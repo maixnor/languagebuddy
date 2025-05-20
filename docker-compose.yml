@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    container_name: tours_backend
+    ports:
+      - "8000:8000"
+
+  valkey:
+    image: valkey/valkey:7.2
+    container_name: tours_valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    command: ["valkey-server", "--save", "60", "1", "--loglevel", "warning"]
+
+volumes:
+  valkey_data:

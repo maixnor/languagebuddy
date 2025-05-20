@@ -1,0 +1,85 @@
+
+- tourId: vindobona_intrigue
+  tourName: "Vindobona Intrigue: Smuggler vs. Guard"
+  minGroupSize: 2
+  maxGroupSize: 12
+  personas:
+    smuggler: roman_carrier
+    guard: roman_guard_captain
+  roles:
+    - roleId: primary_contact
+      isPrimary: true
+      assignment: first_registered
+    - roleId: secondary_contact
+      assignment: second_registered
+  stages:
+    - stageId: "1_smuggler_intro"
+      activePersona: smuggler
+      targetRole: primary_contact
+      message: "Hail, friend! Marcus at your service. I hear you're reliable. I need a group like yours to help me move some... sensitive 'artifacts' out of Vindobona. The pay is good, the risk... manageable. First, head to the old market square. Look for a merchant selling 'slightly used' legionary sandals. Whisper 'The Danube whispers secrets'. What's his reply?"
+      codeword: "CAESAR_SNORES_LOUDLY"
+      onSuccess:
+        nextStage: "2_smuggler_split_task"
+    - stageId: "2_smuggler_split_task"
+      activePersona: smuggler
+      targetRole: primary_contact
+      message: "Excellent! 'Caesar snores loudly' indeed! He must have had too much wine after inspecting the camp's foundations. Now, to cover more ground and avoid the watch, your group needs to split. One half (including you, my primary contact) will be 'Team Eagle'. The other half will be 'Team Wolf'. Team Eagle, go to the Western Gate. Team Wolf, to the Eastern Gate. Primary contact, once your Team Eagle is at the Western Gate, message me 'Eagle has landed'."
+      codeword: "EAGLE_HAS_LANDED"
+      onSuccess:
+        actions:
+          - type: MESSAGE_ROLE
+            targetRole: secondary_contact
+            nextStage: "3_guard_recruitment"
+          - type: CONTINUE_ROLE
+            targetRole: primary_contact
+            nextStage: "4_smuggler_eagle_task"
+    - stageId: "3_guard_recruitment"
+      activePersona: guard
+      targetRole: secondary_contact # This message goes to the other phone
+      message: "Citizen! This is Captain Marius of the Vindobona City Watch. We have reason to believe the group you are with is being manipulated by a known smuggler, 'Marcus'. We need your help – and the help of your 'Team Wolf' – to apprehend him. Your loyalty to Rome is paramount. Do not reveal this communication to Team Eagle. Your first task: proceed to the Eastern Gate as instructed by Marcus, but your true objective is to observe and report. Once there, send me a message: 'Wolfpack at Eastern Gate, awaiting orders.'"
+      codeword: "WOLFPACK_AT_EASTERN_GATE_AWAITING_ORDERS"
+      onSuccess:
+        nextStage: "5_guard_wolf_task"
+    - stageId: "4_smuggler_eagle_task"
+      activePersona: smuggler
+      targetRole: primary_contact
+      message: "Good, Team Eagle. Near the Western Gate, there's a loose stone in the wall, marked with a faint 'X'. Behind it is a small package. Retrieve it and tell me the single word written on it."
+      codeword: "VINO" # Example codeword
+      onSuccess:
+        nextStage: "6_smuggler_rendezvous_prep" # Example next stage
+    - stageId: "5_guard_wolf_task"
+      activePersona: guard
+      targetRole: secondary_contact
+      message: "Well done, Team Wolf. Marcus is trying to retrieve a package at the Western Gate. Your mission: create a diversion at the Eastern Gate to draw away any patrols, then discreetly observe Team Eagle. Report any suspicious activity or if they find the package. If they find it, try to note its description. Send 'Diversion created, observing' once you're set."
+      codeword: "DIVERSION_CREATED_OBSERVING"
+      onSuccess:
+        nextStage: "7_guard_report_findings" # Example next stage
+    - stageId: "6_smuggler_rendezvous_prep"
+      activePersona: smuggler
+      targetRole: primary_contact
+      message: "VINO! Correct. The wine of victory... or perhaps just wine. Excellent work. Now, prepare to meet my associate. But first, ensure Team Wolf hasn't raised any alarms. Send 'All clear' when you're ready to proceed to the final rendezvous point."
+      codeword: "ALL_CLEAR"
+      onSuccess:
+        nextStage: "8_final_stage_smuggler_win" # Example, could also branch based on Team Wolf's actions
+    - stageId: "7_guard_report_findings"
+      activePersona: guard
+      targetRole: secondary_contact
+      message: "Excellent. Now, report your findings. What did Team Eagle do? Did they retrieve a package? What did it look like? Be specific."
+      # This stage might not have a simple codeword, but rather expects a descriptive message.
+      # For simplicity in this example, we'll use one.
+      codeword: "PACKAGE_SECURED_REPORTING"
+      onSuccess:
+        nextStage: "9_guard_interception_plan" # Example
+    - stageId: "8_final_stage_smuggler_win"
+      activePersona: smuggler
+      targetRole: primary_contact # Or all roles if they converge
+      message: "Fantastic! You've done it. The package is safe, and my associate is pleased. Your payment will be... discreetly delivered. You've proven yourself a valuable asset, despite your group's questionable fashion sense. Now, disappear before anyone's the wiser. And remember, never trust a merchant selling 'slightly used' sandals without inspecting the camp's foundations first!"
+      # This is an ending stage
+    - stageId: "9_guard_interception_plan"
+      activePersona: guard
+      targetRole: secondary_contact # Or all roles
+      message: "Your information is vital, Citizen! Based on your report, we're moving in to intercept Marcus. Your group's assistance has been invaluable to the security of Vindobona. You have served Rome well today. Await further instructions, or consider this matter concluded with our thanks."
+      # This is an ending stage
+  endings: # These are more descriptive and can be used if a stage leads to an end.
+    smuggler_escapes: "Marcus slipped away, perhaps with your group's unwitting (or witting) help! He sends his regards and a small pouch of... slightly less valuable coins than promised."
+    smuggler_caught_by_guards: "Thanks to the bravery and cunning of Team Wolf (and perhaps some accidental help from Team Eagle), Captain Marius and his men apprehended Marcus! Rome is safer tonight. Your group is commended."
