@@ -151,15 +151,14 @@ app.post("/webhook", async (req: any, res: any) => {
       console.log(`Received message from ${userPhone}, but no conversation initiated (single-user check). Starting with default start.`);
       
       if (!subscriber) {
-        // Create a new subscriber if not found
-        const newSubscriber: Subscriber = {
+        const subscriber: Subscriber = {
           phone: userPhone,
           level: "",
           languages: [],
           messageHistory: []
         };
-        subscribers.push(newSubscriber);
-        await initiateConversation(newSubscriber, defaultSystemPrompt);
+        subscribers.push(subscriber);
+        await initiateConversation(subscriber, defaultSystemPrompt);
       } else {
         await initiateConversation(subscriber, defaultSystemPrompt);
       }
