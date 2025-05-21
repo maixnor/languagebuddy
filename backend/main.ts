@@ -85,7 +85,6 @@ async function sendWhatsAppMessage(subscriber: Subscriber, text: string, message
     to: subscriber.phone,
     text: { body: text },
   };
-  console.log(payload);
   if (messageIdToContext) {
     payload.context = { message_id: messageIdToContext };
   }
@@ -147,7 +146,6 @@ app.post("/webhook", async (req: any, res: any) => {
   if (message?.type === "text") {
     const userPhone = message.from;
     const subscriber = subscribers.find(p => p.phone === userPhone);
-    console.log(subscriber);
 
     await markMessageAsRead(message.id);
 
@@ -173,7 +171,6 @@ app.post("/webhook", async (req: any, res: any) => {
 
     try {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
-      console.log(conversationHistories[userPhone]);
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
       console.log(`\tSingleUser Incoming Message from ${userPhone}: `, message.text.body);
