@@ -275,7 +275,7 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   return completion.choices[0].message;
 }
 
-const port = Deno.env.get("PORT") || 3000;
+const port = Deno.env.get("PORT") || 4000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
