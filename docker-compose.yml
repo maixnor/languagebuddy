@@ -3,13 +3,13 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    container_name: tours_backend
+    container_name: langbud_backend
     ports:
       - "8000:8000"
 
   valkey:
     image: valkey/valkey:7.2
-    container_name: tours_valkey
+    container_name: langbud_valkey
     ports:
       - "6379:6379"
     volumes:

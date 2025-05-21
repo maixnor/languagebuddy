@@ -1,10 +1,12 @@
 // deno-lint-ignore-file no-explicit-any no-unused-vars
-import express from "express";
+import express, { Request, Response } from "express"; // Added Request, Response types
 import OpenAI from "openai";
 import serveStatic from "npm:serve-static";
 import axios from "npm:axios";
 import * as fs from "node:fs"; // Import fs for reading the JSON file
 import yaml from "npm:js-yaml"; // Added for YAML parsing
+import { createClient } from "npm:redis"; // Added for Valkey
+import Stripe from "npm:stripe"; // Added for Stripe
 
 import "jsr:@std/dotenv/load";
 import "whatsapp-cloud-api-express";
@@ -13,8 +15,32 @@ const openAiToken = Deno.env.get("OPENAI_API_KEY");
 const whatsappToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
 const whatsappPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
 const whatsappVerifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
+const valkeyUrl = Deno.env.get("VALKEY_URL") || "redis://langbud_valkey:6379";
+const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
+const stripePriceId = Deno.env.get("STRIPE_PRICE_ID");
+const stripeWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET"); // Added for Stripe webhook verification
 
 const openai = new OpenAI({ apiKey: openAiToken });
+
+// Initialize Valkey client
+const valkeyClient = createClient({ url: valkeyUrl });
+valkeyClient.on("error", (err) => console.error("Valkey Client Error", err));
+async function connectValkey() {
+  if (!valkeyClient.isOpen) {
+    await valkeyClient.connect();
+    console.log("Connected to Valkey");
+  }
+}
+//connectValkey();
+
+// Initialize Stripe client
+let stripe: Stripe | null = null;
+if (stripeSecretKey) {
+  stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-04-10" });
+  console.log("Stripe client initialized.");
+} else {
+  console.warn("STRIPE_SECRET_KEY not found. Stripe integration will be disabled.");
+}
 
 // In-memory store for single-user conversation histories
 const conversationHistories: { [key: string]: OpenAI.Chat.Completions.ChatCompletionMessageParam[] } = {};
@@ -43,6 +69,8 @@ interface Subscriber {
   level: string;
   languages: Language[];
   messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+  activeSubscription?: boolean; // Optional, to track subscription status
+  stripeCustomerId?: string; // Optional, to store Stripe customer ID
 }
 
 export const app = express();
@@ -143,16 +171,76 @@ app.post("/webhook", async (req: any, res: any) => {
 
   if (message?.type === "text") {
     const userPhone = message.from;
-    const subscriber = subscribers.filter(p => p.phone === userPhone).first();
+    let subscriber: Subscriber | null = null;
+
+    // 1. Try to get subscriber from Valkey
+    try {
+      const subscriberJson = await valkeyClient.get(`subscriber:${userPhone}`);
+      if (subscriberJson) {
+        subscriber = JSON.parse(subscriberJson) as Subscriber;
+        console.log(`Subscriber ${userPhone} found in Valkey.`);
+        // If found in Valkey, check if subscription is active
+        if (!subscriber.activeSubscription) {
+          console.log(`Subscriber ${userPhone} found but subscription is not active. Sending payment link.`);
+          if (stripe && stripePriceId) {
+            await sendPaymentLink(userPhone, stripePriceId);
+            await markMessageAsRead(message.id);
+            return res.sendStatus(200);
+          } else {
+            console.warn(`Stripe not configured. Cannot send payment link to inactive subscriber ${userPhone}.`);
+            // Optionally send a message indicating service is unavailable due to payment issue
+            await sendWhatsAppMessage({ phone: userPhone, level: "unknown", languages: [], messageHistory: [] }, "I am unable to process your request at this time due to a payment system issue.");
+            await markMessageAsRead(message.id);
+            return res.sendStatus(200);
+          }
+        }
+      } else {
+        console.log(`Subscriber ${userPhone} not found in Valkey.`);
+      }
+    } catch (err) {
+      console.error(`Error fetching subscriber ${userPhone} from Valkey:`, err);
+    }
+
+    // If subscriber not found in cache OR not active, check Stripe (or send payment link)
+    if (!subscriber || !subscriber.activeSubscription) {
+      if (stripe && stripePriceId) {
+        // This logic path is for users not in Valkey or in Valkey but inactive.
+        // The primary way to become active is via Stripe webhook after payment.
+        // So, if they are not active here, they need to pay.
+        console.log(`Subscriber ${userPhone} not active or not found. Sending payment link.`);
+        await sendPaymentLink(userPhone, stripePriceId);
+        await markMessageAsRead(message.id);
+        return res.sendStatus(200);
+      } else {
+        console.warn(`Stripe client not initialized or STRIPE_PRICE_ID missing. Cannot check subscription or send payment link for ${userPhone}.`);
+        // Send a message to the user that payment system is unavailable
+        const tempSubscriberOnError: Subscriber = { phone: userPhone, level: "unknown", languages: [], messageHistory: [] }; 
+        await sendWhatsAppMessage(tempSubscriberOnError, "Sorry, I can't set up a new subscription for you at the moment. Please try again later.");
+        await markMessageAsRead(message.id);
+        return res.sendStatus(200);
+      }
+    }
+
+    // At this point, 'subscriber' should be populated AND active.
+    // ... rest of the message handling logic ...
 
     if (!conversationHistories[userPhone]) {
-      console.log(`Received message from ${userPhone}, but no conversation initiated (single-user check). Starting with the viking.`);
-      initiateConversation(userPhone, defaultSystemPrompt)
-      return res.sendStatus(200);
+        // This case might occur if subscriber was found/created but history wasn't initialized yet for this session
+        console.log(`No active conversation history for ${userPhone}, but subscriber exists. Initializing with system prompt.`);
+        conversationHistories[userPhone] = [{ role: "system", content: defaultSystemPrompt.prompt }];
+        // Optionally, send the firstUserMessage if defined and it's truly a new conversation start
+        if (defaultSystemPrompt.firstUserMessage && subscriber.messageHistory.length === 0) { // Check if it's a truly new interaction for this subscriber
+             conversationHistories[userPhone].push({ role: "user", content: defaultSystemPrompt.firstUserMessage });
+             // The initial response will be handled by the getGPTResponse block below
+        }
     }
+
 
     try {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
+      // Update subscriber's message history in Valkey as well (optional, depending on needs)
+      // subscriber.messageHistory = conversationHistories[userPhone]; 
+      // await valkeyClient.set(`subscriber:${userPhone}`, JSON.stringify(subscriber));
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
       console.log(`\tSingleUser Incoming Message from ${userPhone}: `, message.text.body);
@@ -257,3 +345,129 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   });
   return completion.choices[0].message;
 }
+
+// Payment link sending function
+async function sendPaymentLink(userPhone: string, priceId: string): Promise<boolean> {
+  if (!stripe) {
+    console.error("Stripe client not initialized. Cannot send payment link.");
+    return false;
+  }
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription', 
+      client_reference_id: userPhone, // Pass userPhone to identify in webhook
+      // success_url and cancel_url removed as communication is via WhatsApp
+    });
+
+    if (session.url) {
+      const paymentMessage = `To continue, please complete your subscription: ${session.url}`;
+      const tempRecipient = { phone: userPhone, level: "", languages: [], messageHistory: [] };
+      return await sendWhatsAppMessage(tempRecipient, paymentMessage);
+    } else {
+      console.error("Stripe session URL not found.");
+      return false;
+    }
+  } catch (error) {
+    console.error(`Error creating Stripe checkout session for ${userPhone}:`, error);
+    return false;
+  }
+}
+
+// Stripe Webhook Endpoint
+app.post("/stripe-webhook", express.raw({type: 'application/json'}), async (req: Request, res: Response) => {
+  if (!stripe || !stripeWebhookSecret) {
+    console.error("Stripe or webhook secret not configured.");
+    return res.sendStatus(500);
+  }
+
+  const sig = req.headers['stripe-signature'] as string;
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, stripeWebhookSecret);
+  } catch (err: any) {
+    console.error(`⚠️  Webhook signature verification failed.`, err.message);
+    return res.sendStatus(400);
+  }
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userPhone = session.client_reference_id;
+      const stripeCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
+
+      if (!userPhone) {
+        console.error("Webhook received checkout.session.completed without client_reference_id (userPhone).");
+        return res.sendStatus(400); // Bad request, missing identifier
+      }
+
+      console.log(`Checkout session completed for user: ${userPhone}, Stripe Customer ID: ${stripeCustomerId}`);
+
+      try {
+        let subscriberJson = await valkeyClient.get(`subscriber:${userPhone}`);
+        let subscriber: Subscriber;
+
+        if (subscriberJson) {
+          subscriber = JSON.parse(subscriberJson) as Subscriber;
+          subscriber.activeSubscription = true;
+          subscriber.stripeCustomerId = stripeCustomerId;
+        } else {
+          // New subscriber from successful payment
+          subscriber = {
+            phone: userPhone,
+            level: "beginner", // Default level, adjust as needed or get from metadata
+            languages: [],
+            messageHistory: [],
+            activeSubscription: true,
+            stripeCustomerId: stripeCustomerId,
+          };
+        }
+        await valkeyClient.set(`subscriber:${userPhone}`, JSON.stringify(subscriber));
+        console.log(`Subscriber ${userPhone} updated/created in Valkey with active subscription.`);
+
+        // Send WhatsApp confirmation
+        await sendWhatsAppMessage(subscriber, "Thank you! Your subscription is now active. You can continue our conversation.");
+        
+        // Optionally, initiate a welcome sequence or re-engage conversation
+        // if (!conversationHistories[userPhone]) {
+        //   initiateConversation(subscriber, defaultSystemPrompt);
+        // }
+
+      } catch (err) {
+        console.error(`Error processing checkout.session.completed for ${userPhone}:`, err);
+        // If this fails, the user paid but we couldn't update our system.
+        // Implement retry logic or manual follow-up.
+        return res.sendStatus(500); // Internal server error
+      }
+      break;
+    case 'invoice.payment_failed':
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerIdForFailure = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
+      console.log(`Invoice payment failed for Stripe Customer ID: ${customerIdForFailure}`);
+      // Find user by stripeCustomerId in Valkey (requires iterating or secondary index if many users)
+      // For now, we assume we can find them if needed, or we rely on client_reference_id if available on the event
+      // This event might not have client_reference_id directly, so you might need to look up the customer
+      // and then find their phone number from your records.
+      // For simplicity, if we can get a phone number, we notify them.
+      // This part needs more robust user identification based on Stripe Customer ID.
+      // Example: const userPhone = await findUserPhoneByStripeCustomerId(customerIdForFailure);
+      // if (userPhone) { 
+      //   await sendWhatsAppMessage({ phone: userPhone, level:"", languages:[], messageHistory:[]}, "We had an issue with your recent payment. Please update your payment method in Stripe.");
+      //   // Optionally, mark subscription as inactive
+      // }
+      break;
+    // Add other event types to handle as needed (e.g., subscription cancellations)
+    default:
+      console.log(`Unhandled Stripe event type ${event.type}`);
+  }
+
+  res.sendStatus(200);
+});
