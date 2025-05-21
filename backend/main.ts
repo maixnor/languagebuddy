@@ -1,24 +1,24 @@
-// deno-lint-ignore-file no-explicit-any no-unused-vars
-import express, { Request, Response } from "express"; // Added Request, Response types
+import express, { Request, Response } from "express";
 import OpenAI from "openai";
-import serveStatic from "npm:serve-static";
-import axios from "npm:axios";
-import * as fs from "node:fs"; // Import fs for reading the JSON file
-import yaml from "npm:js-yaml"; // Added for YAML parsing
-import { createClient } from "npm:redis"; // Added for Valkey
-import Stripe from "npm:stripe"; // Added for Stripe
+import serveStatic from "serve-static"; // Changed from npm:serve-static
+import axios from "axios"; // Changed from npm:axios
+import * as fs from "fs"; // Changed from node:fs
+import yaml from "js-yaml"; // Changed from npm:js-yaml
+import { createClient } from "redis"; // Changed from npm:redis
+import Stripe from "stripe"; // Changed from npm:stripe
+import dotenv from "dotenv"; // Added for .env file loading
 
-import "jsr:@std/dotenv/load";
-import "whatsapp-cloud-api-express";
+dotenv.config(); // Load environment variables from .env file
 
-const openAiToken = Deno.env.get("OPENAI_API_KEY");
-const whatsappToken = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
-const whatsappPhoneId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
-const whatsappVerifyToken = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
-const valkeyUrl = Deno.env.get("VALKEY_URL") || "redis://langbud_valkey:6379";
-const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
-const stripePriceId = Deno.env.get("STRIPE_PRICE_ID");
-const stripeWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET"); // Added for Stripe webhook verification
+// Replace Deno.env.get with process.env
+const openAiToken = process.env.OPENAI_API_KEY;
+const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
+const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const whatsappVerifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+const valkeyUrl = process.env.VALKEY_URL || "redis://langbud_valkey:6379";
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripePriceId = process.env.STRIPE_PRICE_ID;
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET; // Added for Stripe webhook verification
 
 const openai = new OpenAI({ apiKey: openAiToken });
 
@@ -27,11 +27,15 @@ const valkeyClient = createClient({ url: valkeyUrl });
 valkeyClient.on("error", (err) => console.error("Valkey Client Error", err));
 async function connectValkey() {
   if (!valkeyClient.isOpen) {
-    await valkeyClient.connect();
-    console.log("Connected to Valkey");
+    try { // Added try-catch for connection
+      await valkeyClient.connect();
+      console.log("Connected to Valkey");
+    } catch (err) {
+      console.error("Failed to connect to Valkey:", err);
+    }
   }
 }
-//connectValkey();
+// connectValkey(); // Consider calling this at app startup if Valkey is essential immediately
 
 // Initialize Stripe client
 let stripe: Stripe | null = null;
@@ -68,9 +72,9 @@ interface Subscriber {
   phone: string;
   level: string;
   languages: Language[];
-  messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
-  activeSubscription?: boolean; // Optional, to track subscription status
-  stripeCustomerId?: string; // Optional, to store Stripe customer ID
+  messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[]; // Keep OpenAI type
+  activeSubscription?: boolean; 
+  stripeCustomerId?: string; 
 }
 
 export const app = express();
@@ -78,12 +82,12 @@ export const app = express();
 app.use(express.json());
 
 async function initiateConversation(subscriber: Subscriber, systemPrompt: SystemPromptEntry): Promise<boolean> {
-  console.log(`Initiating single-user conversation for ${subscriber.phone} with system prompt: "${systemPrompt}" and first user message: "${systemPrompt.firstUserMessage}"`);
+  console.log(`Initiating single-user conversation for ${subscriber.phone} with system prompt: "${systemPrompt.prompt}" and first user message: "${systemPrompt.firstUserMessage}"`); // Corrected template literal
   
   // Initialize history with system prompt and the first user message
   conversationHistories[subscriber.phone] = [
-    { role: "system", content: systemPrompt },
-    { role: "user", content: systemPrompt.firstUserMessage }
+    { role: "system", content: systemPrompt.prompt }, // Ensure this is a string
+    { role: "user", content: systemPrompt.firstUserMessage || "" } // Ensure content is a string, provide fallback
   ];
 
   try {
@@ -146,7 +150,7 @@ async function sendWhatsAppMessage(subscriber: Subscriber, text: string, message
 }
 
 // Helper function to send messages to a specific group member
-app.post("/initiate", async (req: any, res: any) => {
+app.post("/initiate", async (req: Request, res: Response) => { // Changed from any to Request, Response
   const { phone, promptSlug } = req.body;
 
   if (!phone || !promptSlug) {
@@ -166,15 +170,17 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 });
 
-app.post("/webhook", async (req: any, res: any) => {
+app.post("/webhook", async (req: Request, res: Response) => { // Changed from any to Request, Response
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
 
   if (message?.type === "text") {
     const userPhone = message.from;
-    let subscriber: Subscriber | null = null;
+    let subscriber: Subscriber | null = null; // Keep this type
 
     // 1. Try to get subscriber from Valkey
     try {
+      // Ensure Valkey client is connected before use
+      await connectValkey(); 
       const subscriberJson = await valkeyClient.get(`subscriber:${userPhone}`);
       if (subscriberJson) {
         subscriber = JSON.parse(subscriberJson) as Subscriber;
@@ -215,7 +221,7 @@ app.post("/webhook", async (req: any, res: any) => {
         console.warn(`Stripe client not initialized or STRIPE_PRICE_ID missing. Cannot check subscription or send payment link for ${userPhone}.`);
         // Send a message to the user that payment system is unavailable
         const tempSubscriberOnError: Subscriber = { phone: userPhone, level: "unknown", languages: [], messageHistory: [] }; 
-        await sendWhatsAppMessage(tempSubscriberOnError, "Sorry, I can't set up a new subscription for you at the moment. Please try again later.");
+        await sendWhatsAppMessage(tempSubscriberOnError, "Sorry, I can\'t set up a new subscription for you at the moment. Please try again later."); // Escaped apostrophe
         await markMessageAsRead(message.id);
         return res.sendStatus(200);
       }
@@ -248,7 +254,14 @@ app.post("/webhook", async (req: any, res: any) => {
 
       if (aiResponse.content) {
         conversationHistories[userPhone].push({ role: "assistant", content: aiResponse.content });
-        await sendWhatsAppMessage(userPhone, aiResponse.content);
+        // Corrected sendWhatsAppMessage call: needs a Subscriber object
+        const currentSubscriber = await valkeyClient.get(`subscriber:${userPhone}`);
+        if (currentSubscriber) {
+            await sendWhatsAppMessage(JSON.parse(currentSubscriber) as Subscriber, aiResponse.content);
+        } else {
+            // Fallback if subscriber not in Valkey, though ideally they should be
+            await sendWhatsAppMessage({ phone: userPhone, level: "", languages: [], messageHistory: [] }, aiResponse.content);
+        }
       }
       
       await markMessageAsRead(message.id);
@@ -294,10 +307,10 @@ async function markMessageAsRead(messageId: string) {
 }
 
 // Webhook verification endpoint
-app.get("/webhook", (req: any, res: any) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+app.get("/webhook", (req: Request, res: Response) => { // Changed from any to Request, Response
+  const mode = req.query["hub.mode"] as string; // Added type assertion
+  const token = req.query["hub.verify_token"] as string; // Added type assertion
+  const challenge = req.query["hub.challenge"] as string; // Added type assertion
 
   // Check the mode and token sent are correct
   if (mode === "subscribe" && token === whatsappVerifyToken) {
@@ -310,13 +323,14 @@ app.get("/webhook", (req: any, res: any) => {
   }
 });
 
-app.get("/", (req: any, res: any) => {
+app.get("/", (req: Request, res: Response) => { // Changed from any to Request, Response
   console.log("/");
   res.send("Hi Mom");
 });
 
 // Set up static file serving for HTML files
-app.use('/static', serveStatic(Deno.cwd() + "/static"));
+// Replace Deno.cwd() with process.cwd()
+app.use('/static', serveStatic(process.cwd() + "/static"));
 
 async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]) {
   // Ensure there's at least a system message if messages array is empty or lacks it.
@@ -330,12 +344,10 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   const filteredMessages = messages.filter(msg => msg.content && String(msg.content).trim() !== '');
 
 
-  if (filteredMessages.length === 1 && filteredMessages[0].role === 'system') {
-    // Avoid sending only a system message if there's no user input yet, can lead to empty/generic responses
-    // This case should be handled by sending a predefined first message or ensuring user input exists.
-    console.warn("getGPTResponse called with only a system message. This might lead to unexpected GPT behavior.");
-    // Depending on strictness, you might return a default message or throw an error.
-    // For now, we'll let it pass to OpenAI but log it.
+  if (filteredMessages.length === 0) { // If all messages were filtered out (e.g. empty system prompt)
+    console.error("Cannot send empty message array to OpenAI. Original messages:", messages);
+    // Return a default or error message structure expected by the caller
+    return { role: "assistant", content: "I encountered an issue processing your request. Please try again." }; 
   }
 
 
@@ -470,4 +482,10 @@ app.post("/stripe-webhook", express.raw({type: 'application/json'}), async (req:
   }
 
   res.sendStatus(200);
+});
+
+const port = process.env.PORT || 3000; // Replace Deno.env.get
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+  connectValkey(); // Connect to Valkey when server starts
 });
