@@ -1,9 +1,6 @@
 import express from "express";
 import OpenAI from "openai";
 import serveStatic from "serve-static"; // Changed from "npm:serve-static"
-import axios from "axios"; // Changed from "npm:axios"
-import * as fs from "node:fs";
-import yaml from "js-yaml"; // Changed from "npm:js-yaml"
 import dotenv from "dotenv"; // Added for Node.js environment variables
 
 import "whatsapp-cloud-api-express";
@@ -24,7 +21,7 @@ const conversationHistories: { [key: string]: OpenAI.Chat.Completions.ChatComple
 interface SystemPromptEntry {
   slug: string;
   prompt: string;
-  firstUserMessage?: string; // Make it optional
+  firstUserMessage: string;
 }
 
 const defaultSystemPrompt: SystemPromptEntry = {
