@@ -6,15 +6,14 @@ import * as fs from "node:fs";
 import yaml from "js-yaml"; // Changed from "npm:js-yaml"
 import dotenv from "dotenv"; // Added for Node.js environment variables
 
-// import "jsr:@std/dotenv/load"; // Removed Deno-specific dotenv
 import "whatsapp-cloud-api-express";
 
 dotenv.config(); // Load environment variables for Node.js
 
-const openAiToken = process.env.OPENAI_API_KEY; // Changed from Deno.env.get
-const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN; // Changed from Deno.env.get
-const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID; // Changed from Deno.env.get
-const whatsappVerifyToken = process.env.WHATSAPP_VERIFY_TOKEN; // Changed from Deno.env.get
+const openAiToken = process.env.OPENAI_API_KEY;
+const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
+const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const whatsappVerifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
 
 const openai = new OpenAI({ apiKey: openAiToken });
 
@@ -247,7 +246,7 @@ app.get("/", (req: any, res: any) => {
 });
 
 // Set up static file serving for HTML files
-app.use('/static', serveStatic(process.cwd() + "/static")); // Changed from Deno.cwd()
+app.use('/static', serveStatic(process.cwd() + "/static"));
 
 async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]) {
   // Ensure there's at least a system message if messages array is empty or lacks it.
@@ -277,7 +276,7 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   return completion.choices[0].message;
 }
 
-const port = process.env.PORT || 4000; // Changed from Deno.env.get
+const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
