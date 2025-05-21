@@ -1,5 +1,0 @@
-{
-  "imports": {
-    "whatsapp-cloud-api-express": "npm:whatsapp-cloud-api-express@^3.1.0"
-  }
-}
