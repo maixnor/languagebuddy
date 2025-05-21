@@ -18,7 +18,6 @@ COPY . .
 RUN npm run build
 
 # Make port 3000 available to the world outside this container
-EXPOSE 4000
 EXPOSE 8080
 EXPOSE 80
 

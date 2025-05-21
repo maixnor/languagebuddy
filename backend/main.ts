@@ -272,7 +272,7 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   return completion.choices[0].message;
 }
 
-const port = process.env.PORT || 4000;
+const port = process.env.PORT || 80;
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
