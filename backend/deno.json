@@ -11,6 +11,8 @@
     "express": "npm:express@4.21.1",
     "openai": "npm:openai@4.73.0",
     "twilio": "npm:twilio@5.3.6",
-    "whatsapp-cloud-api-express": "npm:whatsapp-cloud-api-express@3.1.0"
+    "whatsapp-cloud-api-express": "npm:whatsapp-cloud-api-express@3.1.0",
+    "serve-static": "npm:serve-static@^1.15.0",
+    "js-yaml": "npm:js-yaml@^4.1.0"
   }
 }

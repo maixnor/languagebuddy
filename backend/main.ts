@@ -45,16 +45,18 @@ interface Subscriber {
   messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 }
 
+// Define subscribers array
+const subscribers: Subscriber[] = [];
+
 export const app = express();
 
 app.use(express.json());
 
 async function initiateConversation(subscriber: Subscriber, systemPrompt: SystemPromptEntry): Promise<boolean> {
-  console.log(`Initiating single-user conversation for ${subscriber.phone} with system prompt: "${systemPrompt}" and first user message: "${systemPrompt.firstUserMessage}"`);
+  console.log(`Initiating single-user conversation for ${subscriber.phone} with system prompt: "${systemPrompt.prompt}" and first user message: "${systemPrompt.firstUserMessage}"`);
   
-  // Initialize history with system prompt and the first user message
   conversationHistories[subscriber.phone] = [
-    { role: "system", content: systemPrompt },
+    { role: "system", content: systemPrompt.prompt },
     { role: "user", content: systemPrompt.firstUserMessage }
   ];
 
@@ -83,6 +85,7 @@ async function sendWhatsAppMessage(subscriber: Subscriber, text: string, message
     to: subscriber.phone,
     text: { body: text },
   };
+  console.log(payload);
   if (messageIdToContext) {
     payload.context = { message_id: messageIdToContext };
   }
@@ -143,16 +146,34 @@ app.post("/webhook", async (req: any, res: any) => {
 
   if (message?.type === "text") {
     const userPhone = message.from;
-    const subscriber = subscribers.filter(p => p.phone === userPhone).first();
+    const subscriber = subscribers.find(p => p.phone === userPhone);
+    console.log(subscriber);
 
-    if (!conversationHistories[userPhone]) {
-      console.log(`Received message from ${userPhone}, but no conversation initiated (single-user check). Starting with the viking.`);
-      initiateConversation(userPhone, defaultSystemPrompt)
+    await markMessageAsRead(message.id);
+
+    if (!conversationHistories[userPhone] || !subscriber) {
+      console.log(`Received message from ${userPhone}, but no conversation initiated (single-user check). Starting with default start.`);
+      
+      if (!subscriber) {
+        // Create a new subscriber if not found
+        const newSubscriber: Subscriber = {
+          phone: userPhone,
+          level: "",
+          languages: [],
+          messageHistory: []
+        };
+        subscribers.push(newSubscriber);
+        await initiateConversation(newSubscriber, defaultSystemPrompt);
+      } else {
+        await initiateConversation(subscriber, defaultSystemPrompt);
+      }
+      
       return res.sendStatus(200);
     }
 
     try {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
+      console.log(conversationHistories[userPhone]);
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
       console.log(`\tSingleUser Incoming Message from ${userPhone}: `, message.text.body);
@@ -160,13 +181,12 @@ app.post("/webhook", async (req: any, res: any) => {
 
       if (aiResponse.content) {
         conversationHistories[userPhone].push({ role: "assistant", content: aiResponse.content });
-        await sendWhatsAppMessage(userPhone, aiResponse.content);
+        await sendWhatsAppMessage(subscriber, aiResponse.content);
       }
       
-      await markMessageAsRead(message.id);
-
     } catch (error) {
       console.error("Error processing single-user message:", error);
+      await sendWhatsAppMessage(subscriber, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
     }
   }
   res.sendStatus(200);
@@ -257,3 +277,8 @@ async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMe
   });
   return completion.choices[0].message;
 }
+
+const port = Deno.env.get("PORT") || 3000;
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+});
