@@ -52,6 +52,7 @@ try {
 }
 
 interface Language {
+  languageName: string;
   level: string;
   currentObjectives: string[];
 }
@@ -59,14 +60,60 @@ interface Language {
 // Data structures for group tours
 interface Subscriber {
   phone: string;
-  level: string;
-  speakingLanguages: string[];
+  speakingLanguages: Language[];
   learningLanguages: Language[];
   messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 }
 
-// Define subscribers array
 const subscribers: Subscriber[] = [];
+
+async function handleUserCommand(messageText: string, subscriber: Subscriber): Promise<boolean> {
+  const commandParts = messageText.trim().split(" ");
+  const mainCommand = commandParts[0].toLowerCase();
+
+  if (mainCommand === "!help") {
+    const helpText = "Available commands:\n" +
+                     "!help - Show this help message\n" +
+                     "!define <word> - Get definition of a word\n" +
+                     "!myinfo - Show your current language profile";
+    await sendWhatsAppMessage(subscriber, helpText);
+    return true;
+  } else if (mainCommand === "!define" && commandParts.length > 1) {
+    const termToDefine = commandParts.slice(1).join(" ");
+    try {
+      const definitionPrompt = `Define the term "${termToDefine}" concisely for a language learner.`;
+      const tempMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        { role: "system", content: "You are a helpful dictionary." },
+        { role: "user", content: definitionPrompt }
+      ];
+      const definitionResponse = await getGPTResponse(tempMessages);
+      if (definitionResponse?.content) {
+        await sendWhatsAppMessage(subscriber, `Definition of "${termToDefine}":\n${definitionResponse.content}`);
+      } else {
+        await sendWhatsAppMessage(subscriber, `Sorry, I couldn't define "${termToDefine}" at the moment.`);
+      }
+    } catch (error) {
+      console.error(`Error defining term "${termToDefine}":`, error);
+      await sendWhatsAppMessage(subscriber, "Sorry, there was an error getting the definition.");
+    }
+    return true;
+  } else if (mainCommand === "!myinfo") {
+    let infoText = `Your Language Profile:\n`;
+    infoText += `Speaking Languages: ${subscriber.speakingLanguages.length > 0 ? subscriber.speakingLanguages.join(', ') : 'None set'}\n`;
+    infoText += "Learning Languages:\n";
+    if (subscriber.learningLanguages.length > 0) {
+      subscriber.learningLanguages.forEach(lang => {
+        infoText += `  - ${lang.languageName}: Level ${lang.level} (Objectives: ${lang.currentObjectives.join(', ') || 'None'})\n`;
+      });
+    } else {
+      infoText += "  None set\n";
+    }
+    await sendWhatsAppMessage(subscriber, infoText);
+    return true;
+  }
+
+  return false; // Not a recognized command
+}
 
 export const app = express();
 
@@ -162,42 +209,53 @@ app.post("/webhook", async (req: any, res: any) => {
 
   if (message?.type === "text") {
     const userPhone = message.from;
-    const subscriber = subscribers.find(p => p.phone === userPhone);
+    let subscriber = subscribers.find(p => p.phone === userPhone);
 
     await markMessageAsRead(message.id);
 
-    if (!conversationHistories[userPhone] || !subscriber) {
-      console.log(`Received message from ${userPhone}, but no conversation initiated (single-user check). Starting with default start.`);
-      
-      if (!subscriber) {
-        const subscriber: Subscriber = {
-          phone: userPhone,
-          level: "",
-          speakingLanguages: [],
-          learningLanguages: [],
-          messageHistory: []
-        };
-        subscribers.push(subscriber);
-        await initiateConversation(subscriber, defaultSystemPrompt);
-      } else {
-        await initiateConversation(subscriber, defaultSystemPrompt);
-      }
-      
+    if (!subscriber) {
+      console.log(`New subscriber: ${userPhone}. Creating profile.`);
+      subscriber = {
+        phone: userPhone,
+        speakingLanguages: [],
+        learningLanguages: [],
+        messageHistory: [] // This history is part of Subscriber, separate from conversationHistories
+      };
+      subscribers.push(subscriber);
+    }
+
+    // Handle user commands first
+    if (await handleUserCommand(message.text.body, subscriber)) {
+      return res.sendStatus(200); // Command was handled, stop further processing for this message
+    }
+
+    // If not a user command, and no conversation history, initiate one.
+    if (!conversationHistories[userPhone]) {
+      console.log(`Received message from ${userPhone}, but no conversation initiated. Starting with default start.`);
+      await initiateConversation(subscriber, defaultSystemPrompt);
+      // The current message triggered the initiation. User will reply to the bot's first message.
       return res.sendStatus(200);
     }
 
+    // Process regular conversation message
     try {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
+      let responseTextToUser = aiResponse.content;
 
-      if (aiResponse.content) {
-        conversationHistories[userPhone].push({ role: "assistant", content: aiResponse.content });
-        await sendWhatsAppMessage(subscriber, aiResponse.content);
+      if (responseTextToUser) {
+        conversationHistories[userPhone].push({ role: "assistant", content: responseTextToUser });
+        await sendWhatsAppMessage(subscriber, responseTextToUser);
+      } else {
+        // Handle cases where AI response content is empty/null
+        console.warn(`AI response content was empty for ${userPhone}.`);
+        // Optionally send a fallback message
+        // await sendWhatsAppMessage(subscriber, "I'm not sure how to respond to that. Could you try rephrasing?");
       }
       
     } catch (error) {
-      console.error("Error processing single-user message:", error);
+      console.error(`Error processing message for ${userPhone}:`, error);
       await sendWhatsAppMessage(subscriber, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
     }
   }
