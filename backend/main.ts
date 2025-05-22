@@ -4,6 +4,9 @@ import serveStatic from "serve-static"; // Changed from "npm:serve-static"
 import dotenv from "dotenv"; // Added for Node.js environment variables
 
 import "whatsapp-cloud-api-express";
+import { readFileSync } from 'fs';
+import path from 'path';
+const yaml = require('js-yaml');
 
 dotenv.config(); // Load environment variables for Node.js
 
@@ -24,10 +27,28 @@ interface SystemPromptEntry {
   firstUserMessage: string;
 }
 
-const defaultSystemPrompt: SystemPromptEntry = {
-  slug: "default",
-  prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
-  firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
+let systemPrompts: SystemPromptEntry[] = [];
+let defaultSystemPrompt: SystemPromptEntry;
+
+try {
+  const promptsPath = path.join(process.cwd(), 'system_prompts.yml');
+  const promptsData = readFileSync(promptsPath, 'utf8');
+  systemPrompts = yaml.load(promptsData);
+  defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || {
+    slug: "default",
+    prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
+    firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
+  };
+  console.log(`Loaded ${systemPrompts.length} system prompts from file`);
+} catch (error) {
+  console.error('Error loading system prompts from file:', error);
+  // Fallback to default prompt if file can't be loaded
+  defaultSystemPrompt = {
+    slug: "default",
+    prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
+    firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
+  };
+  systemPrompts = [defaultSystemPrompt];
 }
 
 interface Language {
@@ -39,7 +60,8 @@ interface Language {
 interface Subscriber {
   phone: string;
   level: string;
-  languages: Language[];
+  speakingLanguages: string[];
+  learningLanguages: Language[];
   messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
 }
 
@@ -151,7 +173,8 @@ app.post("/webhook", async (req: any, res: any) => {
         const subscriber: Subscriber = {
           phone: userPhone,
           level: "",
-          languages: [],
+          speakingLanguages: [],
+          learningLanguages: [],
           messageHistory: []
         };
         subscribers.push(subscriber);
