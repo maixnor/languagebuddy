@@ -170,8 +170,6 @@ app.post("/webhook", async (req: any, res: any) => {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
-      console.log(`\tSingleUser Incoming Message from ${userPhone}: `, message.text.body);
-      console.log(`\tSingleUser Answer by GPT: `, aiResponse.content);
 
       if (aiResponse.content) {
         conversationHistories[userPhone].push({ role: "assistant", content: aiResponse.content });
