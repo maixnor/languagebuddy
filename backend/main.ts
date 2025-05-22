@@ -59,7 +59,6 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   ];
 
   try {
-    // Get only the first AI response based on the system prompt and the first user message
     const initialGptResponse = await getGPTResponse(conversationHistories[subscriber.phone]);
 
     if (initialGptResponse?.content) {
@@ -76,7 +75,6 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   }
 }
 
-// Generic function to send a WhatsApp message
 async function sendWhatsAppMessage(subscriber: Subscriber, text: string, messageIdToContext?: string): Promise<boolean> {
   const payload: any = {
     messaging_product: "whatsapp",
@@ -117,7 +115,6 @@ async function sendWhatsAppMessage(subscriber: Subscriber, text: string, message
   }
 }
 
-// Helper function to send messages to a specific group member
 app.post("/initiate", async (req: any, res: any) => {
   const { phone, promptSlug } = req.body;
 
@@ -184,7 +181,6 @@ app.post("/webhook", async (req: any, res: any) => {
   res.sendStatus(200);
 });
 
-// Helper function to mark messages as read
 async function markMessageAsRead(messageId: string) {
   try {
     const readResponse = await fetch(
@@ -217,7 +213,6 @@ async function markMessageAsRead(messageId: string) {
   }
 }
 
-// Webhook verification endpoint
 app.get("/webhook", (req: any, res: any) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -243,29 +238,20 @@ app.get("/", (req: any, res: any) => {
 app.use('/static', serveStatic(process.cwd() + "/static"));
 
 async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]) {
-  // Ensure there's at least a system message if messages array is empty or lacks it.
-  // This is a fallback, ideally messages should always be constructed with a system prompt.
   if (messages.length === 0 || messages[0].role !== 'system') {
     console.warn("getGPTResponse called with messages array not starting with a system prompt. Adding a default one.");
-    messages.unshift({ role: "system", content: "You are a helpful assistant." });
+    messages.unshift({ role: "system", content: defaultSystemPrompt.prompt });
   }
   
-  // Prevent empty user/assistant messages which can cause API errors
   const filteredMessages = messages.filter(msg => msg.content && String(msg.content).trim() !== '');
-
-
   if (filteredMessages.length === 1 && filteredMessages[0].role === 'system') {
-    // Avoid sending only a system message if there's no user input yet, can lead to empty/generic responses
-    // This case should be handled by sending a predefined first message or ensuring user input exists.
-    console.warn("getGPTResponse called with only a system message. This might lead to unexpected GPT behavior.");
-    // Depending on strictness, you might return a default message or throw an error.
-    // For now, we'll let it pass to OpenAI but log it.
+    console.warn("getGPTResponse called with only a system message. Adding a default one.");
+    messages.push({role: "user", content: defaultSystemPrompt.firstUserMessage});
   }
-
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: filteredMessages, // Use filtered messages
+    messages: filteredMessages,
   });
   return completion.choices[0].message;
 }
