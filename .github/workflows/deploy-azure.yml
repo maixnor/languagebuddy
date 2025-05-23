@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy Node.js app to Azure Web App - languagebuddy
+name: Build + Deploy = languagebuddy
 
 on:
   push:
@@ -13,10 +13,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
-    defaults: # Add this
-      run: # Add this
-        working-directory: ./backend # Add this
+      contents: read
+    defaults:
+      run:
+        working-directory: ./backend
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +35,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: backend # Modified
+          path: backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -44,15 +44,15 @@ jobs:
       name: 'Production'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write 
+      contents: read 
 
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: node-app
-          path: . # Modified to download to the root, as the artifact is the backend folder itself
+          path: . 
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -67,4 +67,4 @@ jobs:
         with:
           app-name: 'languagebuddy'
           slot-name: 'Production'
-          package: . # Modified to deploy the current directory (which now contains the backend code)
+          package: .
