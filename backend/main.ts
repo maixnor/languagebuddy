@@ -29,25 +29,21 @@ interface SystemPromptEntry {
 
 let systemPrompts: SystemPromptEntry[] = [];
 let defaultSystemPrompt: SystemPromptEntry;
+let fallbackSystemPrompt = {
+  slug: "default",
+  prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
+  firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
+};
 
 try {
   const promptsPath = path.join(process.cwd(), 'system_prompts.yml');
   const promptsData = readFileSync(promptsPath, 'utf8');
   systemPrompts = yaml.load(promptsData);
-  defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || {
-    slug: "default",
-    prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
-    firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
-  };
+  defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || fallbackSystemPrompt;
   console.log(`Loaded ${systemPrompts.length} system prompts from file`);
 } catch (error) {
   console.error('Error loading system prompts from file:', error);
-  // Fallback to default prompt if file can't be loaded
-  defaultSystemPrompt = {
-    slug: "default",
-    prompt: "You are a helpful language buddy trying his best to match the users language level but are always pushing the user to be slightly out of the comfort zone.",
-    firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
-  };
+  defaultSystemPrompt = fallbackSystemPrompt;
   systemPrompts = [defaultSystemPrompt];
 }
 
