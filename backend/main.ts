@@ -1,27 +1,40 @@
 import express from "express";
-import OpenAI from "openai";
-import serveStatic from "serve-static"; // Changed from "npm:serve-static"
-import dotenv from "dotenv"; // Added for Node.js environment variables
+import serveStatic from "serve-static";
+import dotenv from "dotenv";
+import pino from 'pino';
 
 import "whatsapp-cloud-api-express";
 import { readFileSync } from 'fs';
 import path from 'path';
 const yaml = require('js-yaml');
 
-dotenv.config(); // Load environment variables for Node.js
+import { initStripe, checkStripeSubscription } from './stripe';
+import { initOpenAI, getGPTResponse } from './gpt';
+import { initWhatsApp, sendWhatsAppMessage, markMessageAsRead } from './whatsapp';
+import OpenAI from "openai";
+
+dotenv.config();
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  transport: {
+    target: 'pino-pretty', // Makes logs human-readable during development
+    options: {
+      colorize: true
+    }
+  }
+});
 
 const openAiToken = process.env.OPENAI_API_KEY;
 const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
 const whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const whatsappVerifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
-
-const openai = new OpenAI({ apiKey: openAiToken });
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 // In-memory store for single-user conversation histories
 const conversationHistories: { [key: string]: OpenAI.Chat.Completions.ChatCompletionMessageParam[] } = {};
 
-// Define a type for the system prompt objects
-interface SystemPromptEntry {
+export interface SystemPromptEntry {
   slug: string;
   prompt: string;
   firstUserMessage: string;
@@ -40,12 +53,22 @@ try {
   const promptsData = readFileSync(promptsPath, 'utf8');
   systemPrompts = yaml.load(promptsData);
   defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || fallbackSystemPrompt;
-  console.log(`Loaded ${systemPrompts.length} system prompts from file`);
+  logger.info(`Loaded ${systemPrompts.length} system prompts from file`);
 } catch (error) {
-  console.error('Error loading system prompts from file:', error);
+  logger.error({ err: error }, 'Error loading system prompts from file:');
   defaultSystemPrompt = fallbackSystemPrompt;
   systemPrompts = [defaultSystemPrompt];
 }
+
+// Initialize Stripe, OpenAI, and WhatsApp
+initStripe(stripeSecretKey!, logger);
+if (openAiToken && defaultSystemPrompt) {
+  initOpenAI(openAiToken, logger, defaultSystemPrompt);
+} else {
+  logger.error("OpenAI token or default system prompt is missing. GPT functionality will be impaired.");
+}
+initWhatsApp(whatsappToken!, whatsappPhoneId!, logger); // Initialize WhatsApp
+
 
 interface Language {
   languageName: string;
@@ -72,7 +95,7 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
                      "!help - Show this help message\n" +
                      "!define <word> - Get definition of a word\n" +
                      "!myinfo - Show your current language profile";
-    await sendWhatsAppMessage(subscriber, helpText);
+    await sendWhatsAppMessage(subscriber.phone, helpText); // Uses imported sendWhatsAppMessage
     return true;
   } else if (mainCommand === "!define" && commandParts.length > 1) {
     const termToDefine = commandParts.slice(1).join(" ");
@@ -84,13 +107,13 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
       ];
       const definitionResponse = await getGPTResponse(tempMessages);
       if (definitionResponse?.content) {
-        await sendWhatsAppMessage(subscriber, `Definition of "${termToDefine}":\n${definitionResponse.content}`);
+        await sendWhatsAppMessage(subscriber.phone, `Definition of "${termToDefine}":\n${definitionResponse.content}`); // Uses imported sendWhatsAppMessage
       } else {
-        await sendWhatsAppMessage(subscriber, `Sorry, I couldn't define "${termToDefine}" at the moment.`);
+        await sendWhatsAppMessage(subscriber.phone, `Sorry, I couldn\'t define "${termToDefine}" at the moment.`); // Uses imported sendWhatsAppMessage
       }
     } catch (error) {
-      console.error(`Error defining term "${termToDefine}":`, error);
-      await sendWhatsAppMessage(subscriber, "Sorry, there was an error getting the definition.");
+      logger.error({ err: error, term: termToDefine }, `Error defining term "${termToDefine}":`);
+      await sendWhatsAppMessage(subscriber.phone, "Sorry, there was an error getting the definition."); // Uses imported sendWhatsAppMessage
     }
     return true;
   } else if (mainCommand === "!myinfo") {
@@ -104,7 +127,7 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
     } else {
       infoText += "  None set\n";
     }
-    await sendWhatsAppMessage(subscriber, infoText);
+    await sendWhatsAppMessage(subscriber.phone, infoText); // Uses imported sendWhatsAppMessage
     return true;
   }
 
@@ -116,7 +139,7 @@ export const app = express();
 app.use(express.json());
 
 async function initiateConversation(subscriber: Subscriber, systemPrompt: SystemPromptEntry): Promise<boolean> {
-  console.log(`Initiating single-user conversation for ${subscriber.phone} with system prompt: "${systemPrompt.prompt}" and first user message: "${systemPrompt.firstUserMessage}"`);
+  logger.info({ phone: subscriber.phone, promptSlug: systemPrompt.slug }, `Initiating single-user conversation with system prompt: "${systemPrompt.prompt}" and first user message: "${systemPrompt.firstUserMessage}"`);
   
   conversationHistories[subscriber.phone] = [
     { role: "system", content: systemPrompt.prompt },
@@ -124,61 +147,23 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   ];
 
   try {
-    const initialGptResponse = await getGPTResponse(conversationHistories[subscriber.phone]);
+    const initialGptResponse = await getGPTResponse(conversationHistories[subscriber.phone]); // Uses imported getGPTResponse
 
     if (initialGptResponse?.content) {
       // Add AI's first response to history
       conversationHistories[subscriber.phone].push({ role: "assistant", content: initialGptResponse.content });
-      return await sendWhatsAppMessage(subscriber, initialGptResponse.content);
+      return await sendWhatsAppMessage(subscriber.phone, initialGptResponse.content); // Uses imported sendWhatsAppMessage
     } else {
-      console.error(`GPT did not generate an initial message for system prompt: "${systemPrompt}" and first user message: "${systemPrompt.firstUserMessage}" for phone: ${subscriber.phone}`);
+      logger.error({ phone: subscriber.phone, prompt: systemPrompt.prompt, firstUserMessage: systemPrompt.firstUserMessage }, `GPT did not generate an initial message for system prompt`);
       return false;
     }
   } catch (error) {
-    console.error(`Error during conversation initiation for ${subscriber.phone}:`, error);
+    logger.error({ err: error, phone: subscriber.phone }, `Error during conversation initiation`);
     return false;
   }
 }
 
-async function sendWhatsAppMessage(subscriber: Subscriber, text: string, messageIdToContext?: string): Promise<boolean> {
-  const payload: any = {
-    messaging_product: "whatsapp",
-    to: subscriber.phone,
-    text: { body: text },
-  };
-  if (messageIdToContext) {
-    payload.context = { message_id: messageIdToContext };
-  }
-
-  try {
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${whatsappPhoneId}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${whatsappToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      }
-    );
-
-    if (!response.ok) {
-      console.error(
-        `Error sending WhatsApp message to ${subscriber.phone}:`,
-        response.status,
-        response.statusText,
-        await response.text()
-      );
-      return false;
-    }
-    console.log(`WhatsApp message sent successfully to ${subscriber.phone}.`);
-    return true;
-  } catch (error) {
-    console.error(`Exception sending WhatsApp message to ${subscriber.phone}:`, error);
-    return false;
-  }
-}
+// sendWhatsAppMessage function moved to whatsapp.ts
 
 app.post("/initiate", async (req: any, res: any) => {
   const { phone, promptSlug } = req.body;
@@ -187,15 +172,38 @@ app.post("/initiate", async (req: any, res: any) => {
     return res.status(400).send("Missing 'phone' or 'promptSlug' in request body.");
   }
 
+  const hasPaid = await checkStripeSubscription(phone); // Uses imported checkStripeSubscription
+  if (!hasPaid) {
+    logger.info({ phone }, "/initiate: User has not paid according to Stripe.");
+    // You might want to send a WhatsApp message here if you have a way to do it before full subscription
+    // For now, just return an error.
+    //return res.status(403).send("Payment required to initiate conversation. Please subscribe via [your-payment-link].");
+  } else {
+    logger.info({ phone }, "/initiate: User has paid. Proceeding with initiation.");
+  }
+
+  let subscriber = subscribers.find(p => p.phone === phone);
+  if (!subscriber) {
+    subscriber = {
+      phone: phone,
+      speakingLanguages: [],
+      learningLanguages: [],
+      messageHistory: []
+    };
+    subscribers.push(subscriber); // Add to subscribers list if new and paid
+  }
+
+  const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
+
   try {
-    const success = await initiateConversation(phone, defaultSystemPrompt);
+    const success = await initiateConversation(subscriber, selectedPrompt);
     if (success) {
       res.status(200).send("Conversation initiated successfully.");
     } else {
       res.status(500).send("Failed to initiate conversation.");
     }
   } catch (error) {
-    console.error("Error reading or parsing system_prompts.json:", error);
+    logger.error({ err: error }, "Error in /initiate endpoint after prompt loading");
     res.status(500).send("Internal server error while processing prompts.");
   }
 });
@@ -207,10 +215,19 @@ app.post("/webhook", async (req: any, res: any) => {
     const userPhone = message.from;
     let subscriber = subscribers.find(p => p.phone === userPhone);
 
-    await markMessageAsRead(message.id);
+    await markMessageAsRead(message.id); // Uses imported markMessageAsRead
 
     if (!subscriber) {
-      console.log(`New subscriber: ${userPhone}. Creating profile.`);
+      logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
+      const hasPaid = await checkStripeSubscription(userPhone);
+
+      if (!hasPaid) {
+        logger.info({ userPhone }, "User has not paid. Sending payment link.");
+        await sendWhatsAppMessage(userPhone, "Welcome! To use this service, please complete your subscription here: [Your Payment Link]"); // Uses imported sendWhatsAppMessage
+        return res.sendStatus(200); // Stop processing until payment
+      }
+      
+      logger.info({ userPhone }, "New user has paid. Creating profile.");
       subscriber = {
         phone: userPhone,
         speakingLanguages: [],
@@ -218,16 +235,23 @@ app.post("/webhook", async (req: any, res: any) => {
         messageHistory: [] // This history is part of Subscriber, separate from conversationHistories
       };
       subscribers.push(subscriber);
+      // For a new, paid user, initiate the conversation immediately.
+      // The current message that triggered this will be ignored for conversation history,
+      // as the bot will start with its own initiation message.
+      await initiateConversation(subscriber, defaultSystemPrompt);
+      return res.sendStatus(200); // Conversation initiated, no further processing of this incoming message.
     }
 
+    // Existing subscriber, or new subscriber for whom conversation was just initiated.
     // Handle user commands first
     if (await handleUserCommand(message.text.body, subscriber)) {
       return res.sendStatus(200); // Command was handled, stop further processing for this message
     }
 
     // If not a user command, and no conversation history, initiate one.
+    // This case should be less common now that new paid users have conversation initiated above.
     if (!conversationHistories[userPhone]) {
-      console.log(`Received message from ${userPhone}, but no conversation initiated. Starting with default start.`);
+      logger.warn({ userPhone }, `No conversation history for subscriber. Initiating with default start.`);
       await initiateConversation(subscriber, defaultSystemPrompt);
       // The current message triggered the initiation. User will reply to the bot's first message.
       return res.sendStatus(200);
@@ -238,57 +262,27 @@ app.post("/webhook", async (req: any, res: any) => {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
-      let responseTextToUser = aiResponse.content;
+      let responseTextToUser = aiResponse?.content;
 
       if (responseTextToUser) {
         conversationHistories[userPhone].push({ role: "assistant", content: responseTextToUser });
-        await sendWhatsAppMessage(subscriber, responseTextToUser);
+        await sendWhatsAppMessage(subscriber.phone, responseTextToUser); // Uses imported sendWhatsAppMessage
       } else {
         // Handle cases where AI response content is empty/null
-        console.warn(`AI response content was empty for ${userPhone}.`);
+        logger.warn({ userPhone }, `AI response content was empty.`);
         // Optionally send a fallback message
-        // await sendWhatsAppMessage(subscriber, "I'm not sure how to respond to that. Could you try rephrasing?");
+        // await sendWhatsAppMessage(subscriber.phone, "I\'m not sure how to respond to that. Could you try rephrasing?");
       }
       
     } catch (error) {
-      console.error(`Error processing message for ${userPhone}:`, error);
-      await sendWhatsAppMessage(subscriber, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
+      logger.error({ err: error, userPhone }, `Error processing message`);
+      await sendWhatsAppMessage(subscriber.phone, "Hey, I\'m currently suffering from bugs. The exterminator has been called already!"); // Uses imported sendWhatsAppMessage
     }
   }
   res.sendStatus(200);
 });
 
-async function markMessageAsRead(messageId: string) {
-  try {
-    const readResponse = await fetch(
-      `https://graph.facebook.com/v18.0/${whatsappPhoneId}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${whatsappToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: messageId
-        })
-      }
-    );
-    if (!readResponse.ok) {
-      console.error(
-        "Error marking message as read:",
-        readResponse.status,
-        readResponse.statusText,
-        await readResponse.text()
-      );
-    } else {
-      console.log(`Message ${messageId} marked as read.`);
-    }
-  } catch (error) {
-    console.error(`Exception marking message ${messageId} as read:`, error);
-  }
-}
+// markMessageAsRead function moved to whatsapp.ts
 
 app.get("/webhook", (req: any, res: any) => {
   const mode = req.query["hub.mode"];
@@ -299,7 +293,7 @@ app.get("/webhook", (req: any, res: any) => {
   if (mode === "subscribe" && token === whatsappVerifyToken) {
     // Respond with challenge token from the request
     res.status(200).send(challenge);
-    console.log("Webhook verified successfully!");
+    logger.info("Webhook verified successfully!");
   } else {
     // Respond with '403 Forbidden' if verify tokens do not match
     res.sendStatus(403);
@@ -307,33 +301,14 @@ app.get("/webhook", (req: any, res: any) => {
 });
 
 app.get("/", (req: any, res: any) => {
-  console.log("/");
+  logger.info("/");
   res.send("Hi Mom");
 });
 
 // Set up static file serving for HTML files
 app.use('/static', serveStatic(process.cwd() + "/static"));
 
-async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[]) {
-  if (messages.length === 0 || messages[0].role !== 'system') {
-    console.warn("getGPTResponse called with messages array not starting with a system prompt. Adding a default one.");
-    messages.unshift({ role: "system", content: defaultSystemPrompt.prompt });
-  }
-  
-  const filteredMessages = messages.filter(msg => msg.content && String(msg.content).trim() !== '');
-  if (filteredMessages.length === 1 && filteredMessages[0].role === 'system') {
-    console.warn("getGPTResponse called with only a system message. Adding a default one.");
-    messages.push({role: "user", content: defaultSystemPrompt.firstUserMessage});
-  }
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: filteredMessages,
-  });
-  return completion.choices[0].message;
-}
-
 const port = process.env.PORT || 8080;
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  logger.info(`Server running on port ${port}`);
 });
