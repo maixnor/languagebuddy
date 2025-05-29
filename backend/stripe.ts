@@ -24,7 +24,7 @@ export async function checkStripeSubscription(phoneNumber: string): Promise<bool
   try {
     const customers = await stripe.customers.search({
       limit: 1,
-      query: `phone:'${phoneNumber}'`
+      query: `phone:'+${phoneNumber}'` // Whatsapp phone numbers are without the plus. adding it here
     });
 
     if (customers.data.length === 0) {
