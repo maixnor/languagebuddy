@@ -23,21 +23,32 @@ export async function getGPTResponse(messages: OpenAI.Chat.Completions.ChatCompl
     logger.error("OpenAI client not initialized.");
     return null;
   }
-  if (messages.length === 0 || messages[0].role !== 'system') {
+
+  let effectiveMessages = [...messages]; // Work on a copy
+
+  if (effectiveMessages.length === 0 || effectiveMessages[0].role !== 'system') {
     logger.warn("getGPTResponse called with messages array not starting with a system prompt. Adding a default one.");
-    messages.unshift({ role: "system", content: currentDefaultSystemPrompt.prompt });
+    effectiveMessages.unshift({ role: "system", content: currentDefaultSystemPrompt.prompt });
   }
 
-  const filteredMessages = messages.filter(msg => msg.content && String(msg.content).trim() !== '');
+  // Filter out messages with empty or whitespace-only content AFTER ensuring system prompt.
+  let filteredMessages = effectiveMessages.filter(msg => msg.content && String(msg.content).trim() !== '');
+
+  // If, after filtering, only a system message remains, add the default first user message.
   if (filteredMessages.length === 1 && filteredMessages[0].role === 'system') {
-    logger.warn("getGPTResponse called with only a system message. Adding a default user message.");
-    messages.push({ role: "user", content: currentDefaultSystemPrompt.firstUserMessage });
+    logger.warn("getGPTResponse called with only a system message (after filtering). Adding default user message.");
+    filteredMessages.push({ role: "user", content: currentDefaultSystemPrompt.firstUserMessage });
+  }
+
+  if (filteredMessages.length === 0) {
+      logger.error("No valid messages to send to GPT after filtering.");
+      return null;
   }
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: filteredMessages,
+      messages: filteredMessages, // Use the potentially modified filteredMessages
     });
     return completion.choices[0].message;
   } catch (error) {

@@ -78,6 +78,7 @@ interface Language {
 // Data structures for group tours
 interface Subscriber {
   phone: string;
+  name: string; // how the user wants to be adressed
   speakingLanguages: Language[];
   learningLanguages: Language[];
   messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
@@ -117,7 +118,7 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
     return true;
   } else if (mainCommand === "!myinfo") {
     let infoText = `Your Language Profile:\n`;
-    infoText += `Speaking Languages: ${subscriber.speakingLanguages.length > 0 ? subscriber.speakingLanguages.join(', ') : 'None set'}\n`;
+    infoText += `Speaking Languages: ${subscriber.speakingLanguages.length > 0 ? subscriber.speakingLanguages.map(lang => lang.languageName).join(', ') : 'None set'}\n`; // Corrected this line
     infoText += "Learning Languages:\n";
     if (subscriber.learningLanguages.length > 0) {
       subscriber.learningLanguages.forEach(lang => {
@@ -185,6 +186,7 @@ app.post("/initiate", async (req: any, res: any) => {
   if (!subscriber) {
     subscriber = {
       phone: phone,
+      name: "nothing specified",
       speakingLanguages: [],
       learningLanguages: [],
       messageHistory: []
@@ -229,53 +231,109 @@ app.post("/webhook", async (req: any, res: any) => {
       logger.info({ userPhone }, "New user has paid. Creating profile.");
       subscriber = {
         phone: userPhone,
+        name: "nothing specified",
         speakingLanguages: [],
         learningLanguages: [],
         messageHistory: [] // This history is part of Subscriber, separate from conversationHistories
       };
       subscribers.push(subscriber);
-      // For a new, paid user, initiate the conversation immediately.
-      // The current message that triggered this will be ignored for conversation history,
-      // as the bot will start with its own initiation message.
       await initiateConversation(subscriber, defaultSystemPrompt);
-      return res.sendStatus(200); // Conversation initiated, no further processing of this incoming message.
-    }
-
-    // Existing subscriber, or new subscriber for whom conversation was just initiated.
-    // Handle user commands first
-    if (await handleUserCommand(message.text.body, subscriber)) {
-      return res.sendStatus(200); // Command was handled, stop further processing for this message
-    }
-
-    // If not a user command, and no conversation history, initiate one.
-    // This case should be less common now that new paid users have conversation initiated above.
-    if (!conversationHistories[userPhone]) {
-      logger.warn({ userPhone }, `No conversation history for subscriber. Initiating with default start.`);
-      await initiateConversation(subscriber, defaultSystemPrompt);
-      // The current message triggered the initiation. User will reply to the bot's first message.
       return res.sendStatus(200);
     }
 
-    // Process regular conversation message
+    if (await handleUserCommand(message.text.body, subscriber)) {
+      return res.sendStatus(200);
+    }
+
+    if (!conversationHistories[userPhone]) {
+      logger.warn({ userPhone }, `No conversation history for subscriber. Initiating with default start.`);
+      await initiateConversation(subscriber, defaultSystemPrompt);
+      return res.sendStatus(200);
+    }
+
     try {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
       let responseTextToUser = aiResponse?.content;
+      let gptCommandProcessedSuccessfully = false;
+      let rawCommandFromGpt = "";
 
-      if (responseTextToUser) {
-        conversationHistories[userPhone].push({ role: "assistant", content: responseTextToUser });
-        await sendWhatsAppMessage(subscriber.phone, responseTextToUser); // Uses imported sendWhatsAppMessage
-      } else {
-        // Handle cases where AI response content is empty/null
-        logger.warn({ userPhone }, `AI response content was empty.`);
-        // Optionally send a fallback message
-        // await sendWhatsAppMessage(subscriber.phone, "I\'m not sure how to respond to that. Could you try rephrasing?");
+      while (true) { // parse and remove GPT commands from response
+        if (!responseTextToUser) break;
+        const lines = responseTextToUser.split('\n');
+        const commandMatch = lines[0].match(/^!COMMAND\s+(\w+)=(.+)/);
+        if (!commandMatch) break;
+
+        rawCommandFromGpt = lines[0];
+        const attributeName = commandMatch[1];
+        const attributeValueString = commandMatch[2].trim();
+        try {
+          const attributeValue = JSON.parse(attributeValueString);
+          logger.info({ userPhone, attributeName, attributeValue }, "Attempting to process GPT command");
+
+          if (attributeName === "speakingLanguages" && Array.isArray(attributeValue)) {
+            subscriber.speakingLanguages = attributeValue
+              .filter(lang => typeof lang === 'string')
+              .map(langName => ({ languageName: langName, level: "", currentObjectives: [] }));
+            logger.info({ userPhone, speakingLanguages: subscriber.speakingLanguages }, "Updated subscriber speakingLanguages via GPT command");
+            gptCommandProcessedSuccessfully = true;
+          } else if (attributeName === "learningLanguages" && Array.isArray(attributeValue)) {
+            subscriber.learningLanguages = attributeValue.filter(lang =>
+              lang && typeof lang.languageName === 'string' &&
+              (typeof lang.level === 'string' || lang.level === undefined || lang.level === null) &&
+              (Array.isArray(lang.currentObjectives) || lang.currentObjectives === undefined || lang.currentObjectives === null)
+            ).map(lang => ({
+              languageName: lang.languageName,
+              level: lang.level || "",
+              currentObjectives: lang.currentObjectives || []
+            }));
+            logger.info({ userPhone, learningLanguages: subscriber.learningLanguages }, "Updated subscriber learningLanguages via GPT command");
+            gptCommandProcessedSuccessfully = true;
+          } else if (attributeName === "name") {
+            subscriber.name = attributeValue;
+          }
+          // Add more command handlers here for other attributes
+
+          if (gptCommandProcessedSuccessfully) {
+            lines.shift(); // Remove the command line
+            responseTextToUser = lines.join('\n').trim();
+          } else {
+            logger.warn({ userPhone, command: lines[0] }, "GPT command not recognized or failed validation. Stripping command from response.");
+            lines.shift(); // Strip unrecognized/invalid command
+            responseTextToUser = lines.join('\n').trim();
+          }
+        } catch (e) {
+          logger.error({ err: e, userPhone, commandLine: lines[0] }, "Error parsing GPT command JSON value. Command stripped.");
+          lines.shift(); // Remove the malformed command line
+          responseTextToUser = lines.join('\n').trim();
+        }
+      }
+
+      // Logic for history and sending message
+      if (aiResponse?.content || gptCommandProcessedSuccessfully) {
+        // responseTextToUser has been modified (command stripped if applicable)
+        // Store the (potentially modified) responseTextToUser in history
+        conversationHistories[userPhone].push({ role: "assistant", content: responseTextToUser || "" });
+
+        if (responseTextToUser && responseTextToUser.trim() !== "") {
+          await sendWhatsAppMessage(subscriber.phone, responseTextToUser);
+        } else if (gptCommandProcessedSuccessfully) {
+          logger.info({ userPhone, command: rawCommandFromGpt }, "GPT command processed, no subsequent text message for user.");
+        } else if (rawCommandFromGpt) { // A command was detected and stripped, but not successfully processed, and response is now empty
+          logger.info({ userPhone, command: rawCommandFromGpt }, "A command-like line was stripped, resulting in an empty message. Nothing sent to user.");
+        } else if (!responseTextToUser && aiResponse?.content) {
+           // Original response was not empty, but became empty (e.g. was only a malformed command)
+           logger.warn({ userPhone, originalContent: aiResponse.content }, "Original AI response was present but became empty after command processing attempts. Nothing sent to user.");
+        }
+      } else { // AI response was initially null/empty and no command was processed
+        logger.warn({ userPhone }, `AI response content was null or empty, and no command processed.`);
+        conversationHistories[userPhone].push({ role: "assistant", content: "" }); // Record an empty turn
       }
       
     } catch (error) {
       logger.error({ err: error, userPhone }, `Error processing message`);
-      await sendWhatsAppMessage(subscriber.phone, "Hey, I\'m currently suffering from bugs. The exterminator has been called already!"); // Uses imported sendWhatsAppMessage
+      await sendWhatsAppMessage(subscriber.phone, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
     }
   }
   res.sendStatus(200);
