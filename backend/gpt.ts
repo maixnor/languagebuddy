@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import pino from 'pino';
-import { SystemPromptEntry } from "./main"; // Assuming SystemPromptEntry will be exported from main.ts or a shared types file
+import { SystemPromptEntry } from "./types";
 
 let openai: OpenAI;
 let logger: pino.Logger;

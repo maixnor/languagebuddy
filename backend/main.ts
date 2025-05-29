@@ -13,12 +13,9 @@ import { initOpenAI, getGPTResponse } from './gpt';
 import { initWhatsApp, sendWhatsAppMessage, markMessageAsRead } from './whatsapp';
 import { handleGptCommands } from "./commands";
 import OpenAI from "openai";
+import { Subscriber, SystemPromptEntry, logger } from "./types";
 
 dotenv.config();
-
-export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
 
 const openAiToken = process.env.OPENAI_API_KEY;
 const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
@@ -28,12 +25,6 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
 // In-memory store for single-user conversation histories
 const conversationHistories: { [key: string]: OpenAI.Chat.Completions.ChatCompletionMessageParam[] } = {};
-
-export interface SystemPromptEntry {
-  slug: string;
-  prompt: string;
-  firstUserMessage: string;
-}
 
 let systemPrompts: SystemPromptEntry[] = [];
 let defaultSystemPrompt: SystemPromptEntry;
@@ -62,22 +53,6 @@ if (openAiToken && defaultSystemPrompt) {
   logger.error("OpenAI token or default system prompt is missing. GPT functionality will be impaired.");
 }
 initWhatsApp(whatsappToken!, whatsappPhoneId!, logger);
-
-
-interface Language {
-  languageName: string;
-  level: string;
-  currentObjectives: string[];
-}
-
-// Data structures for group tours
-export interface Subscriber {
-  phone: string;
-  name: string; // how the user wants to be adressed
-  speakingLanguages: Language[];
-  learningLanguages: Language[];
-  messageHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
-}
 
 const subscribers: Subscriber[] = [];
 
@@ -248,7 +223,7 @@ app.post("/webhook", async (req: any, res: any) => {
       conversationHistories[userPhone].push({ role: "user", content: message.text.body });
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
-      let responseTextToUser = aiResponse?.content;
+      let responseTextToUser = aiResponse?.content!;
       
       let gptCommandProcessedSuccessfully = false;
       let rawCommandFromGpt = "";
