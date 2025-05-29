@@ -41,3 +41,7 @@ ignore the typing when a user command is being handled
 translate
 define
 
+# GPT commands
+
+does not work yet, but most of the code is written already, only need to debug
+
