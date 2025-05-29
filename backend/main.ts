@@ -95,7 +95,7 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
                      "!help - Show this help message\n" +
                      "!define <word> - Get definition of a word\n" +
                      "!myinfo - Show your current language profile";
-    await sendWhatsAppMessage(subscriber.phone, helpText); // Uses imported sendWhatsAppMessage
+    await sendWhatsAppMessage(subscriber.phone, helpText);
     return true;
   } else if (mainCommand === "!define" && commandParts.length > 1) {
     const termToDefine = commandParts.slice(1).join(" ");
@@ -107,13 +107,13 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
       ];
       const definitionResponse = await getGPTResponse(tempMessages);
       if (definitionResponse?.content) {
-        await sendWhatsAppMessage(subscriber.phone, `Definition of "${termToDefine}":\n${definitionResponse.content}`); // Uses imported sendWhatsAppMessage
+        await sendWhatsAppMessage(subscriber.phone, `Definition of "${termToDefine}":\n${definitionResponse.content}`);
       } else {
-        await sendWhatsAppMessage(subscriber.phone, `Sorry, I couldn\'t define "${termToDefine}" at the moment.`); // Uses imported sendWhatsAppMessage
+        await sendWhatsAppMessage(subscriber.phone, `Sorry, I couldn\'t define "${termToDefine}" at the moment.`);
       }
     } catch (error) {
       logger.error({ err: error, term: termToDefine }, `Error defining term "${termToDefine}":`);
-      await sendWhatsAppMessage(subscriber.phone, "Sorry, there was an error getting the definition."); // Uses imported sendWhatsAppMessage
+      await sendWhatsAppMessage(subscriber.phone, "Sorry, there was an error getting the definition.");
     }
     return true;
   } else if (mainCommand === "!myinfo") {
@@ -127,7 +127,7 @@ async function handleUserCommand(messageText: string, subscriber: Subscriber): P
     } else {
       infoText += "  None set\n";
     }
-    await sendWhatsAppMessage(subscriber.phone, infoText); // Uses imported sendWhatsAppMessage
+    await sendWhatsAppMessage(subscriber.phone, infoText);
     return true;
   }
 
@@ -147,12 +147,12 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   ];
 
   try {
-    const initialGptResponse = await getGPTResponse(conversationHistories[subscriber.phone]); // Uses imported getGPTResponse
+    const initialGptResponse = await getGPTResponse(conversationHistories[subscriber.phone]);
 
     if (initialGptResponse?.content) {
       // Add AI's first response to history
       conversationHistories[subscriber.phone].push({ role: "assistant", content: initialGptResponse.content });
-      return await sendWhatsAppMessage(subscriber.phone, initialGptResponse.content); // Uses imported sendWhatsAppMessage
+      return await sendWhatsAppMessage(subscriber.phone, initialGptResponse.content);
     } else {
       logger.error({ phone: subscriber.phone, prompt: systemPrompt.prompt, firstUserMessage: systemPrompt.firstUserMessage }, `GPT did not generate an initial message for system prompt`);
       return false;
@@ -163,8 +163,6 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   }
 }
 
-// sendWhatsAppMessage function moved to whatsapp.ts
-
 app.post("/initiate", async (req: any, res: any) => {
   const { phone, promptSlug } = req.body;
 
@@ -172,7 +170,7 @@ app.post("/initiate", async (req: any, res: any) => {
     return res.status(400).send("Missing 'phone' or 'promptSlug' in request body.");
   }
 
-  const hasPaid = await checkStripeSubscription(phone); // Uses imported checkStripeSubscription
+  const hasPaid = await checkStripeSubscription(phone);
   if (!hasPaid) {
     logger.info({ phone }, "/initiate: User has not paid according to Stripe.");
     // You might want to send a WhatsApp message here if you have a way to do it before full subscription
@@ -191,7 +189,7 @@ app.post("/initiate", async (req: any, res: any) => {
       learningLanguages: [],
       messageHistory: []
     };
-    subscribers.push(subscriber); // Add to subscribers list if new and paid
+    subscribers.push(subscriber);
   }
 
   const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
@@ -216,7 +214,7 @@ app.post("/webhook", async (req: any, res: any) => {
     const userPhone = message.from;
     let subscriber = subscribers.find(p => p.phone === userPhone);
 
-    await markMessageAsRead(message.id); // Uses imported markMessageAsRead
+    await markMessageAsRead(message.id);
 
     if (!subscriber) {
       logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
@@ -224,8 +222,8 @@ app.post("/webhook", async (req: any, res: any) => {
 
       if (!hasPaid) {
         logger.info({ userPhone }, "User has not paid. Sending payment link.");
-        await sendWhatsAppMessage(userPhone, "Welcome! To use this service, please complete your subscription here: [Your Payment Link]"); // Uses imported sendWhatsAppMessage
-        return res.sendStatus(200); // Stop processing until payment
+        await sendWhatsAppMessage(userPhone, "Welcome! To use this service, please complete your subscription here: [Your Payment Link]");
+        return res.sendStatus(200);
       }
       
       logger.info({ userPhone }, "New user has paid. Creating profile.");
@@ -234,7 +232,7 @@ app.post("/webhook", async (req: any, res: any) => {
         name: "nothing specified",
         speakingLanguages: [],
         learningLanguages: [],
-        messageHistory: [] // This history is part of Subscriber, separate from conversationHistories
+        messageHistory: []
       };
       subscribers.push(subscriber);
       await initiateConversation(subscriber, defaultSystemPrompt);
@@ -256,64 +254,14 @@ app.post("/webhook", async (req: any, res: any) => {
 
       const aiResponse = await getGPTResponse(conversationHistories[userPhone]);
       let responseTextToUser = aiResponse?.content;
+      
       let gptCommandProcessedSuccessfully = false;
       let rawCommandFromGpt = "";
 
-      while (true) { // parse and remove GPT commands from response
-        if (!responseTextToUser) break;
-        const lines = responseTextToUser.split('\n');
-        const commandMatch = lines[0].match(/^!COMMAND\s+(\w+)=(.+)/);
-        if (!commandMatch) break;
-
-        rawCommandFromGpt = lines[0];
-        const attributeName = commandMatch[1];
-        const attributeValueString = commandMatch[2].trim();
-        try {
-          const attributeValue = JSON.parse(attributeValueString);
-          logger.info({ userPhone, attributeName, attributeValue }, "Attempting to process GPT command");
-
-          if (attributeName === "speakingLanguages" && Array.isArray(attributeValue)) {
-            subscriber.speakingLanguages = attributeValue
-              .filter(lang => typeof lang === 'string')
-              .map(langName => ({ languageName: langName, level: "", currentObjectives: [] }));
-            logger.info({ userPhone, speakingLanguages: subscriber.speakingLanguages }, "Updated subscriber speakingLanguages via GPT command");
-            gptCommandProcessedSuccessfully = true;
-          } else if (attributeName === "learningLanguages" && Array.isArray(attributeValue)) {
-            subscriber.learningLanguages = attributeValue.filter(lang =>
-              lang && typeof lang.languageName === 'string' &&
-              (typeof lang.level === 'string' || lang.level === undefined || lang.level === null) &&
-              (Array.isArray(lang.currentObjectives) || lang.currentObjectives === undefined || lang.currentObjectives === null)
-            ).map(lang => ({
-              languageName: lang.languageName,
-              level: lang.level || "",
-              currentObjectives: lang.currentObjectives || []
-            }));
-            logger.info({ userPhone, learningLanguages: subscriber.learningLanguages }, "Updated subscriber learningLanguages via GPT command");
-            gptCommandProcessedSuccessfully = true;
-          } else if (attributeName === "name") {
-            subscriber.name = attributeValue;
-          }
-          // Add more command handlers here for other attributes
-
-          if (gptCommandProcessedSuccessfully) {
-            lines.shift(); // Remove the command line
-            responseTextToUser = lines.join('\n').trim();
-          } else {
-            logger.warn({ userPhone, command: lines[0] }, "GPT command not recognized or failed validation. Stripping command from response.");
-            lines.shift(); // Strip unrecognized/invalid command
-            responseTextToUser = lines.join('\n').trim();
-          }
-        } catch (e) {
-          logger.error({ err: e, userPhone, commandLine: lines[0] }, "Error parsing GPT command JSON value. Command stripped.");
-          lines.shift(); // Remove the malformed command line
-          responseTextToUser = lines.join('\n').trim();
-        }
-      }
+      ({ responseTextToUser, rawCommandFromGpt, gptCommandProcessedSuccessfully } = handleGptCommands(responseTextToUser, subscriber));
 
       // Logic for history and sending message
       if (aiResponse?.content || gptCommandProcessedSuccessfully) {
-        // responseTextToUser has been modified (command stripped if applicable)
-        // Store the (potentially modified) responseTextToUser in history
         conversationHistories[userPhone].push({ role: "assistant", content: responseTextToUser || "" });
 
         if (responseTextToUser && responseTextToUser.trim() !== "") {
@@ -329,6 +277,7 @@ app.post("/webhook", async (req: any, res: any) => {
       } else { // AI response was initially null/empty and no command was processed
         logger.warn({ userPhone }, `AI response content was null or empty, and no command processed.`);
         conversationHistories[userPhone].push({ role: "assistant", content: "" }); // Record an empty turn
+        // TODO get a new response from GPT
       }
       
     } catch (error) {
@@ -369,3 +318,59 @@ const port = process.env.PORT || 8080;
 app.listen(port, () => {
   logger.info(`Server running on port ${port}`);
 });
+
+function handleGptCommands(responseTextToUser: string | null | undefined, subscriber: Subscriber) {
+  if (!responseTextToUser) return {responseTextToUser, rawCommandFromGpt:"", gptCommandProcessedSuccessfully:true};
+  const lines = responseTextToUser!.split('\n');
+  let rawCommandFromGpt = "";
+  let gptCommandProcessedSuccessfully = false;
+  while (true) { // parse and remove GPT commands from response
+    const commandMatch = lines[0].match(/^!COMMAND\s+(\w+)=(.+)/);
+    if (!commandMatch) break;
+
+    rawCommandFromGpt = lines[0];
+    const attributeName = commandMatch[1];
+    const attributeValueString = commandMatch[2].trim();
+    try {
+      const attributeValue = JSON.parse(attributeValueString);
+      logger.info({ userPhone: subscriber.phone, attributeName, attributeValue }, "Attempting to process GPT command");
+
+      if (attributeName === "speakingLanguages" && Array.isArray(attributeValue)) {
+        subscriber.speakingLanguages = attributeValue
+          .filter(lang => typeof lang === 'string')
+          .map(langName => ({ languageName: langName, level: "", currentObjectives: [] }));
+        logger.info({ userPhone: subscriber.phone, speakingLanguages: subscriber.speakingLanguages }, "Updated subscriber speakingLanguages via GPT command");
+        gptCommandProcessedSuccessfully = true;
+      } else if (attributeName === "learningLanguages" && Array.isArray(attributeValue)) {
+        subscriber.learningLanguages = attributeValue.filter(lang => lang && typeof lang.languageName === 'string' &&
+          (typeof lang.level === 'string' || lang.level === undefined || lang.level === null) &&
+          (Array.isArray(lang.currentObjectives) || lang.currentObjectives === undefined || lang.currentObjectives === null)
+        ).map(lang => ({
+          languageName: lang.languageName,
+          level: lang.level || "",
+          currentObjectives: lang.currentObjectives || []
+        }));
+        logger.info({ userPhone: subscriber.phone, learningLanguages: subscriber.learningLanguages }, "Updated subscriber learningLanguages via GPT command");
+        gptCommandProcessedSuccessfully = true;
+      } else if (attributeName === "name") {
+        subscriber.name = attributeValue;
+        gptCommandProcessedSuccessfully = true;
+      }
+      // Add more command handlers here for other attributes
+      if (gptCommandProcessedSuccessfully) {
+        lines.shift(); // Remove the command line
+        responseTextToUser = lines.join('\n').trim();
+      } else {
+        logger.warn({ userPhone: subscriber.phone, command: lines[0] }, "GPT command not recognized or failed validation. Stripping command from response.");
+        lines.shift(); // Strip unrecognized/invalid command
+        responseTextToUser = lines.join('\n').trim();
+      }
+    } catch (e) {
+      logger.error({ err: e, userPhone: subscriber.phone, commandLine: lines[0] }, "Error parsing GPT command JSON value. Command stripped.");
+      lines.shift(); // Remove the malformed command line
+      responseTextToUser = lines.join('\n').trim();
+    }
+  }
+  return { responseTextToUser, rawCommandFromGpt, gptCommandProcessedSuccessfully };
+}
+

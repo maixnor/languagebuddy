@@ -29,3 +29,15 @@ then get a first response from GPT and send that to the user
 # Payment integration
 
 figure out how this thing with the payment links works exactly, but I presume via the phone number in the form the phone field is populated so I can search for it later.
+
+# Whatsapp behavior
+
+add a logo and description to give the buddy a bit more personality
+when the response from GPT is returned have a typing... status issued and wait based on the amount of words in the GPT response, the function should have a cap of 10s
+ignore the typing when a user command is being handled
+
+# User commands
+
+translate
+define
+
