@@ -1,5 +1,5 @@
 test:
   npm run build
-  # node dist/stripe-test.js
+  node dist/stripe-test.js
   node dist/commands-test.js
 
