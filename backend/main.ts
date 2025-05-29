@@ -192,7 +192,7 @@ app.post("/webhook", async (req: any, res: any) => {
 
       if (!hasPaid) {
         logger.info({ userPhone }, "User has not paid. Sending payment link.");
-        await sendWhatsAppMessage(userPhone, "Welcome! To use this service, please complete your subscription here: [Your Payment Link]");
+        await sendWhatsAppMessage(userPhone, "Welcome! To use me as your language buddy please complete your subscription here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nUse coupon code: 'STARTUP' until 8th of June 2025 for 100% off your first month since we are still in testing!");
         return res.sendStatus(200);
       }
       
