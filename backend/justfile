@@ -1,0 +1,3 @@
+stripe-test:
+  npm run build && node dist/stripe-test.js
+

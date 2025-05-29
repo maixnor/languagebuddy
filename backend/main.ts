@@ -60,14 +60,13 @@ try {
   systemPrompts = [defaultSystemPrompt];
 }
 
-// Initialize Stripe, OpenAI, and WhatsApp
 initStripe(stripeSecretKey!, logger);
 if (openAiToken && defaultSystemPrompt) {
   initOpenAI(openAiToken, logger, defaultSystemPrompt);
 } else {
   logger.error("OpenAI token or default system prompt is missing. GPT functionality will be impaired.");
 }
-initWhatsApp(whatsappToken!, whatsappPhoneId!, logger); // Initialize WhatsApp
+initWhatsApp(whatsappToken!, whatsappPhoneId!, logger);
 
 
 interface Language {

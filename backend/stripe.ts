@@ -1,4 +1,4 @@
-\
+
 import Stripe from 'stripe';
 import pino from 'pino';
 
@@ -11,7 +11,7 @@ export function initStripe(apiKey: string, pinoLogger: pino.Logger) {
     stripe = null;
     return;
   }
-  stripe = new Stripe(apiKey, { apiVersion: '2024-04-10' });
+  stripe = new Stripe(apiKey);
   logger = pinoLogger;
   logger.info("Stripe initialized.");
 }
@@ -19,13 +19,12 @@ export function initStripe(apiKey: string, pinoLogger: pino.Logger) {
 export async function checkStripeSubscription(phoneNumber: string): Promise<boolean> {
   if (!stripe) {
     logger.warn("Stripe is not initialized. Assuming user has paid (development/testing mode).");
-    return true; // Or false, depending on desired default behavior without Stripe
+    return true; // TODO
   }
   try {
-    const customers = await stripe.customers.list({
+    const customers = await stripe.customers.search({
       limit: 1,
-      // email: `user-${phoneNumber}@example.com`, // If you create emails like this
-      // metadata: { 'phone_number': phoneNumber } // This is usually how you'd do it.
+      query: `phone:'${phoneNumber}'`
     });
 
     if (customers.data.length === 0) {
@@ -34,6 +33,7 @@ export async function checkStripeSubscription(phoneNumber: string): Promise<bool
     }
 
     const customer = customers.data[0];
+    logger.info(customer);
     logger.info({ customerId: customer.id, phoneNumber }, "Found Stripe customer.");
 
     const subscriptions = await stripe.subscriptions.list({
