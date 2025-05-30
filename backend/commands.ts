@@ -80,11 +80,11 @@ export function handleGptCommands(responseTextToUser: string, subscriber: Subscr
 
     if (gptCommandProcessedSuccessfully) {
       lines.shift();
-      responseTextToUser = lines.join('\\n').trim();
+      responseTextToUser = lines.join('\\n').trim().substring(3);
     } else {
       logger.warn({ userPhone: subscriber.phone, command: lines[0] }, "GPT command processing failed. Stripping command from response.");
       lines.shift();
-      responseTextToUser = lines.join('\\n').trim();
+      responseTextToUser = lines.join('\\n').trim().substring(3);
     }
   }
   return { responseTextToUser, rawCommandFromGpt, gptCommandProcessedSuccessfully, subscriber };
