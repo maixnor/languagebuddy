@@ -131,7 +131,7 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
   
   const initialHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt.prompt },
-    { role: "user", content: firstUserMessage ?? systemPrompt.firstUserMessage }
+    { role: "user", content: "This is the user object:\n" + JSON.stringify(subscriber) + (firstUserMessage ?? systemPrompt.firstUserMessage) }
   ];
 
   try {
@@ -147,7 +147,7 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
       // Store only the system and first user message if GPT fails initially
       await redisClient.set(subscriber.phone, JSON.stringify([
         { role: "system", content: systemPrompt.prompt },
-        { role: "user", content: firstUserMessage ?? systemPrompt.firstUserMessage }
+        { role: "user", content: "This is the user object:\n" + JSON.stringify(subscriber) + (firstUserMessage ?? systemPrompt.firstUserMessage) }
       ]));
       return false;
     }
@@ -157,7 +157,7 @@ async function initiateConversation(subscriber: Subscriber, systemPrompt: System
     try {
       await redisClient.set(subscriber.phone, JSON.stringify([
         { role: "system", content: systemPrompt.prompt },
-        { role: "user", content: firstUserMessage ?? systemPrompt.firstUserMessage }
+        { role: "user", content: "This is the user object:\n" + JSON.stringify(subscriber) + (firstUserMessage ?? systemPrompt.firstUserMessage) }
       ]));
     } catch (redisError) {
       logger.error({ err: redisError, phone: subscriber.phone }, `Error storing minimal history to Redis during conversation initiation failure`);
