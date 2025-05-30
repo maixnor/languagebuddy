@@ -63,7 +63,7 @@ export function handleGptCommands(responseTextToUser: string, subscriber: Subscr
 
     rawCommandFromGpt = lines[0];
     logger.info(rawCommandFromGpt);
-    const jsonPayloadString = rawCommandFromGpt.substring(9); // Extract JSON payload from command
+    const jsonPayloadString = rawCommandFromGpt.substring(16); // Extract JSON payload from command
     try {
       const commandData = JSON.parse(jsonPayloadString);
       logger.info({ userPhone: subscriber.phone, commandData }, "Parsed GPT command data for merging");
@@ -80,11 +80,11 @@ export function handleGptCommands(responseTextToUser: string, subscriber: Subscr
 
     if (gptCommandProcessedSuccessfully) {
       lines.shift();
-      responseTextToUser = lines.join('\\n').trim().substring(3);
+      responseTextToUser = lines.join('\\n').trim();
     } else {
       logger.warn({ userPhone: subscriber.phone, command: lines[0] }, "GPT command processing failed. Stripping command from response.");
       lines.shift();
-      responseTextToUser = lines.join('\\n').trim().substring(3);
+      responseTextToUser = lines.join('\\n').trim();
     }
   }
   return { responseTextToUser, rawCommandFromGpt, gptCommandProcessedSuccessfully, subscriber };

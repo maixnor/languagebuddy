@@ -88,3 +88,6 @@ if (result3.responseTextToUser !== "Final message") {
 }
 
 logger.warn("All GPT Commands tests passed!");
+
+const ok1 = handleGptCommands(message, subscriber);
+logger.warn(ok1)
