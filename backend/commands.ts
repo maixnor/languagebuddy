@@ -7,8 +7,8 @@ export function handleGptCommands(responseTextToUser: string, subscriber: Subscr
   let gptCommandProcessedSuccessfully = false;
   while (true) { // parse and remove GPT commands from response
     logger.info(lines[0])
-    const commandMatch = lines[0].match(/^!COMMAND.*/);
-    if (!commandMatch) break;
+    const commandMatch = lines[0].match(/^!SUBSCRIBERDATA.*/);
+    if (!SUBSCRIBERDATAMatch) break;
 
     rawCommandFromGpt = lines[0];
     logger.info(rawCommandFromGpt);

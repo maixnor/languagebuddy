@@ -12,7 +12,7 @@ const subscriber: Subscriber = {
     messageHistory: []
 }
 
-const message = '!COMMAND {"name":"Herbert"}\n this is the message'
+const message = '!SUBSCRIBERDATA {"name":"Herbert"}\n this is the message'
 
 const ok = handleGptCommands(message, subscriber)
 logger.info(ok);
@@ -28,7 +28,7 @@ const subscriber2: Subscriber = {
     messageHistory: []
 };
 
-const message2 = '!COMMAND {"name":"New Name","speakingLanguages":[{"languageName":"German", "currentObjectives":[], "level":"conversational"},{"languageName":"French", "currentObjectives":[], "level":"fluent"}],"learningLanguages":[{"languageName":"Italian", "currentObjectives":[], "level":"beginner"},{"languageName":"Portuguese", "currentObjectives":[], "level":"intermediate"}]}\nAnother message content';
+const message2 = '!SUBSCRIBERDATA {"name":"New Name","speakingLanguages":[{"languageName":"German", "currentObjectives":[], "level":"conversational"},{"languageName":"French", "currentObjectives":[], "level":"fluent"}],"learningLanguages":[{"languageName":"Italian", "currentObjectives":[], "level":"beginner"},{"languageName":"Portuguese", "currentObjectives":[], "level":"intermediate"}]}\nAnother message content';
 const result2 = handleGptCommands(message2, subscriber2);
 logger.info({result: result2, subscriber: subscriber2}, "Test Case 2 Results");
 
@@ -52,7 +52,7 @@ if (result2.responseTextToUser !== "Another message content") {
 // Test case 3: Multiple commands, only the last one for a field should apply if not merged, but we merge.
 // Let's test merging behavior with a more complex scenario.
 // Since Object.assign is used, later properties in the same command object will overwrite earlier ones.
-// And if multiple !COMMAND lines exist, they are processed sequentially, each modifying the subscriber.
+// And if multiple !SUBSCRIBERDATA lines exist, they are processed sequentially, each modifying the subscriber.
 const subscriber3: Subscriber = {
     phone: "436801231235",
     name: "Initial Name",
@@ -63,7 +63,7 @@ const subscriber3: Subscriber = {
 
 // First command updates name and adds a speaking language.
 // Second command updates name again and adds a learning language.
-const message3 = '!COMMAND {"name":"Intermediate Name","speakingLanguages":[{"languageName":"English", "currentObjectives":[], "level":"native"},{"languageName":"Spanish", "currentObjectives":["ordering food"], "level":"fluent"}]}\n!COMMAND {"name":"Final Name","learningLanguages":[{"languageName":"German", "currentObjectives":["basic greetings"], "level":"beginner"}]}\nFinal message';
+const message3 = '!SUBSCRIBERDATA {"name":"Intermediate Name","speakingLanguages":[{"languageName":"English", "currentObjectives":[], "level":"native"},{"languageName":"Spanish", "currentObjectives":["ordering food"], "level":"fluent"}]}\n!SUBSCRIBERDATA {"name":"Final Name","learningLanguages":[{"languageName":"German", "currentObjectives":["basic greetings"], "level":"beginner"}]}\nFinal message';
 const result3 = handleGptCommands(message3, subscriber3);
 logger.info({result: result3, subscriber: subscriber3}, "Test Case 3 Results");
 
