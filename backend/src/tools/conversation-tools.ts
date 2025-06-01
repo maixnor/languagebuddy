@@ -471,13 +471,6 @@ async function extractInfoFromMessage(message: string): Promise<Partial<Subscrib
 
 async function parseSubscriberInfoFromMessage(message: string, currentSubscriber: Subscriber): Promise<Partial<Subscriber>> {
   const updates: Partial<Subscriber> = {};
-  const lowerMessage = message.toLowerCase();
-
-  // Parse language learning information
-  const languagePatterns = [
-    /(?:learning|studying|want to learn|practicing)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi,
-    /(?:i speak|i know|fluent in|native)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi
-  ];
 
   // Extract learning languages
   const learningMatches = message.match(/(?:learning|studying|want to learn|practicing)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi);

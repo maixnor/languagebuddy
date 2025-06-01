@@ -1,2 +1,5 @@
+run:
+  npm run build && npm run start
+
 test:
-  npm run build
+  npm run build && npm run test
