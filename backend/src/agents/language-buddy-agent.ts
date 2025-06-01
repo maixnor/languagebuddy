@@ -107,6 +107,8 @@ export class LanguageBuddyAgent {
       .addEdge(START, "initialize_conversation")
       .addEdge("initialize_conversation", "check_feature_access")
       .addEdge("check_feature_access", "process_message")
+      .addEdge("initialize_conversation", "detect_missing_info")
+      .addEdge("detect_missing_info", "process_message")
       .addEdge("process_message", "check_feedback_opportunity")
     
       .addConditionalEdges(
