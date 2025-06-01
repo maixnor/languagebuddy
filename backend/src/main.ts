@@ -113,7 +113,7 @@ app.post("/initiate", async (req: any, res: any) => {
     const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
     
     // Use LangGraph agent to initiate conversation
-    const initialMessage = await languageBuddyAgent.initiateConversation(phone, selectedPrompt);
+    const initialMessage = await languageBuddyAgent.initiate(phone, selectedPrompt);
     
     if (initialMessage) {
       await whatsappService.sendMessage(phone, initialMessage);

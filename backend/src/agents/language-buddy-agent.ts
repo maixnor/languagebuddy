@@ -504,4 +504,96 @@ FREE USER: This user has access to basic conversation features. Their conversati
     logger.warn({ messagesCount: messages.length }, "No valid AI response found in messages");
     return this.getLocalizedErrorMessage("no_response", "en"); // TODO: Get user's actual language here
   }
+
+  // Public interface methods for main.ts compatibility
+  async initiate(phone: string, systemPrompt: SystemPromptEntry): Promise<string> {
+    try {
+      // Get or create subscriber
+      let subscriber = await this.subscriberService.getSubscriber(phone);
+      if (!subscriber) {
+        subscriber = await this.subscriberService.createSubscriber(phone);
+      }
+
+      // Create initial conversation state
+      const initialState: ConversationState = {
+        messages: [new SystemMessage(systemPrompt.prompt)],
+        subscriber,
+        shouldEnd: false,
+        feedbackRequested: false,
+        feedbackReceived: false,
+        originalMessage: "",
+        conversationMode: "chatting",
+        isPremium: subscriber.isPremium || false,
+        sessionStartTime: new Date(),
+        lastMessageTime: undefined,
+      };
+
+      // Invoke the graph
+      const result = await this.graph.invoke(initialState, {
+        configurable: { thread_id: phone }
+      });
+
+      return this.extractResponseContent(result.messages) || systemPrompt.firstUserMessage;
+    } catch (error) {
+      logger.error({ err: error, phone }, "Error in initiate method");
+      return systemPrompt.firstUserMessage || "Hello! I'm your language buddy. What language would you like to practice today?";
+    }
+  }
+
+  async initiateConversation(phone: string, systemPrompt: SystemPromptEntry): Promise<string> {
+    return this.initiate(phone, systemPrompt);
+  }
+
+  async processUserMessage(phone: string, messageText: string): Promise<string> {
+    try {
+      // Get subscriber
+      const subscriber = await this.subscriberService.getSubscriber(phone);
+      if (!subscriber) {
+        throw new Error("Subscriber not found");
+      }
+
+      // Get conversation history from checkpointer
+      const threadId = phone;
+      
+      // Create conversation state with the new message
+      const userMessage = new HumanMessage(messageText);
+      const conversationState: ConversationState = {
+        messages: [userMessage],
+        subscriber,
+        shouldEnd: false,
+        feedbackRequested: false,
+        feedbackReceived: false,
+        originalMessage: messageText,
+        conversationMode: "chatting",
+        isPremium: subscriber.isPremium || false,
+        sessionStartTime: new Date(),
+        lastMessageTime: subscriber.lastActiveAt,
+      };
+
+      // Invoke the graph with the conversation state
+      const result = await this.graph.invoke(conversationState, {
+        configurable: { thread_id: threadId }
+      });
+
+      const response = this.extractResponseContent(result.messages);
+      
+      if (!response || response.trim() === "") {
+        const primaryLanguage = this.determinePrimaryLanguage(subscriber);
+        return this.getLocalizedErrorMessage("no_response", primaryLanguage);
+      }
+
+      return response;
+    } catch (error) {
+      logger.error({ err: error, phone, messageText }, "Error processing user message");
+      
+      // Try to get user's language for error message
+      try {
+        const subscriber = await this.subscriberService.getSubscriber(phone);
+        const primaryLanguage = subscriber ? this.determinePrimaryLanguage(subscriber) : "english";
+        return this.getLocalizedErrorMessage("technical_error", primaryLanguage);
+      } catch (langError) {
+        return "I'm experiencing some technical difficulties. Please try again in a moment!";
+      }
+    }
+  }
 }
