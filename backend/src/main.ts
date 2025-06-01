@@ -19,7 +19,7 @@ import { FeedbackService } from './services/feedback-service';
 import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
-import { logger, config } from './config';
+import { logger, config, trackEvent, trackMetric } from './config';
 import { SystemPromptEntry } from './types';
 
 // Initialize Redis
@@ -135,6 +135,13 @@ app.post("/webhook", async (req: any, res: any) => {
     const userPhone = message.from;
     
     await whatsappService.markMessageAsRead(message.id);
+    
+    // Track message received event
+    trackEvent("message_received", {
+      userPhone: userPhone.slice(-4), // Only last 4 digits for privacy
+      messageLength: message.text.body.length,
+      timestamp: new Date().toISOString()
+    });
 
     try {
       // Check if subscriber exists, create if not
@@ -142,40 +149,62 @@ app.post("/webhook", async (req: any, res: any) => {
       
       if (!subscriber) {
         logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
+        trackEvent("new_user_detected", { userPhone: userPhone.slice(-4) });
+        
         const hasPaid = await stripeService.checkSubscription(userPhone);
 
         if (!hasPaid) {
           logger.info({ userPhone }, "User has not paid. Sending payment link.");
+          trackEvent("payment_required", { userPhone: userPhone.slice(-4) });
           await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
           return res.sendStatus(200);
         }
         
         logger.info({ userPhone }, "New user has created a subscription. Creating profile.");
+        trackEvent("subscription_verified", { userPhone: userPhone.slice(-4) });
         subscriber = await subscriberService.createSubscriber(userPhone);
         
         // Use LangGraph agent for new user initialization
         const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
         await whatsappService.sendMessage(userPhone, welcomeMessage);
+        trackEvent("welcome_sent", { userPhone: userPhone.slice(-4) });
         return res.sendStatus(200);
       }
 
       // Process message through LangGraph agent
       logger.info({ userPhone, messageText: message.text.body }, "Processing message through LangGraph");
+      const startTime = Date.now();
       
       const response = await languageBuddyAgent.processUserMessage(
         userPhone, 
         message.text.body
       );
+      
+      const processingTime = Date.now() - startTime;
+      trackMetric("message_processing_time_ms", processingTime, {
+        userPhone: userPhone.slice(-4),
+        responseLength: response?.length || 0
+      });
 
       if (response && response.trim() !== "") {
         await whatsappService.sendMessage(userPhone, response);
         logger.info({ userPhone, responseLength: response.length }, "Response sent via LangGraph");
+        trackEvent("response_sent", {
+          userPhone: userPhone.slice(-4),
+          responseLength: response.length,
+          processingTimeMs: processingTime
+        });
       } else {
         logger.warn({ userPhone }, "Empty response from LangGraph agent");
+        trackEvent("empty_response", { userPhone: userPhone.slice(-4) });
       }
 
     } catch (error) {
       logger.error({ err: error, userPhone }, `Error processing message through LangGraph`);
+      trackEvent("message_processing_error", {
+        userPhone: userPhone.slice(-4),
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      });
       await whatsappService.sendMessage(userPhone, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
     }
   }

@@ -1,8 +1,86 @@
 import pino from 'pino';
+import * as appInsights from 'applicationinsights';
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-});
+// Initialize Application Insights if connection string is provided
+if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
+  appInsights.setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
+    .setAutoDependencyCorrelation(true)
+    .setAutoCollectRequests(true)
+    .setAutoCollectPerformance(true, true)
+    .setAutoCollectExceptions(true)
+    .setAutoCollectDependencies(true)
+    .setAutoCollectConsole(true)
+    .setUseDiskRetryCaching(true)
+    .setSendLiveMetrics(false) // Disable live metrics for cost optimization
+    .start();
+  
+  console.log('Application Insights initialized');
+} else {
+  console.log('Application Insights not configured - APPLICATIONINSIGHTS_CONNECTION_STRING not found');
+}
+
+// Configure Pino logger with Application Insights transport
+const createLogger = () => {
+  const baseConfig = {
+    level: process.env.LOG_LEVEL || 'info',
+    formatters: {
+      level: (label: string) => {
+        return { level: label };
+      },
+    },
+  };
+
+  // Add Application Insights transport if available
+  if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
+    return pino({
+      ...baseConfig,
+      transport: {
+        targets: [
+          {
+            target: 'pino-applicationinsights',
+            options: {
+              connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
+              track: {
+                console: true,
+                exceptions: true,
+                dependencies: true
+              }
+            },
+            level: 'info'
+          }
+        ]
+      }
+    });
+  }
+
+  // Fallback to console logging if Application Insights is not configured
+  return pino(baseConfig);
+};
+
+export const logger = createLogger();
+
+// Custom function to track custom events and metrics
+export const trackEvent = (name: string, properties?: Record<string, any>, measurements?: Record<string, number>) => {
+  if (appInsights.defaultClient) {
+    appInsights.defaultClient.trackEvent({
+      name,
+      properties,
+      measurements
+    });
+  }
+  logger.info({ event: name, properties, measurements }, `Custom event: ${name}`);
+};
+
+export const trackMetric = (name: string, value: number, properties?: Record<string, any>) => {
+  if (appInsights.defaultClient) {
+    appInsights.defaultClient.trackMetric({
+      name,
+      value,
+      properties
+    });
+  }
+  logger.info({ metric: name, value, properties }, `Custom metric: ${name} = ${value}`);
+};
 
 export const config = {
   openai: {

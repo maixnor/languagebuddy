@@ -1,6 +1,6 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { logger } from '../config';
+import { logger, trackEvent, trackMetric } from '../config';
 import { Subscriber, FeedbackEntry, VocabularyItem, ConversationDigest } from '../types';
 import { SubscriberService } from '../services/subscriber-service';
 import { FeedbackService } from '../services/feedback-service';
