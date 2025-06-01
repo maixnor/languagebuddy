@@ -133,11 +133,17 @@ export class LanguageBuddyAgent {
   }
 
   private async shouldDetectMissingInfo(state: ConversationState): Promise<string> {
-    // Only detect missing info for new conversations or when subscriber data is minimal
-    const hasMinimalInfo = !state.subscriber.name || 
-                          !state.subscriber.learningLanguages?.length ||
-                          !state.subscriber.speakingLanguages?.length;
-    return hasMinimalInfo ? "detect_missing" : "continue";
+    // Only detect missing info for new conversations or when subscriber data is truly minimal
+    const hasValidName = state.subscriber.name && 
+                        state.subscriber.name !== "New User" && 
+                        state.subscriber.name.trim().length > 0;
+    const hasLearningLanguageInfo = (state.subscriber.learningLanguages?.length || 0) > 0;
+    const hasSpeakingLanguageInfo = (state.subscriber.speakingLanguages?.length || 0) > 0;
+    
+    // Only ask for missing info if user truly has no name AND no language information
+    const needsBasicInfo = !hasValidName && !hasLearningLanguageInfo && !hasSpeakingLanguageInfo;
+    
+    return needsBasicInfo ? "detect_missing" : "continue";
   }
 
   private async initializeConversation(state: ConversationState): Promise<Partial<ConversationState>> {
@@ -251,8 +257,10 @@ export class LanguageBuddyAgent {
     } catch (error) {
       logger.error({ err: error }, "Error processing message");
       
+      // Get localized error message
+      const primaryLanguage = this.determinePrimaryLanguage(state.subscriber);
       const errorMessage = new AIMessage({
-        content: "I'm experiencing some technical difficulties. Please try again in a moment!"
+        content: this.getLocalizedErrorMessage("technical_error", primaryLanguage)
       });
       
       return {
@@ -336,6 +344,10 @@ export class LanguageBuddyAgent {
   }
 
   private getSystemPrompt(state: ConversationState): string {
+    // Determine the user's primary communication language
+    const primaryLanguage = this.determinePrimaryLanguage(state.subscriber);
+    const learningLanguage = state.subscriber.learningLanguages?.[0]?.languageName || 'target language';
+    
     const basePrompt = `You are a helpful language buddy trying your best to match the user's language level but are always pushing the user to be slightly out of their comfort zone.
 
 You can switch between 2 modes: chatting and tutoring.
@@ -344,7 +356,15 @@ In tutoring mode you try to explain concepts or teach about grammar or synonyms.
 
 Those modes are distinct from one another, but they can be interwoven. During a conversation the user is able to ask for an explanation or even a translation. You provide the help the user needs and then continue the conversation.
 
-You should always speak in a language the user is speaking or the desired language. If the user only speaks e.g. German and wants to learn Spanish you should speak and explain in German and practice Spanish.
+CRITICAL LANGUAGE COMMUNICATION RULES:
+- User's primary language for communication: ${primaryLanguage}
+- User's target learning language: ${learningLanguage}
+- ALWAYS communicate, explain, and provide instructions in ${primaryLanguage}
+- Only use ${learningLanguage} when practicing or teaching specific phrases/words
+- When explaining grammar or concepts, do it in ${primaryLanguage}
+- Error messages, clarifications, and meta-conversation should be in ${primaryLanguage}
+- If user writes in ${primaryLanguage}, respond in ${primaryLanguage}
+- If user writes in ${learningLanguage}, you can respond in ${learningLanguage} for practice, but provide explanations in ${primaryLanguage}
 
 IMPORTANT TOOL USAGE INSTRUCTIONS:
 1. ALWAYS use detect_missing_info at the start of conversations to check if user profile information is incomplete
@@ -379,77 +399,74 @@ FREE USER: This user has access to basic conversation features. Their conversati
     }
   }
 
-  // Main method to process incoming messages
-  async processUserMessage(
-    phoneNumber: string, 
-    message: string, 
-    systemPromptEntry?: SystemPromptEntry
-  ): Promise<string> {
-    try {
-      const threadId = `conversation:${phoneNumber}`;
-      const subscriber = await this.subscriberService.getSubscriber(phoneNumber);
-      
-      if (!subscriber) {
-        throw new Error(`Subscriber not found: ${phoneNumber}`);
-      }
-
-      const userMessage = new HumanMessage({ content: message });
-      
-      const result = await this.graph.invoke(
-        {
-          messages: [userMessage],
-          subscriber,
-          isPremium: subscriber.isPremium || false,
-        },
-        {
-          configurable: { 
-            thread_id: threadId,
-          }
-        }
+  private determinePrimaryLanguage(subscriber: Subscriber): string {
+    // If user has speaking languages defined, use the first native/advanced one
+    if (subscriber.speakingLanguages && subscriber.speakingLanguages.length > 0) {
+      // Look for native language first
+      const nativeLanguage = subscriber.speakingLanguages.find(lang => 
+        lang.level === 'native' || lang.level === 'mother tongue' || lang.level === 'first language'
       );
-
-      // FIXED: Better response extraction that handles tool calls
-      return this.extractResponseContent(result.messages);
-    } catch (error) {
-      logger.error({ err: error, phoneNumber, message }, "Error processing user message");
-      return "I'm experiencing some technical difficulties. Please try again in a moment!";
+      if (nativeLanguage) {
+        return nativeLanguage.languageName;
+      }
+      
+      // If no native language, look for advanced
+      const advancedLanguage = subscriber.speakingLanguages.find(lang => 
+        lang.level === 'advanced' || lang.level === 'fluent' || lang.level === 'proficient'
+      );
+      if (advancedLanguage) {
+        return advancedLanguage.languageName;
+      }
+      
+      // Otherwise use the first speaking language
+      return subscriber.speakingLanguages[0].languageName;
     }
+    
+    // Default to English if no speaking languages defined
+    return 'English';
   }
 
-  // Method for initiating conversations (daily messages, etc.)
-  async initiateConversation(
-    phoneNumber: string, 
-    systemPromptEntry: SystemPromptEntry
-  ): Promise<string> {
-    try {
-      const threadId = `conversation:${phoneNumber}`;
-      const subscriber = await this.subscriberService.getSubscriber(phoneNumber);
-      
-      if (!subscriber) {
-        throw new Error(`Subscriber not found: ${phoneNumber}`);
+  private getLocalizedErrorMessage(errorCode: string, language: string): string {
+    // For now, just return a generic message in the requested language
+    // This should be expanded with actual localization support
+    const messages: { [key: string]: { [key: string]: string } } = {
+      technical_error: {
+        english: "I'm experiencing some technical difficulties. Please try again in a moment!",
+        spanish: "Estoy experimentando algunas dificultades técnicas. ¡Por favor, inténtalo de nuevo en un momento!",
+        french: "Je rencontre quelques difficultés techniques. Veuillez réessayer dans un moment !",
+        german: "Ich habe technische Schwierigkeiten. Bitte versuche es in einem Moment noch einmal!",
+        italian: "Sto riscontrando alcune difficoltà tecniche. Per favore, riprova tra un momento!",
+        portuguese: "Estou enfrentando algumas dificuldades técnicas. Por favor, tente novamente em um momento!",
+        chinese: "我遇到了一些技术困难。请稍后再试！",
+        japanese: "技術的な問題が発生しています。しばらくしてからもう一度お試しください！",
+        korean: "기술적인 문제가 발생했습니다. 잠시 후 다시 시도해 주세요!",
+        arabic: "أواجه بعض الصعوبات التقنية. يرجى المحاولة مرة أخرى بعد قليل!",
+        russian: "У меня возникли технические трудности. Пожалуйста, попробуйте еще раз через некоторое время!",
+        dutch: "Ik ondervind wat technische problemen. Probeer het over een moment opnieuw!",
+        swedish: "Jag upplever tekniska svårigheter. Försök igen om ett ögonblick!",
+        norwegian: "Jeg opplever tekniske vanskeligheter. Vennligst prøv igjen om et øyeblikk!",
+        danish: "Jeg oplever tekniske vanskeligheder. Prøv venligst igen om et øjeblik!"
+      },
+      no_response: {
+        english: "I'm not sure how to respond to that. Could you try rephrasing?",
+        spanish: "No estoy seguro de cómo responder a eso. ¿Podrías intentar reformularlo?",
+        french: "Je ne suis pas sûr de comment répondre à cela. Pourriez-vous essayer de reformuler ?",
+        german: "Ich bin mir nicht sicher, wie ich darauf antworten soll. Könntest du es anders formulieren?",
+        italian: "Non sono sicuro di come rispondere a questo. Potresti provare a riformulare?",
+        portuguese: "Não tenho certeza de como responder a isso. Você poderia tentar reformular?",
+        chinese: "我不确定如何回应这个。你能试着重新表述一下吗？",
+        japanese: "どのように返答すべきかわかりません。言い方を変えてみてもらえますか？",
+        korean: "어떻게 답해야 할지 확실하지 않습니다. 다시 말씀해 주시겠어요?",
+        arabic: "لست متأكداً من كيفية الرد على ذلك. هل يمكنك المحاولة بطريقة أخرى؟",
+        russian: "Я не уверен, как на это ответить. Не могли бы вы перефразировать?",
+        dutch: "Ik weet niet zeker hoe ik daarop moet reageren. Kun je het anders formuleren?",
+        swedish: "Jag är inte säker på hur jag ska svara på det. Kan du försöka omformulera?",
+        norwegian: "Jeg er ikke sikker på hvordan jeg skal svare på det. Kan du prøve å omformulere?",
+        danish: "Jeg er ikke sikker på, hvordan jeg skal svare på det. Kan du prøve at omformulere?"
       }
+    };
 
-      const systemMessage = new SystemMessage({ content: systemPromptEntry.prompt });
-      const initialMessage = new HumanMessage({ content: systemPromptEntry.firstUserMessage });
-      
-      const result = await this.graph.invoke(
-        {
-          messages: [systemMessage, initialMessage],
-          subscriber,
-          isPremium: subscriber.isPremium || false,
-        },
-        {
-          configurable: { 
-            thread_id: threadId,
-          }
-        }
-      );
-
-      return this.extractResponseContent(result.messages) || "Hello! Ready for today's language practice?";
-    } catch (error) {
-      logger.error({ err: error, phoneNumber }, "Error initiating conversation");
-      return "Hello! Ready for today's language practice?";
-    }
+    return messages[errorCode]?.[language] || messages[errorCode]?.['en'] || "An error occurred";
   }
 
   private extractResponseContent(messages: any[]): string {
@@ -476,15 +493,15 @@ FREE USER: This user has access to basic conversation features. Their conversati
       }
       
       // Also check for any message with assistant-like content
-      if (msg.content && typeof msg.content === 'string' && 
+      if (msg.content && typeof msg.content === 'string' &&
           msg.content.trim() && 
           !msg.content.startsWith('{')) { // Skip JSON responses
         return msg.content.trim();
       }
     }
     
-    // Fallback response
+    // Fallback response - this should be localized based on user's language
     logger.warn({ messagesCount: messages.length }, "No valid AI response found in messages");
-    return "I'm not sure how to respond to that. Could you try rephrasing?";
+    return this.getLocalizedErrorMessage("no_response", "en"); // TODO: Get user's actual language here
   }
 }

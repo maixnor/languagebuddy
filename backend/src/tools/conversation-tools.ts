@@ -12,43 +12,51 @@ export const detectMissingInfoTool = tool(
       const missingFields: string[] = [];
       const suggestions: string[] = [];
 
-      // Check for missing basic information
-      if (!subscriber.name || subscriber.name === "New User") {
+      // Determine primary language for asking questions
+      const primaryLanguage = determinePrimaryLanguageFromSubscriber(subscriber);
+
+      // Check for missing basic information - be more selective about name
+      const hasValidName = subscriber.name && 
+                          subscriber.name !== "New User" && 
+                          subscriber.name.trim().length > 0;
+      
+      if (!hasValidName) {
         missingFields.push("name");
-        suggestions.push("What should I call you?");
+        suggestions.push(getLocalizedQuestion("name", primaryLanguage));
       }
 
       if (!subscriber.speakingLanguages || subscriber.speakingLanguages.length === 0) {
         missingFields.push("speakingLanguages");
-        suggestions.push("What languages do you speak fluently?");
+        suggestions.push(getLocalizedQuestion("speakingLanguages", primaryLanguage));
       }
 
       if (!subscriber.learningLanguages || subscriber.learningLanguages.length === 0) {
         missingFields.push("learningLanguages");
-        suggestions.push("What language would you like to learn or practice?");
+        suggestions.push(getLocalizedQuestion("learningLanguages", primaryLanguage));
       }
 
-      if (!subscriber.timezone) {
+      // Only ask for timezone if user has basic info but missing this optional field
+      if (hasValidName && (subscriber.learningLanguages?.length || 0) > 0 && !subscriber.timezone) {
         missingFields.push("timezone");
-        suggestions.push("What timezone are you in? (e.g., America/New_York, Europe/Berlin)");
+        suggestions.push(getLocalizedQuestion("timezone", primaryLanguage));
       }
 
-      // Check for incomplete language information
+      // Check for incomplete language information only if they have languages defined
       subscriber.learningLanguages?.forEach((lang, index) => {
         if (!lang.level) {
           missingFields.push(`learningLanguages[${index}].level`);
-          suggestions.push(`What's your current level in ${lang.languageName}? (beginner, intermediate, advanced)`);
+          suggestions.push(getLocalizedQuestion("learningLevel", primaryLanguage, lang.languageName));
         }
         if (!lang.currentObjectives || lang.currentObjectives.length === 0) {
           missingFields.push(`learningLanguages[${index}].currentObjectives`);
-          suggestions.push(`What are your learning goals for ${lang.languageName}?`);
+          suggestions.push(getLocalizedQuestion("learningGoals", primaryLanguage, lang.languageName));
         }
       });
 
       subscriber.speakingLanguages?.forEach((lang, index) => {
         if (!lang.level) {
           missingFields.push(`speakingLanguages[${index}].level`);
-          suggestions.push(`What's your proficiency level in ${lang.languageName}?`);
+          suggestions.push(getLocalizedQuestion("speakingLevel", primaryLanguage, lang.languageName));
         }
       });
 
@@ -577,4 +585,154 @@ function generateUpdateSummary(updates: Partial<Subscriber>): string {
   }
 
   return summaryParts.join(', ');
+}
+
+// Placeholder functions for language detection and localized question retrieval
+function determinePrimaryLanguageFromSubscriber(subscriber: Subscriber): string {
+  // For now, default to English if no languages are set
+  if (!subscriber.speakingLanguages || subscriber.speakingLanguages.length === 0) {
+    return 'english';
+  }
+
+  // Prefer speaking language if available
+  const primarySpeaking = subscriber.speakingLanguages[0].languageName.toLowerCase();
+  if (primarySpeaking) {
+    return primarySpeaking;
+  }
+
+  // Fallback to learning language if no speaking language is set
+  const primaryLearning = subscriber.learningLanguages?.[0]?.languageName.toLowerCase();
+  return primaryLearning || 'english';
+}
+
+function getLocalizedQuestion(field: string, language: string, param?: string): string {
+  const questions: Record<string, Record<string, string>> = {
+    name: {
+      english: "What should I call you?",
+      spanish: "¿Cómo debería llamarte?",
+      french: "Comment devrais-je t'appeler?",
+      german: "Wie soll ich dich nennen?",
+      italian: "Come dovrei chiamarti?",
+      portuguese: "Como devo te chamar?",
+      chinese: "我应该怎么称呼你？",
+      japanese: "あなたを何と呼べばいいですか？",
+      korean: "당신을 뭐라고 불러야 하나요?",
+      arabic: "ماذا يجب أن أسميك؟",
+      russian: "Как мне тебя называть?",
+      dutch: "Hoe moet ik je noemen?",
+      swedish: "Vad ska jag kalla dig?",
+      norwegian: "Hva skal jeg kalle deg?",
+      danish: "Hvad skal jeg kalde dig?"
+    },
+    speakingLanguages: {
+      english: "What languages do you speak fluently?",
+      spanish: "¿Qué idiomas hablas con fluidez?",
+      french: "Quelles langues parles-tu couramment?",
+      german: "Welche Sprachen sprichst du fließend?",
+      italian: "Quali lingue parli fluentemente?",
+      portuguese: "Quais idiomas você fala fluentemente?",
+      chinese: "你流利地说什么语言？",
+      japanese: "あなたは何語を流暢に話しますか？",
+      korean: "당신은 어떤 언어를 유창하게 말하나요?",
+      arabic: "ما هي اللغات التي تتحدثها بطلاقة؟",
+      russian: "На каких языках вы говорите свободно?",
+      dutch: "Welke talen spreek je vloeiend?",
+      swedish: "Vilka språk talar du flytande?",
+      norwegian: "Hvilke språk snakker du flytende?",
+      danish: "Hvilke sprog taler du flydende?"
+    },
+    learningLanguages: {
+      english: "What language would you like to learn or practice?",
+      spanish: "¿Qué idioma te gustaría aprender o practicar?",
+      french: "Quelle langue aimerais-tu apprendre ou pratiquer?",
+      german: "Welche Sprache möchtest du lernen oder üben?",
+      italian: "Quale lingua ti piacerebbe imparare o praticare?",
+      portuguese: "Que língua você gostaria de aprender ou praticar?",
+      chinese: "你想学或练习什么语言？",
+      japanese: "どの言語を学びたいですか？",
+      korean: "어떤 언어를 배우고 싶나요?",
+      arabic: "ما هي اللغة التي تود تعلمها أو ممارستها؟",
+      russian: "Какой язык вы хотели бы выучить или практиковать?",
+      dutch: "Welke taal zou je willen leren of oefenen?",
+      swedish: "Vilket språk skulle du vilja lära dig eller öva?",
+      norwegian: "Hvilket språk ønsker du å lære eller øve på?",
+      danish: "H hvilket sprog vil du gerne lære eller øve?"
+    },
+    timezone: {
+      english: "What timezone are you in? (e.g., America/New_York, Europe/Berlin)",
+      spanish: "¿En qué zona horaria te encuentras? (por ejemplo, America/New_York, Europe/Berlín)",
+      french: "Dans quel fuseau horaire es-tu ? (par exemple, America/New_York, Europe/Berlin)",
+      german: "In welcher Zeitzone befindest du dich? (z.B. America/New_York, Europe/Berlin)",
+      italian: "In quale fuso orario ti trovi? (ad esempio, America/New_York, Europe/Berlino)",
+      portuguese: "Em que fuso horário você está? (por exemplo, America/New_York, Europe/Berlin)",
+      chinese: "你在哪个时区？（例如，America/New_York，Europe/Berlin）",
+      japanese: "あなたはどのタイムゾーンにいますか？（例：America/New_York、Europe/Berlin）",
+      korean: "당신은 어떤 표준시를 사용하고 있나요? (예: America/New_York, Europe/Berlin)",
+      arabic: "في أي منطقة زمنية أنت؟ (على سبيل المثال، America/New_York، Europe/Berlin)",
+      russian: "В каком часовом поясе вы находитесь? (например, America/New_York, Europe/Berlin)",
+      dutch: "In welke tijdzone bevind je je? (bijv. America/New_York, Europe/Berlin)",
+      swedish: "I vilken tidszon befinner du dig? (t.ex. America/New_York, Europe/Berlin)",
+      norwegian: "Hvilket tidssone er du i? (f.eks. America/New_York, Europe/Berlin)",
+      danish: "Hvilken tidszone er du i? (f.eks. America/New_York, Europe/Berlin)"
+    },
+    learningLevel: {
+      english: "What's your current level in {{language}}? (beginner, intermediate, advanced)",
+      spanish: "¿Cuál es tu nivel actual en {{language}}? (principiante, intermedio, avanzado)",
+      french: "Quel est ton niveau actuel en {{language}}? (débutant, intermédiaire, avancé)",
+      german: "Wie ist dein aktuelles Niveau in {{language}}? (Anfänger, Fortgeschrittener, Profi)",
+      italian: "Qual è il tuo attuale livello in {{language}}? (principiante, intermedio, avanzato)",
+      portuguese: "Qual é o seu nível atual em {{language}}? (iniciante, intermediário, avançado)",
+      chinese: "你在{{language}}的当前水平是什么？（初学者，中级，高级）",
+      japanese: "あなたの{{language}}の現在のレベルは何ですか？（初級、中級、上級）",
+      korean: "당신의 {{language}} 현재 수준은 무엇인가요? (초급, 중급, 고급)",
+      arabic: "ما هو مستواك الحالي في {{language}}؟ (مبتدئ، متوسط، متقدم)",
+      russian: "Какой у вас текущий уровень в {{language}}? (начальный, средний, продвинутый)",
+      dutch: "Wat is je huidige niveau in {{language}}? (beginner, gemiddeld, gevorderd)",
+      swedish: "Vad är din nuvarande nivå i {{language}}? (nybörjare, mellanliggande, avancerad)",
+      norwegian: "Hva er ditt nåværende nivå i {{language}}? (nybegynner, middels, avansert)",
+      danish: "Hvad er dit nuværende niveau i {{language}}? (begynder, mellem, avanceret)"
+    },
+    learningGoals: {
+      english: "What are your learning goals for {{language}}?",
+      spanish: "¿Cuáles son tus objetivos de aprendizaje para {{language}}?",
+      french: "Quels sont tes objectifs d'apprentissage pour {{language}}?",
+      german: "Was sind deine Lernziele für {{language}}?",
+      italian: "Quali sono i tuoi obiettivi di apprendimento per {{language}}?",
+      portuguese: "Quais são seus objetivos de aprendizagem para {{language}}?",
+      chinese: "你对{{language}}的学习目标是什么？",
+      japanese: "あなたの{{language}}の学習目標は何ですか？",
+      korean: "당신의 {{language}} 학습 목표는 무엇인가요?",
+      arabic: "ما هي أهدافك التعليمية لـ {{language}}؟",
+      russian: "Каковы ваши учебные цели для {{language}}?",
+      dutch: "Wat zijn je leerdoelen voor {{language}}?",
+      swedish: "Vad är dina lärandemål för {{language}}?",
+      norwegian: "Hva er læringsmålene dine for {{language}}?",
+      danish: "Hvad er dine læringsmål for {{language}}?"
+    },
+    speakingLevel: {
+      english: "What's your proficiency level in {{language}}?",
+      spanish: "¿Cuál es tu nivel de competencia en {{language}}?",
+      french: "Quel est ton niveau de compétence en {{language}}?",
+      german: "Wie ist dein Kenntnisstand in {{language}}?",
+      italian: "Qual è il tuo livello di competenza in {{language}}?",
+      portuguese: "Qual é o seu nível de proficiência em {{language}}?",
+      chinese: "你在{{language}}的熟练程度如何？",
+      japanese: "あなたの{{language}}の熟練度はどれくらいですか？",
+      korean: "당신의 {{language}} 숙련도는 어느 정도인가요?",
+      arabic: "ما هو مستوى إتقانك لـ {{language}}؟",
+      russian: "Каков ваш уровень владения {{language}}?",
+      dutch: "Wat is je vaardigheidsniveau in {{language}}?",
+      swedish: "Vad är din färdighetsnivå i {{language}}?",
+      norwegian: "Hva er ferdighetsnivået ditt i {{language}}?",
+      danish: "Hvad er dit færdighedsniveau i {{language}}?"
+    }
+  };
+
+  const question = questions[field]?.[language];
+  if (question) {
+    return param ? question.replace('{{language}}', param) : question;
+  }
+
+  // Fallback to English if no translation is available
+  return questions[field]?.['english'] || '';
 }
