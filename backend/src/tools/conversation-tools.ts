@@ -5,42 +5,199 @@ import { Subscriber, FeedbackEntry, VocabularyItem, ConversationDigest } from '.
 import { SubscriberService } from '../services/subscriber-service';
 import { FeedbackService } from '../services/feedback-service';
 
-// Replace your !SUBSCRIBERDATA command system
+// New tool to detect missing subscriber information
+export const detectMissingInfoTool = tool(
+  async ({ subscriber }: { subscriber: Subscriber }) => {
+    try {
+      const missingFields: string[] = [];
+      const suggestions: string[] = [];
+
+      // Check for missing basic information
+      if (!subscriber.name || subscriber.name === "New User") {
+        missingFields.push("name");
+        suggestions.push("What should I call you?");
+      }
+
+      if (!subscriber.speakingLanguages || subscriber.speakingLanguages.length === 0) {
+        missingFields.push("speakingLanguages");
+        suggestions.push("What languages do you speak fluently?");
+      }
+
+      if (!subscriber.learningLanguages || subscriber.learningLanguages.length === 0) {
+        missingFields.push("learningLanguages");
+        suggestions.push("What language would you like to learn or practice?");
+      }
+
+      if (!subscriber.timezone) {
+        missingFields.push("timezone");
+        suggestions.push("What timezone are you in? (e.g., America/New_York, Europe/Berlin)");
+      }
+
+      // Check for incomplete language information
+      subscriber.learningLanguages?.forEach((lang, index) => {
+        if (!lang.level) {
+          missingFields.push(`learningLanguages[${index}].level`);
+          suggestions.push(`What's your current level in ${lang.languageName}? (beginner, intermediate, advanced)`);
+        }
+        if (!lang.currentObjectives || lang.currentObjectives.length === 0) {
+          missingFields.push(`learningLanguages[${index}].currentObjectives`);
+          suggestions.push(`What are your learning goals for ${lang.languageName}?`);
+        }
+      });
+
+      subscriber.speakingLanguages?.forEach((lang, index) => {
+        if (!lang.level) {
+          missingFields.push(`speakingLanguages[${index}].level`);
+          suggestions.push(`What's your proficiency level in ${lang.languageName}?`);
+        }
+      });
+
+      return {
+        hasMissingInfo: missingFields.length > 0,
+        missingFields,
+        suggestions,
+        nextQuestionToAsk: suggestions[0] || null
+      };
+    } catch (error) {
+      logger.error({ err: error }, "Error detecting missing subscriber info");
+      return {
+        hasMissingInfo: false,
+        missingFields: [],
+        suggestions: [],
+        nextQuestionToAsk: null
+      };
+    }
+  },
+  {
+    name: "detect_missing_info",
+    description: "Detect missing information in a subscriber's profile and suggest questions to fill gaps",
+    schema: z.object({
+      subscriber: z.object({
+        phone: z.string(),
+        name: z.string(),
+        speakingLanguages: z.array(z.object({
+          languageName: z.string(),
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
+        })).optional(),
+        learningLanguages: z.array(z.object({
+          languageName: z.string(),
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
+        })).optional(),
+        timezone: z.string().optional(),
+        isPremium: z.boolean().optional(),
+        lastActiveAt: z.date().optional()
+      })
+    }),
+  }
+);
+
+// Enhanced update subscriber tool with better validation and parsing
 export const updateSubscriberTool = tool(
-  async ({ updates, phoneNumber }: { 
-    updates: Partial<Subscriber>, 
-    phoneNumber: string 
+  async ({ updates, phoneNumber, extractFromMessage }: { 
+    updates?: Partial<Subscriber>, 
+    phoneNumber: string,
+    extractFromMessage?: string
   }) => {
     try {
       const subscriberService = SubscriberService.getInstance();
-      await subscriberService.updateSubscriber(phoneNumber, updates);
+      let finalUpdates = updates || {};
+
+      // If extractFromMessage is provided, try to parse information from user's message
+      if (extractFromMessage) {
+        const extractedInfo = await extractInfoFromMessage(extractFromMessage);
+        finalUpdates = { ...finalUpdates, ...extractedInfo };
+      }
+
+      if (Object.keys(finalUpdates).length === 0) {
+        return "No information to update";
+      }
+
+      await subscriberService.updateSubscriber(phoneNumber, finalUpdates);
       
-      logger.info({ phoneNumber, updates }, "Subscriber information updated via LangGraph tool");
-      return "Subscriber information updated successfully";
+      logger.info({ phoneNumber, updates: finalUpdates }, "Subscriber information updated via enhanced tool");
+      
+      // Return a summary of what was updated
+      const updatedFields = Object.keys(finalUpdates);
+      return `Successfully updated: ${updatedFields.join(', ')}. Information saved to your profile!`;
     } catch (error) {
       logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");
-      return "Failed to update subscriber information";
+      return "I had trouble saving that information. Could you try again?";
     }
   },
   {
     name: "update_subscriber",
-    description: "Update subscriber language learning information and profile data",
+    description: "Update subscriber language learning information and profile data, optionally extracting info from a message",
     schema: z.object({
+      phoneNumber: z.string(),
       updates: z.object({
         name: z.string().optional(),
         speakingLanguages: z.array(z.object({
           languageName: z.string(),
-          level: z.string(),
-          currentObjectives: z.array(z.string())
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
         })).optional(),
         learningLanguages: z.array(z.object({
           languageName: z.string(),
-          level: z.string(),
-          currentObjectives: z.array(z.string())
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
         })).optional(),
         timezone: z.string().optional(),
-      }),
+      }).optional(),
+      extractFromMessage: z.string().optional(),
+    }),
+  }
+);
+
+// Tool to intelligently parse and update subscriber info from natural language
+export const smartUpdateSubscriberTool = tool(
+  async ({ userMessage, phoneNumber, currentSubscriber }: {
+    userMessage: string,
+    phoneNumber: string,
+    currentSubscriber: Subscriber
+  }) => {
+    try {
+      const updates = await parseSubscriberInfoFromMessage(userMessage, currentSubscriber);
+      
+      if (Object.keys(updates).length === 0) {
+        return "No profile information detected in your message.";
+      }
+
+      const subscriberService = SubscriberService.getInstance();
+      await subscriberService.updateSubscriber(phoneNumber, updates);
+      
+      logger.info({ phoneNumber, updates }, "Smart subscriber update completed");
+      
+      const updateSummary = generateUpdateSummary(updates);
+      return `Got it! I've updated your profile: ${updateSummary}`;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error in smart subscriber update");
+      return "I couldn't parse that information. Could you be more specific?";
+    }
+  },
+  {
+    name: "smart_update_subscriber",
+    description: "Intelligently parse user messages to extract and update subscriber profile information",
+    schema: z.object({
+      userMessage: z.string(),
       phoneNumber: z.string(),
+      currentSubscriber: z.object({
+        phone: z.string(),
+        name: z.string(),
+        speakingLanguages: z.array(z.object({
+          languageName: z.string(),
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
+        })),
+        learningLanguages: z.array(z.object({
+          languageName: z.string(),
+          level: z.string().optional(),
+          currentObjectives: z.array(z.string()).optional()
+        })),
+        timezone: z.string().optional(),
+        isPremium: z.boolean().optional()
+      })
     }),
   }
 );
@@ -266,4 +423,158 @@ function getFeatureRestrictionMessage(feature: string, isPremium: boolean): stri
   };
   
   return messages[feature] || "This feature requires a premium subscription to access.";
+}
+
+// Helper functions for parsing subscriber information from messages
+async function extractInfoFromMessage(message: string): Promise<Partial<Subscriber>> {
+  const updates: Partial<Subscriber> = {};
+  const lowerMessage = message.toLowerCase();
+
+  // Extract name
+  const namePatterns = [
+    /(?:my name is|i'm|i am|call me)\s+([a-zA-Z]+)/i,
+    /(?:name:|name is)\s+([a-zA-Z]+)/i
+  ];
+  
+  for (const pattern of namePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      updates.name = match[1].charAt(0).toUpperCase() + match[1].slice(1);
+      break;
+    }
+  }
+
+  // Extract timezone
+  const timezonePatterns = [
+    /(?:timezone|time zone|tz)[:is\s]+([A-Za-z_\/]+)/i,
+    /(?:i'm in|located in|live in)\s+([A-Za-z_\/\s]+)/i
+  ];
+  
+  for (const pattern of timezonePatterns) {
+    const match = message.match(pattern);
+    if (match) {
+      updates.timezone = match[1].trim();
+      break;
+    }
+  }
+
+  return updates;
+}
+
+async function parseSubscriberInfoFromMessage(message: string, currentSubscriber: Subscriber): Promise<Partial<Subscriber>> {
+  const updates: Partial<Subscriber> = {};
+  const lowerMessage = message.toLowerCase();
+
+  // Parse language learning information
+  const languagePatterns = [
+    /(?:learning|studying|want to learn|practicing)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi,
+    /(?:i speak|i know|fluent in|native)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi
+  ];
+
+  // Extract learning languages
+  const learningMatches = message.match(/(?:learning|studying|want to learn|practicing)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi);
+  if (learningMatches) {
+    const learningLanguages = learningMatches.map(match => {
+      const lang = match.split(/\s+/).pop()?.toLowerCase();
+      return {
+        languageName: lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : '',
+        level: extractLevelFromMessage(message, lang || ''),
+        currentObjectives: extractObjectivesFromMessage(message)
+      };
+    }).filter(lang => lang.languageName);
+
+    updates.learningLanguages = [...(currentSubscriber.learningLanguages || []), ...learningLanguages];
+  }
+
+  // Extract speaking languages
+  const speakingMatches = message.match(/(?:i speak|i know|fluent in|native)\s+(spanish|french|german|italian|portuguese|chinese|japanese|korean|arabic|russian|english|dutch|swedish|norwegian|danish)/gi);
+  if (speakingMatches) {
+    const speakingLanguages = speakingMatches.map(match => {
+      const lang = match.split(/\s+/).pop()?.toLowerCase();
+      return {
+        languageName: lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : '',
+        level: extractLevelFromMessage(message, lang || '') || 'native',
+        currentObjectives: []
+      };
+    }).filter(lang => lang.languageName);
+
+    updates.speakingLanguages = [...(currentSubscriber.speakingLanguages || []), ...speakingLanguages];
+  }
+
+  // Extract basic info using existing function
+  const basicInfo = await extractInfoFromMessage(message);
+  Object.assign(updates, basicInfo);
+
+  return updates;
+}
+
+function extractLevelFromMessage(message: string, language: string): string {
+  const lowerMessage = message.toLowerCase();
+  
+  // Look for level indicators around the language mention
+  const levelPatterns = [
+    /beginner|beginning|just started|new to/i,
+    /intermediate|middle|okay|decent/i,
+    /advanced|fluent|proficient|expert/i,
+    /native|mother tongue|first language/i
+  ];
+
+  const levels = ['beginner', 'intermediate', 'advanced', 'native'];
+  
+  for (let i = 0; i < levelPatterns.length; i++) {
+    if (levelPatterns[i].test(lowerMessage)) {
+      return levels[i];
+    }
+  }
+
+  return 'beginner'; // default
+}
+
+function extractObjectivesFromMessage(message: string): string[] {
+  const objectives: string[] = [];
+  const lowerMessage = message.toLowerCase();
+
+  // Common learning objectives
+  const objectivePatterns = [
+    { pattern: /conversation|speaking|talk/i, objective: 'conversational fluency' },
+    { pattern: /business|work|professional/i, objective: 'business communication' },
+    { pattern: /travel|vacation|trip/i, objective: 'travel communication' },
+    { pattern: /grammar|structure/i, objective: 'grammar mastery' },
+    { pattern: /vocabulary|words/i, objective: 'vocabulary expansion' },
+    { pattern: /pronunciation|accent/i, objective: 'pronunciation improvement' },
+    { pattern: /writing|text/i, objective: 'writing skills' },
+    { pattern: /reading|books/i, objective: 'reading comprehension' }
+  ];
+
+  for (const { pattern, objective } of objectivePatterns) {
+    if (pattern.test(lowerMessage)) {
+      objectives.push(objective);
+    }
+  }
+
+  return objectives.length > 0 ? objectives : ['general language practice'];
+}
+
+function generateUpdateSummary(updates: Partial<Subscriber>): string {
+  const summaryParts: string[] = [];
+
+  if (updates.name) {
+    summaryParts.push(`name set to ${updates.name}`);
+  }
+
+  if (updates.learningLanguages && updates.learningLanguages.length > 0) {
+    const langs = updates.learningLanguages.map(l => l.languageName).join(', ');
+    summaryParts.push(`learning ${langs}`);
+  }
+
+  if (updates.speakingLanguages && updates.speakingLanguages.length > 0) {
+    const langs = updates.speakingLanguages.map(l => l.languageName).join(', ');
+    summaryParts.push(`speaking ${langs}`);
+  }
+
+  if (updates.timezone) {
+    summaryParts.push(`timezone set to ${updates.timezone}`);
+  }
+
+  return summaryParts.join(', ');
 }
