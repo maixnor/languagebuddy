@@ -103,12 +103,18 @@ export class LanguageBuddyAgent {
       .addNode("finalize_response", this.finalizeResponse.bind(this))
       .addNode("detect_missing_info", this.detectMissingInfo.bind(this))
 
-      // Define the conversation flow
+      // Define the conversation flow - FIXED: Remove conflicting edges
       .addEdge(START, "initialize_conversation")
-      .addEdge("initialize_conversation", "check_feature_access")
+      .addConditionalEdges(
+        "initialize_conversation",
+        this.shouldDetectMissingInfo.bind(this),
+        {
+          detect_missing: "detect_missing_info",
+          continue: "check_feature_access",
+        }
+      )
+      .addEdge("detect_missing_info", "check_feature_access")
       .addEdge("check_feature_access", "process_message")
-      .addEdge("initialize_conversation", "detect_missing_info")
-      .addEdge("detect_missing_info", "process_message")
       .addEdge("process_message", "check_feedback_opportunity")
     
       .addConditionalEdges(
@@ -124,6 +130,14 @@ export class LanguageBuddyAgent {
       .addEdge("finalize_response", END)
 
     return graph.compile({ checkpointer: this.checkpointer });
+  }
+
+  private async shouldDetectMissingInfo(state: ConversationState): Promise<string> {
+    // Only detect missing info for new conversations or when subscriber data is minimal
+    const hasMinimalInfo = !state.subscriber.name || 
+                          !state.subscriber.learningLanguages?.length ||
+                          !state.subscriber.speakingLanguages?.length;
+    return hasMinimalInfo ? "detect_missing" : "continue";
   }
 
   private async initializeConversation(state: ConversationState): Promise<Partial<ConversationState>> {
@@ -394,11 +408,8 @@ FREE USER: This user has access to basic conversation features. Their conversati
         }
       );
 
-      // Extract the AI response
-      const aiMessages = result.messages.filter((msg: any) => msg.role === 'assistant');
-      const lastAiMessage = aiMessages[aiMessages.length - 1];
-      
-      return lastAiMessage?.content || "I'm not sure how to respond to that. Could you try rephrasing?";
+      // FIXED: Better response extraction that handles tool calls
+      return this.extractResponseContent(result.messages);
     } catch (error) {
       logger.error({ err: error, phoneNumber, message }, "Error processing user message");
       return "I'm experiencing some technical difficulties. Please try again in a moment!";
@@ -434,13 +445,46 @@ FREE USER: This user has access to basic conversation features. Their conversati
         }
       );
 
-      const aiMessages = result.messages.filter((msg: any) => msg.role === 'assistant');
-      const lastAiMessage = aiMessages[aiMessages.length - 1];
-      
-      return lastAiMessage?.content || "Hello! Ready for today's language practice?";
+      return this.extractResponseContent(result.messages) || "Hello! Ready for today's language practice?";
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error initiating conversation");
       return "Hello! Ready for today's language practice?";
     }
+  }
+
+  private extractResponseContent(messages: any[]): string {
+    // Find the last AI message with actual content
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      
+      // Check for different message types and structures
+      if (msg instanceof AIMessage || msg._getType?.() === 'ai' || msg.role === 'assistant') {
+        // Handle regular content
+        if (msg.content && typeof msg.content === 'string' && msg.content.trim()) {
+          return msg.content.trim();
+        }
+        
+        // Handle tool calls - extract content from tool responses
+        if (msg.tool_calls && msg.tool_calls.length > 0) {
+          for (let j = i + 1; j < messages.length; j++) {
+            const toolMsg = messages[j];
+            if (toolMsg.content && typeof toolMsg.content === 'string' && toolMsg.content.trim()) {
+              return toolMsg.content.trim();
+            }
+          }
+        }
+      }
+      
+      // Also check for any message with assistant-like content
+      if (msg.content && typeof msg.content === 'string' && 
+          msg.content.trim() && 
+          !msg.content.startsWith('{')) { // Skip JSON responses
+        return msg.content.trim();
+      }
+    }
+    
+    // Fallback response
+    logger.warn({ messagesCount: messages.length }, "No valid AI response found in messages");
+    return "I'm not sure how to respond to that. Could you try rephrasing?";
   }
 }
