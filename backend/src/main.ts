@@ -186,7 +186,8 @@ app.post("/webhook", async (req: any, res: any) => {
         responseLength: response?.length || 0
       });
 
-      if (response && response.trim() !== "") {
+      logger.info(response);
+      if (response && response.content && response.content.trim() !== "") {
         await whatsappService.sendMessage(userPhone, response);
         logger.info({ userPhone, responseLength: response.length }, "Response sent via LangGraph");
         trackEvent("response_sent", {
@@ -274,7 +275,7 @@ app.get("/subscriber/:phone", async (req: any, res: any) => {
     const subscriber = await subscriberService.getSubscriber(req.params.phone);
     if (subscriber) {
       // Remove sensitive information before sending
-      const { messageHistory, ...safeSubscriber } = subscriber;
+      const { ...safeSubscriber } = subscriber;
       res.json(safeSubscriber);
     } else {
       res.status(404).json({ error: "Subscriber not found" });

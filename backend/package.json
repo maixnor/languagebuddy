@@ -30,6 +30,7 @@
     "openai": "^4.73.0",
     "pino": "^9.7.0",
     "pino-applicationinsights": "^2.1.0",
+    "pino-pretty": "^13.0.0",
     "serve-static": "^1.15.0",
     "stripe": "^18.1.1",
     "whatsapp-cloud-api-express": "^3.1.0",

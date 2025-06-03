@@ -1,7 +1,6 @@
-import pino from 'pino';
 import * as appInsights from 'applicationinsights';
 
-// Initialize Application Insights if connection string is provided
+// Initialize Application Insights immediately if connection string is provided
 if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
   appInsights.setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
     .setAutoDependencyCorrelation(true)
@@ -11,7 +10,7 @@ if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
     .setAutoCollectDependencies(true)
     .setAutoCollectConsole(true)
     .setUseDiskRetryCaching(true)
-    .setSendLiveMetrics(false) // Disable live metrics for cost optimization
+    //.setSendLiveMetrics(false) // Disable live metrics for cost optimization
     .start();
   
   console.log('Application Insights initialized');
@@ -19,42 +18,29 @@ if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
   console.log('Application Insights not configured - APPLICATIONINSIGHTS_CONNECTION_STRING not found');
 }
 
-// Configure Pino logger with Application Insights transport
+// Now import other modules
+import pino from 'pino';
+
+// Configure Pino logger - simplified to avoid transport conflicts
 const createLogger = () => {
   const baseConfig = {
     level: process.env.LOG_LEVEL || 'info',
-    formatters: {
-      level: (label: string) => {
-        return { level: label };
-      },
-    },
+    // Remove custom formatters that conflict with transports
   };
 
-  // Add Application Insights transport if available
-  if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
-    return pino({
-      ...baseConfig,
-      transport: {
-        targets: [
-          {
-            target: 'pino-applicationinsights',
-            options: {
-              connectionString: process.env.APPLICATIONINSIGHTS_CONNECTION_STRING,
-              track: {
-                console: true,
-                exceptions: true,
-                dependencies: true
-              }
-            },
-            level: 'info'
-          }
-        ]
+  // Use simple console logging to avoid pino-applicationinsights conflicts
+  // Application Insights will automatically capture console output
+  return pino({
+    ...baseConfig,
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname'
       }
-    });
-  }
-
-  // Fallback to console logging if Application Insights is not configured
-  return pino(baseConfig);
+    }
+  });
 };
 
 export const logger = createLogger();

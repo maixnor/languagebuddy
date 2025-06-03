@@ -2,7 +2,6 @@ import { BaseCheckpointSaver } from "@langchain/langgraph";
 import { Checkpoint, CheckpointMetadata, CheckpointTuple } from "@langchain/langgraph";
 import { Redis } from 'ioredis';
 import { logger } from '../config';
-import { ConversationDigest } from '../types';
 
 export class RedisCheckpointSaver extends BaseCheckpointSaver {
   private redis: Redis;
@@ -136,29 +135,6 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     }
   }
 
-  // Additional methods for SubscriberService
-  async saveConversationDigest(phoneNumber: string, digest: ConversationDigest): Promise<void> {
-    try {
-      const digestKey = `digest:${phoneNumber}:${digest.date}`;
-      await this.redis.setex(
-        digestKey,
-        60 * 60 * 24 * 90, // 90 days expiration
-        JSON.stringify(digest)
-      );
-
-      // Also add to user's digest list
-      const userDigestsKey = `user_digests:${phoneNumber}`;
-      await this.redis.lpush(userDigestsKey, JSON.stringify(digest));
-      await this.redis.ltrim(userDigestsKey, 0, 29); // Keep last 30 digests
-      await this.redis.expire(userDigestsKey, 60 * 60 * 24 * 90); // 90 days expiration
-
-      logger.info({ phoneNumber, date: digest.date }, "Conversation digest saved");
-    } catch (error) {
-      logger.error({ err: error, phoneNumber }, "Error saving conversation digest");
-      throw error;
-    }
-  }
-
   async getStoredLearningData(phoneNumber: string): Promise<any> {
     try {
       const userDigestsKey = `user_digests:${phoneNumber}`;
@@ -174,18 +150,6 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       const vocabulary: any[] = [];
       const learningProgress: string[] = [];
       const suggestedReviews: string[] = [];
-
-      digests.forEach((digest: ConversationDigest) => {
-        if (digest.vocabulary) {
-          vocabulary.push(...digest.vocabulary);
-        }
-        if (digest.learningProgress) {
-          learningProgress.push(digest.learningProgress);
-        }
-        if (digest.suggestedReview) {
-          suggestedReviews.push(...digest.suggestedReview);
-        }
-      });
 
       return {
         totalDigests: digests.length,
@@ -217,18 +181,6 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error clearing user history");
       throw error;
-    }
-  }
-
-  async getUserDigests(phoneNumber: string, limit: number = 10): Promise<ConversationDigest[]> {
-    try {
-      const userDigestsKey = `user_digests:${phoneNumber}`;
-      const digestsData = await this.redis.lrange(userDigestsKey, 0, limit - 1);
-      
-      return digestsData.map(data => JSON.parse(data));
-    } catch (error) {
-      logger.error({ err: error, phoneNumber }, "Error getting user digests");
-      return [];
     }
   }
 }

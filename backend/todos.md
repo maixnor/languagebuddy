@@ -12,7 +12,7 @@
 
 # User probing
 
-- [x] GPT should try to fill out all information missing in the specific subscriber object to have full information at all times
+- [ ] GPT should try to fill out all information missing in the specific subscriber object to have full information at all times
 
 # verify user subscription
 
@@ -36,9 +36,11 @@ ignore the typing when a user command is being handled
 # User commands
 
 - [ ] translate
-- [x] define
+- [ ] define
 
 # GPT commands
 
 - [x] does not work yet, but most of the code is written already, only need to debug
+
+
 
