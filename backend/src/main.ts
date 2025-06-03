@@ -187,7 +187,7 @@ app.post("/webhook", async (req: any, res: any) => {
       });
 
       logger.info(response);
-      if (response && response.content && response.content.trim() !== "") {
+      if (response && response.trim() !== "") {
         await whatsappService.sendMessage(userPhone, response);
         logger.info({ userPhone, responseLength: response.length }, "Response sent via LangGraph");
         trackEvent("response_sent", {

@@ -276,7 +276,7 @@ Be natural and conversational. Proactively gather missing information but weave 
     return this.initiate(phone, systemPrompt);
   }
 
-  async processUserMessage(phone: string, messageText: string): Promise<any> {
+  async processUserMessage(phone: string, messageText: string): Promise<string> {
     try {
       const subscriber = await this.subscriberService.getSubscriber(phone);
       if (!subscriber) {
@@ -298,8 +298,13 @@ Be natural and conversational. Proactively gather missing information but weave 
         configurable: { thread_id: phone }
       });
 
-      const response = result.messages.pop();
-      return response || "I'm not sure how to respond to that. Could you try rephrasing?";
+      // Extract the AI response message and get its content
+      const responseMessage = result.messages?.pop();
+      if (responseMessage && responseMessage.content) {
+        return responseMessage.content;
+      }
+      
+      return "I'm not sure how to respond to that. Could you try rephrasing?";
     } catch (error) {
       logger.error({ err: error, phone, messageText }, "Error processing user message");
       return "I'm experiencing some technical difficulties. Please try again in a moment!";
