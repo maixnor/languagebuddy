@@ -1,5 +1,3 @@
-import pino from "pino";
-
 export interface Language {
   languageName: string;
   level?: string;
@@ -36,8 +34,7 @@ export interface FeedbackEntry {
 export interface ConversationState {
   messages: any[];
   subscriber: Subscriber;
-  shouldEnd: boolean;
-  conversationMode: 'chatting' | 'tutoring';
+  conversationMode: 'chatting' | 'tutoring' | 'roleplaying';
   isPremium: boolean;
   sessionStartTime: Date;
   lastMessageTime?: Date;

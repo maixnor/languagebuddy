@@ -1,5 +1,5 @@
 import { StateGraph, END, START, Annotation } from "@langchain/langgraph";
-import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { ConversationState, Subscriber, SystemPromptEntry } from '../types';
 import { logger, config } from '../config';
@@ -85,7 +85,7 @@ export class LanguageBuddyAgent {
         ...state.messages
       ];
 
-      const response = await this.llm.invoke(messagesWithContext);
+      const response = await this.llm.invoke(messagesWithContext.reverse().slice(0, 10));
       
       // Update last active time
       await this.subscriberService.updateSubscriber(subscriber.phone, {
@@ -94,14 +94,14 @@ export class LanguageBuddyAgent {
 
       logger.info({ 
         phoneNumber: subscriber.phone, 
-        messageLength: response.content?.length || 0 
+        messageLength: response?.content?.length || 0,
+        hadToolCalls: response.tool_calls?.length > 0 ? "yes" : "no"
       }, "Message processed");
 
       return {
-        messages: [response],
+        messages: response,
         subscriber,
         isPremium: subscriber.isPremium || false,
-        shouldEnd: true,
         lastMessageTime: new Date(),
       };
     } catch (error) {
@@ -112,8 +112,7 @@ export class LanguageBuddyAgent {
       });
       
       return {
-        messages: [errorMessage],
-        shouldEnd: true,
+        messages: [errorMessage]
       };
     }
   }
@@ -142,7 +141,7 @@ INSTRUCTIONS:
 7. Keep responses conversational and not too long
 `;
 
-if (missingInfo) {
+if (missingInfo && missingInfo.length > 0) {
   prompt += `
   PROACTIVE INFORMATION GATHERING:
   ${this.generateInfoGatheringInstructions(missingInfo)}
@@ -189,7 +188,6 @@ Be natural and conversational. Proactively gather missing information but weave 
       missing.push("learning languages");
     }
     
-    // Check for languages without levels
     subscriber.learningLanguages?.forEach((lang, index) => {
       if (!lang.level) {
         missing.push(`${lang.languageName} level`);
@@ -237,7 +235,7 @@ Be natural and conversational. Proactively gather missing information but weave 
     }
     
     instructions.push(`
-⚠️  PRIORITY: Ask for the most important missing info (${missingInfo.join(', ')}) in the first few messages.
+⚠️ PRIORITY: Ask for the most important missing info (${missingInfo.join(', ')}) in the first few messages.
 📋 ASK ONE QUESTION AT A TIME - don't overwhelm the user with multiple questions.`);
     
     return instructions.join('\n');
@@ -254,7 +252,6 @@ Be natural and conversational. Proactively gather missing information but weave 
       const initialState: ConversationState = {
         messages: [],
         subscriber,
-        shouldEnd: false,
         conversationMode: "chatting",
         isPremium: subscriber.isPremium || false,
         sessionStartTime: new Date(),
@@ -287,7 +284,6 @@ Be natural and conversational. Proactively gather missing information but weave 
       const conversationState: ConversationState = {
         messages: [userMessage],
         subscriber,
-        shouldEnd: false,
         conversationMode: "chatting",
         isPremium: subscriber.isPremium || false,
         sessionStartTime: new Date(),
@@ -304,6 +300,7 @@ Be natural and conversational. Proactively gather missing information but weave 
         return responseMessage.content;
       }
       
+      logger.warn(result);
       return "I'm not sure how to respond to that. Could you try rephrasing?";
     } catch (error) {
       logger.error({ err: error, phone, messageText }, "Error processing user message");
