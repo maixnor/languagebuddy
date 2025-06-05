@@ -12,6 +12,7 @@ export const updateSubscriberTool = tool(
     updates: Partial<Subscriber>
   }) => {
     try {
+      logger.info('reached the tool at least')
       const subscriberService = SubscriberService.getInstance();
       await subscriberService.updateSubscriber(phoneNumber, updates);
       
@@ -28,18 +29,18 @@ export const updateSubscriberTool = tool(
     schema: z.object({
       phoneNumber: z.string(),
       updates: z.object({
-        name: z.string().optional(),
+        name: z.string().optional().describe('the name the user wants to be addressed as, possibly a nickname'),
         speakingLanguages: z.array(z.object({
-          languageName: z.string(),
-          level: z.string().optional(),
-          currentObjectives: z.array(z.string()).optional()
-        })).optional(),
+          languageName: z.string().describe('the name of the language the user is currently speaking, e.g. english, german, spanish'),
+          level: z.string().optional().describe('the level the person is speaking the language at, e.g. native, advanced'),
+          currentObjectives: z.array(z.string()).optional().describe('the current objectives within this specific language')
+        })).optional().describe('the languages the user is currently speaking and that you will use to explain concepts to the user. most likely this will be just a single language or 2 languages'),
         learningLanguages: z.array(z.object({
-          languageName: z.string(),
-          level: z.string().optional(),
-          currentObjectives: z.array(z.string()).optional()
-        })).optional(),
-        timezone: z.string().optional(),
+          languageName: z.string().describe('the name of the language the user is currently speaking, e.g. english, german, spanish'),
+          level: z.string().optional().describe('the level at which the user is currently in his language learning process. You may add notes about topics to practice. e.g. advanced, but conjugation needs to be practiced more'),
+          currentObjectives: z.array(z.string()).optional().describe('topics or situations the user is interested in, e.g. at the cafe, talking about cars, talking about the weather')
+        })).optional().describe('the langauges which the user is currently learning or wants to be more advanced in, here also multiple languages can be added if the user is learning or wants to learn multiple languages.'),
+        timezone: z.string().optional().describe('the timezone of the user, needed to send timed messages throughout the day respective of the user'),
       })
     }),
   }

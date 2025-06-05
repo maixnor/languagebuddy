@@ -45,7 +45,6 @@ const createLogger = () => {
 
 export const logger = createLogger();
 
-// Custom function to track custom events and metrics
 export const trackEvent = (name: string, properties?: Record<string, any>, measurements?: Record<string, number>) => {
   if (appInsights.defaultClient) {
     appInsights.defaultClient.trackEvent({
