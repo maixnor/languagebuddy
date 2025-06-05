@@ -241,7 +241,6 @@ Be natural and conversational. Proactively gather missing information but weave 
     return instructions.join('\n');
   }
 
-  // Public interface methods
   async initiate(phone: string, systemPrompt: SystemPromptEntry): Promise<string> {
     try {
       let subscriber = await this.subscriberService.getSubscriber(phone);

@@ -8,9 +8,10 @@
     "start": "node dist/src/main.js",
     "dev": "tsc -w & nodemon dist/src/main.js",
     "lint": "eslint . --ext .ts",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "node --test --require tsx/cjs tests/**/*.test.ts",
+    "test:watch": "node --test --watch --require tsx/cjs tests/**/*.test.ts",
+    "test:coverage": "node --test --experimental-test-coverage --require tsx/cjs tests/**/*.test.ts",
+    "test:e2e": "RUN_E2E_TESTS=true node --test --require tsx/cjs tests/**/*.e2e.test.ts --timeout 120000",
   },
   "keywords": [],
   "author": "",
@@ -37,34 +38,17 @@
     "zod": "^3.25.45"
   },
   "devDependencies": {
+    "@testcontainers/redis": "^11.0.0",
     "@types/express": "^4.17.21",
-    "@types/jest": "^29.5.12",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.12",
     "@types/serve-static": "^1.15.7",
     "@typescript-eslint/eslint-plugin": "^7.10.0",
     "@typescript-eslint/parser": "^7.10.0",
     "eslint": "^8.57.0",
-    "jest": "^29.7.0",
     "nodemon": "^3.1.0",
-    "ts-jest": "^29.1.2",
+    "testcontainers": "^11.0.0",
+    "tsx": "^4.7.0",
     "typescript": "^5.4.5"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "roots": [
-      "<rootDir>/src",
-      "<rootDir>/tests"
-    ],
-    "testMatch": [
-      "**/__tests__/**/*.ts",
-      "**/?(*.)+(spec|test).ts"
-    ],
-    "collectCoverageFrom": [
-      "src/**/*.ts",
-      "!src/**/*.d.ts",
-      "!src/types/**/*.ts"
-    ]
   }
 }
