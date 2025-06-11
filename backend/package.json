@@ -11,7 +11,7 @@
     "test": "node --test --require tsx/cjs tests/**/*.test.ts",
     "test:watch": "node --test --watch --require tsx/cjs tests/**/*.test.ts",
     "test:coverage": "node --test --experimental-test-coverage --require tsx/cjs tests/**/*.test.ts",
-    "test:e2e": "RUN_E2E_TESTS=true node --test --require tsx/cjs tests/**/*.e2e.test.ts --timeout 120000",
+    "test:e2e": "RUN_E2E_TESTS=true node --test --require tsx/cjs tests/**/*.e2e.test.ts --timeout 120000"
   },
   "keywords": [],
   "author": "",

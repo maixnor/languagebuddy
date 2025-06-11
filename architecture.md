@@ -17,11 +17,3 @@ Purpose: Enable communication between the customer and the GPT game master via W
 ## 6. Payment Processing
 Technology: Stripe
 Purpose: Handle customer payments for the tour.
-
-# Integration Steps
-## 1. Integrate WhatsApp with Twilio
-Sign up for a Twilio account and set up a WhatsApp sandbox.
-Use the Twilio API to send and receive messages.
-## 2. Integrate GPT-4 with OpenAI API
-Sign up for an OpenAI account and get an API key.
-Use the OpenAI API to send prompts and receive responses from GPT-4.

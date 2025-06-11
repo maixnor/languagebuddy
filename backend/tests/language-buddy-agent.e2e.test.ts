@@ -15,13 +15,14 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
 // Skip these tests by default to avoid costs during development
 // To run these tests, set environment variable RUN_E2E_TESTS=true
-const shouldSkipE2E = process.env.RUN_E2E_TESTS !== 'true';
+const shouldSkipE2E = process.env.RUN_E2E_TESTS !== 'false';
 
 describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   let redis: Redis;
   let checkpointer: RedisCheckpointSaver;
   let agent: LanguageBuddyAgent;
   let subscriberService: SubscriberService;
+  let testPhone = '436802456552';
 
   before(async function() {
     if (shouldSkipE2E) {
@@ -36,12 +37,10 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-      maxRetriesPerRequest: 3,
-      lazyConnect: true,
+      tls: {},
     });
 
     try {
-      await redis.connect();
       await redis.ping();
       console.log(`✅ Connected to Redis at ${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`);
     } catch (error) {
@@ -78,7 +77,6 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should process user message with real OpenAI and Redis', async () => {
-    const testPhone = 'test:+436802456552';
     const userMessage = 'Hello! My name is John and I want to learn Spanish. I already speak English fluently.';
 
     console.log('📤 Sending message to real LLM...');
@@ -108,9 +106,8 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should trigger LLM tool calling for profile updates', async () => {
-    const testPhone = 'test:+436701234567';
-    
     // Create a fresh test subscriber first
+    const testPhone = '436802456569';
     await subscriberService.createSubscriber(testPhone);
     
     const userMessage = 'Hi! I\'m Maria, I speak Italian natively and I want to learn French. I\'m a beginner in French.';
@@ -168,8 +165,7 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should handle feedback collection tool calls', async () => {
-    const testPhone = 'test:+436709876543';
-    
+    const testPhone = '436802456569';
     await subscriberService.createSubscriber(testPhone);
     
     const userMessage = 'That was a great conversation! I really enjoyed practicing with you. The explanations were very clear.';
@@ -198,8 +194,7 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should maintain conversation context across multiple messages', async () => {
-    const testPhone = 'test:+436705555555';
-    
+    const testPhone = '436802456569';
     await subscriberService.createSubscriber(testPhone);
     
     // First message
@@ -237,8 +232,7 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should handle complex language learning scenarios', async () => {
-    const testPhone = 'test:+436708888888';
-    
+    const testPhone = '436802456569';
     await subscriberService.createSubscriber(testPhone);
     
     const complexMessage = 'I speak German and English. I want to learn Spanish and I\'m intermediate level. Can you explain the difference between ser and estar in Spanish?';
@@ -274,8 +268,6 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should handle errors gracefully with real services', async () => {
-    const testPhone = 'test:+436700000000';
-    
     // Test with potentially problematic input
     const problematicMessage = '';
     
@@ -293,8 +285,7 @@ describe('LanguageBuddyAgent End-to-End Tests (Real Services)', () => {
   });
 
   (shouldSkipE2E ? skip : test)('should verify Redis checkpoint persistence', async () => {
-    const testPhone = 'test:+436706666666';
-    
+    const testPhone = '436802456569';
     await subscriberService.createSubscriber(testPhone);
     
     // Send a message to create checkpoint data
