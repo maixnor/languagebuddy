@@ -51,7 +51,7 @@ export class LanguageBuddyAgent {
     
     // Create LLM instance with both tools
     this.llm = new ChatOpenAI({
-      modelName: config.openai.model,
+      model: config.openai.model,
       temperature: 0.7,
       maxTokens: config.openai.maxTokens,
     }).bindTools([updateSubscriberTool, collectFeedbackTool]);
@@ -236,7 +236,7 @@ Be natural and conversational. Proactively gather missing information but weave 
     
     instructions.push(`
 ⚠️ PRIORITY: Ask for the most important missing info (${missingInfo.join(', ')}) in the first few messages.
-📋 ASK ONE QUESTION AT A TIME - don't overwhelm the user with multiple questions.`);
+📋 ASK ONE QUESTION AT A TIME - don't overwhelm the user with multiple questions at once.`);
     
     return instructions.join('\n');
   }
