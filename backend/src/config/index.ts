@@ -1,35 +1,10 @@
-import * as appInsights from 'applicationinsights';
-
-// Initialize Application Insights immediately if connection string is provided
-if (process.env.APPLICATIONINSIGHTS_CONNECTION_STRING) {
-  appInsights.setup(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING)
-    .setAutoDependencyCorrelation(true)
-    .setAutoCollectRequests(true)
-    .setAutoCollectPerformance(true, true)
-    .setAutoCollectExceptions(true)
-    .setAutoCollectDependencies(true)
-    .setAutoCollectConsole(true)
-    .setUseDiskRetryCaching(true)
-    //.setSendLiveMetrics(false) // Disable live metrics for cost optimization
-    .start();
-  
-  console.log('Application Insights initialized');
-} else {
-  console.log('Application Insights not configured - APPLICATIONINSIGHTS_CONNECTION_STRING not found');
-}
-
-// Now import other modules
 import pino from 'pino';
 
-// Configure Pino logger - simplified to avoid transport conflicts
+// Configure Pino logger
 const createLogger = () => {
   const baseConfig = {
     level: process.env.LOG_LEVEL || 'info',
-    // Remove custom formatters that conflict with transports
   };
-
-  // Use simple console logging to avoid pino-applicationinsights conflicts
-  // Application Insights will automatically capture console output
   return pino({
     ...baseConfig,
     transport: {
@@ -46,24 +21,10 @@ const createLogger = () => {
 export const logger = createLogger();
 
 export const trackEvent = (name: string, properties?: Record<string, any>, measurements?: Record<string, number>) => {
-  if (appInsights.defaultClient) {
-    appInsights.defaultClient.trackEvent({
-      name,
-      properties,
-      measurements
-    });
-  }
   logger.info({ event: name, properties, measurements }, `Custom event: ${name}`);
 };
 
 export const trackMetric = (name: string, value: number, properties?: Record<string, any>) => {
-  if (appInsights.defaultClient) {
-    appInsights.defaultClient.trackMetric({
-      name,
-      value,
-      properties
-    });
-  }
   logger.info({ metric: name, value, properties }, `Custom metric: ${name} = ${value}`);
 };
 

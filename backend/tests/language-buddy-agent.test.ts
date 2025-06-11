@@ -27,7 +27,7 @@ describe('LanguageBuddyAgent processUserMessage tests', () => {
 
   // Mock environment variables for testing
   process.env.OPENAI_API_KEY = 'test-key';
-  process.env.OPENAI_MODEL = 'gpt-3.5-turbo';
+  process.env.OPENAI_MODEL = 'gpt-4o-mini';
   process.env.OPENAI_MAX_TOKENS = '1000';
 
   before(async () => {

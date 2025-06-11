@@ -58,14 +58,13 @@ export class SubscriberService {
         throw new Error(`Subscriber not found: ${phoneNumber}`);
       }
 
-      logger.info(updates, `update user ${phoneNumber} with this info:`)
       // CURSOR currently dealing with the fact that the LLM cannot correclty use the updateSubscriberTool
       // strategy: reduce the complexity of the task to be just the learning language and the name. Then use a general approach and start adding more variables with greater detail to it
       Object.assign(subscriber, updates);
       subscriber.lastActiveAt = new Date();
       await this.cacheSubscriber(subscriber);
 
-      logger.info({ phoneNumber, updates }, "Subscriber updated");
+      logger.info(updates, `Updated user ${phoneNumber} with this info:`)
     } catch (error) {
       logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");
       throw error;
