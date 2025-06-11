@@ -279,18 +279,6 @@ Be natural and conversational. Proactively gather missing information but weave 
         throw new Error("Subscriber not found");
       }
 
-      // Parse user profile updates for name and languages
-      const updates: Partial<import('../types').Subscriber> = {};
-      const nameMatch = messageText.match(/I['’]?m\s+([A-Za-z]+)/i);
-      if (nameMatch) updates.name = nameMatch[1];
-      const speakMatch = messageText.match(/speak\s+([A-Za-z]+)/i);
-      if (speakMatch) updates.speakingLanguages = [{ languageName: speakMatch[1], level: 'native' }];
-      const learnMatch = messageText.match(/learning\s+([A-ZaZ]+)\s+at\s+([A-Za-z]+)/i);
-      if (learnMatch) updates.learningLanguages = [{ languageName: learnMatch[1], level: learnMatch[2] }];
-      if (Object.keys(updates).length > 0) {
-        await this.subscriberService.updateSubscriber(phone, updates);
-      }
-
       const userMessage = new HumanMessage(messageText);
       const conversationState: ConversationState = {
         messages: [userMessage],

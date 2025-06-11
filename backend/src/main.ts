@@ -9,7 +9,7 @@ import serveStatic from "serve-static";
 import Redis from 'ioredis';
 import "whatsapp-cloud-api-express";
 import { readFileSync } from 'fs';
-const yaml = require('js-yaml');
+import yaml from 'js-yaml';
 
 // Import LangGraph components
 import { LanguageBuddyAgent } from './agents/language-buddy-agent';
@@ -51,7 +51,7 @@ let fallbackSystemPrompt = {
 try {
   const promptsPath = path.join(process.cwd(), 'system_prompts.yml');
   const promptsData = readFileSync(promptsPath, 'utf8');
-  systemPrompts = yaml.load(promptsData);
+  systemPrompts = yaml.load(promptsData) as SystemPromptEntry[];
   defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || fallbackSystemPrompt;
   dailySystemPrompt = systemPrompts.find(prompt => prompt.slug === 'daily') || defaultSystemPrompt;
   logger.info(`Loaded ${systemPrompts.length} system prompts from file`);
@@ -104,15 +104,7 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 
   try {
-    // Get or create subscriber using new service
-    let subscriber = await subscriberService.getSubscriber(phone);
-    if (!subscriber) {
-      subscriber = await subscriberService.createSubscriber(phone);
-    }
-
     const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
-    
-    // Use LangGraph agent to initiate conversation
     const initialMessage = await languageBuddyAgent.initiate(phone, selectedPrompt);
     
     if (initialMessage) {
@@ -160,11 +152,6 @@ app.post("/webhook", async (req: any, res: any) => {
           return res.sendStatus(200);
         }
         
-        logger.info({ userPhone }, "New user has created a subscription. Creating profile.");
-        trackEvent("subscription_verified", { userPhone: userPhone.slice(-4) });
-        subscriber = await subscriberService.createSubscriber(userPhone);
-        
-        // Use LangGraph agent for new user initialization
         const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
         await whatsappService.sendMessage(userPhone, welcomeMessage);
         trackEvent("welcome_sent", { userPhone: userPhone.slice(-4) });
@@ -189,7 +176,6 @@ app.post("/webhook", async (req: any, res: any) => {
       logger.info(response);
       if (response && response.trim() !== "") {
         await whatsappService.sendMessage(userPhone, response);
-        logger.info({ userPhone, responseLength: response.length }, "Response sent via LangGraph");
         trackEvent("response_sent", {
           userPhone: userPhone.slice(-4),
           responseLength: response.length,
