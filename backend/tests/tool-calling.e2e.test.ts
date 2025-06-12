@@ -1,19 +1,17 @@
-import { test, before, after, describe, skip } from 'node:test';
+import { test, before, after, describe } from 'node:test';
 import { Redis } from 'ioredis';
 import { RedisCheckpointSaver } from '../src/persistence/redis-checkpointer';
 import { SubscriberService } from '../src/services/subscriber-service';
-import { HumanMessage} from "@langchain/core/messages";
+import {HumanMessage, SystemMessage} from "@langchain/core/messages";
 import {ChatOpenAI} from "@langchain/openai";
-import {config} from "../src/config";
-import {collectFeedbackTool, updateSubscriberTool} from "../src/tools/conversation-tools";
+import {collectFeedbackTool } from "../src/tools/feedback-tools";
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import dotenv from "dotenv";
 import path from "path";
-import {RunnableLambda} from "@langchain/core/runnables";
-import {BaseChatModel} from "@langchain/core/dist/language_models/chat_models";
-import {setContextVariable} from "@langchain/core/context";
 import assert = require("node:assert");
 import {FeedbackService} from "../src/services/feedback-service";
+import {updateSubscriberTool} from "../src/tools/subscriber-tools";
+import {setContextVariable} from "@langchain/core/context";
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
@@ -64,35 +62,9 @@ describe('WTF how does tool calling work?', () => {
     }
   });
 
-  const lambda = RunnableLambda.from(
-      async (params: { phone: string; query: string; llm: BaseChatModel }) => {
-        const { phone, query, llm } = params;
-        if (!llm.bindTools) {
-          throw new Error("Language model does not support tools.");
-        }
-        // Set a context variable accessible to any child runnables called within this one.
-        // You can also set context variables at top level that act as globals.
-        setContextVariable("phone", phone);
-        console.log(`📞 Phone number set to: ${phone}`);
-        const tools = [updateSubscriberTool];
-        const llmWithTools = llm.bindTools(tools);
-
-        const modelResponse = await llmWithTools.invoke(query);
-
-        if (modelResponse.tool_calls.length > 0) {
-          for (const item of modelResponse.tool_calls) {
-            return updateSubscriberTool.invoke(item);
-          }
-        } else {
-          return "No tool invoked.";
-        }
-        return "nothing happened at all";
-      }
-  );
-
   test('should call the subscriber tool and update the redis record', async () => {
     console.log('🔍 Starting tool calling test...');
-    const userMessage = 'Hello my name is John and I want to learn Spanish. Im quite the beginner in spanish. I already speak English fluently';
+    const userMessage = 'Ich versuche gerade Spanisch zu lernen. Ich bin gerade so mittendrin. Ich brauche Hilfe bei Grammatik und Vokabeln.';
 
     let subscriber = await subscriberService.getSubscriber(testPhone);
     if (!subscriber) {
@@ -102,8 +74,8 @@ describe('WTF how does tool calling work?', () => {
 
     const llm = new ChatOpenAI({
       model: 'gpt-4o-mini',
-      temperature: 0.7,
-      maxTokens: config.openai.maxTokens,
+      temperature: 0.3,
+      maxTokens: 1000,
     });
 
     const agent = createReactAgent({
@@ -112,8 +84,9 @@ describe('WTF how does tool calling work?', () => {
       checkpointer: checkpointer,
     })
 
+    setContextVariable('phone', subscriber.phone);
     const response = await agent.invoke(
-      { messages: [new HumanMessage(userMessage)] },
+      { messages: [new SystemMessage(subscriberService.getSystemPrompt(subscriber)), new HumanMessage(userMessage)] },
       { configurable: { thread_id: testPhone} }
     );
 

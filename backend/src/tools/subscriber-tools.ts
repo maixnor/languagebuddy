@@ -3,26 +3,30 @@ import { Subscriber } from "../types";
 import { SubscriberService } from "../services/subscriber-service";
 import { logger } from "../config";
 import z from "zod";
+import {getContextVariable} from "@langchain/core/context";
 
 export const updateSubscriberTool = tool(
-  async ({ phoneNumber, updates }: { 
-    phoneNumber: string,
+  async ({ updates }: {
     updates: Partial<Subscriber>
   }) => {
+    const phoneNumber = getContextVariable('phone');
+    if (!phoneNumber) {
+      logger.error("Phone number not found in context");
+      return "Phone number is required to update subscriber profile";
+    }
     try {
       const subscriberService = SubscriberService.getInstance();
       await subscriberService.updateSubscriber(phoneNumber, updates);
-      return "Profile updated successfully!";
+      return "Subscriber profile updated successfully!";
     } catch (error) {
-      logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");
-      return "I had trouble saving that information. Could you try again?";
+      logger.error({ err: error, phone: phoneNumber, updates: updates }, "Error updating subscriber");
+      return "Error updating subscriber profile";
     }
   },
   {
     name: "update_subscriber",
     description: "Update subscriber profile information when they share personal details",
     schema: z.object({
-      phoneNumber: z.string(),
       updates: z.object({
         name: z.string().optional(),
         speakingLanguages: z.array(z.object({

@@ -1,51 +1,9 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { logger } from '../config';
-import { Subscriber, FeedbackEntry } from '../types';
-import { SubscriberService } from '../services/subscriber-service';
+import { FeedbackEntry } from '../types';
 import { FeedbackService } from '../services/feedback-service';
-import {getContextVariable} from "@langchain/core/context";
 
-// Simple subscriber update tool
-export const updateSubscriberTool = tool(
-  async ({ updates }: {
-    phoneNumber: string,
-    updates: Partial<Subscriber>
-  }) => {
-    const phoneNumber = getContextVariable("phone");
-    try {
-      const subscriberService = SubscriberService.getInstance();
-      await subscriberService.updateSubscriber(phoneNumber, updates);
-      return "Profile updated successfully!";
-    } catch (error) {
-      logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");
-      return "I had trouble saving that information. Could you try again?";
-    }
-  },
-  {
-    name: "update_subscriber",
-    description: "Update subscriber profile information when they share personal details",
-    schema: z.object({
-      phoneNumber: z.string(),
-      updates: z.object({
-        name: z.string().optional().describe('the name the user wants to be addressed as, possibly a nickname'),
-        speakingLanguages: z.array(z.object({
-          languageName: z.string().describe('the name of the language the user is currently speaking, e.g. english, german, spanish'),
-          level: z.string().optional().describe('the level the person is speaking the language at, e.g. native, advanced'),
-          currentObjectives: z.array(z.string()).optional().describe('the current objectives within this specific language')
-        })).optional().describe('the languages the user is currently speaking and that you will use to explain concepts to the user. most likely this will be just a single language or 2 languages'),
-        learningLanguages: z.array(z.object({
-          languageName: z.string().describe('the name of the language the user is currently speaking, e.g. english, german, spanish'),
-          level: z.string().optional().describe('the level at which the user is currently in his language learning process. You may add notes about topics to practice. e.g. advanced, but conjugation needs to be practiced more'),
-          currentObjectives: z.array(z.string()).optional().describe('topics or situations the user is interested in, e.g. at the cafe, talking about cars, talking about the weather')
-        })).optional().describe('the langauges which the user is currently learning or wants to be more advanced in, here also multiple languages can be added if the user is learning or wants to learn multiple languages.'),
-        timezone: z.string().optional().describe('the timezone of the user, needed to send timed messages throughout the day respective of the user'),
-      })
-    }),
-  }
-);
-
-// Feedback collection tool
 export const collectFeedbackTool = tool(
   async ({ originalMessage, userFeedback, userPhone }: { 
     originalMessage: string, 
@@ -65,8 +23,6 @@ export const collectFeedbackTool = tool(
       };
       
       await feedbackService.saveFeedback(feedbackEntry);
-      
-      logger.info({ userPhone }, "Feedback collected and processed");
       return "Thank you for your feedback! It helps me improve our conversations.";
     } catch (error) {
       logger.error({ err: error, userPhone }, "Error collecting feedback");

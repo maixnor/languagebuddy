@@ -35,12 +35,7 @@ export class FeedbackService {
       const dailyCountKey = `feedback_count:${feedback.userPhone}:${today}`;
       await this.redis.incr(dailyCountKey);
       await this.redis.expire(dailyCountKey, 24 * 60 * 60); // Expire after 24 hours
-
-      logger.info({ 
-        userPhone: feedback.userPhone, 
-        sentiment: feedback.sentiment, 
-        category: feedback.category 
-      }, "Feedback saved successfully");
+      logger.info(`Saved feedback for ${feedback.userPhone.slice(-4)}`);
     } catch (error) {
       logger.error({ err: error, feedback }, "Error saving feedback");
       throw error;
@@ -68,8 +63,8 @@ export class FeedbackService {
         return false;
       }
 
-      // Random chance (10% probability)
-      return Math.random() < 0.1;
+      // Random chance (1% probability)
+      return Math.random() < 0.01;
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error checking if should request feedback");
       return false;

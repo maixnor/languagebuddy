@@ -20,7 +20,8 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import { SystemPromptEntry } from './types';
+import {ConversationState, SystemPromptEntry} from './types';
+import {HumanMessage} from "@langchain/core/messages";
 
 // Initialize Redis
 const redisClient = new Redis({
@@ -124,80 +125,95 @@ app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
 
   if (message?.type === "text") {
-    const userPhone = message.from;
-    
-    await whatsappService.markMessageAsRead(message.id);
-    
-    // Track message received event
-    trackEvent("message_received", {
-      userPhone: userPhone.slice(-4), // Only last 4 digits for privacy
-      messageLength: message.text.body.length,
-      timestamp: new Date().toISOString()
-    });
-
     try {
-      // Check if subscriber exists, create if not
-      let subscriber = await subscriberService.getSubscriber(userPhone);
-      
-      if (!subscriber) {
-        logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
-        trackEvent("new_user_detected", { userPhone: userPhone.slice(-4) });
-        
-        const hasPaid = await stripeService.checkSubscription(userPhone);
-
-        if (!hasPaid) {
-          logger.info({ userPhone }, "User has not paid. Sending payment link.");
-          trackEvent("payment_required", { userPhone: userPhone.slice(-4) });
-          await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
-          return res.sendStatus(200);
-        }
-        
-        const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
-        await whatsappService.sendMessage(userPhone, welcomeMessage);
-        trackEvent("welcome_sent", { userPhone: userPhone.slice(-4) });
-        return res.sendStatus(200);
-      }
-
-      // Process message through LangGraph agent
-      logger.info({ userPhone, messageText: message.text.body }, "Processing message through LangGraph");
-      const startTime = Date.now();
-      
-      const response = await languageBuddyAgent.processUserMessage(
-        userPhone, 
-        message.text.body
-      );
-      
-      const processingTime = Date.now() - startTime;
-      trackMetric("message_processing_time_ms", processingTime, {
-        userPhone: userPhone.slice(-4),
-        responseLength: response?.length || 0
-      });
-
-      logger.info(response);
-      if (response && response.trim() !== "") {
-        await whatsappService.sendMessage(userPhone, response);
-        trackEvent("response_sent", {
-          userPhone: userPhone.slice(-4),
-          responseLength: response.length,
-          processingTimeMs: processingTime
-        });
-      } else {
-        logger.warn({ userPhone }, "Empty response from LangGraph agent");
-        trackEvent("empty_response", { userPhone: userPhone.slice(-4) });
-      }
-
-    } catch (error) {
-      logger.error({ err: error, userPhone }, `Error processing message through LangGraph`);
-      trackEvent("message_processing_error", {
-        userPhone: userPhone.slice(-4),
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
-      });
-      await whatsappService.sendMessage(userPhone, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
+      handleTextMessage(message);
+    }
+    catch (error) {
+      res.sendStatus(400).send("Unexpected error while processing webhook.");
     }
   }
   res.sendStatus(200);
 });
 
+const handleTextMessage = async (message: any) => {
+  const userPhone = message.from;
+
+  await whatsappService.markMessageAsRead(message.id);
+
+  // Track message received event
+  trackEvent("text_message_received", {
+    userPhone: userPhone.slice(-4), // Only last 4 digits for privacy
+    messageLength: message.text.body.length,
+    timestamp: new Date().toISOString()
+  });
+
+  try {
+    // Check if subscriber exists, create if not
+    let subscriber = await subscriberService.getSubscriber(userPhone);
+
+    if (!subscriber) {
+      logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
+      trackEvent("new_user_detected", { userPhone: userPhone.slice(-4) });
+
+      const hasPaid = await stripeService.checkSubscription(userPhone);
+
+      if (!hasPaid && false) { // TODO add the payment link sending
+        logger.info({ userPhone }, "User has not paid. Sending payment link.");
+        trackEvent("payment_required", { userPhone: userPhone.slice(-4) });
+        await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
+        return;
+      }
+
+      //const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
+      await whatsappService.sendMessage(userPhone, "Hi, I'm your language buddy!\nI try my best to match your language level but always push you slightly out of your comfort zone.");
+      trackEvent("welcome_sent", { userPhone: userPhone.slice(-4) });
+      return;
+    }
+
+    // Process message through LangGraph agent
+    logger.info({ userPhone, messageText: message.text.body }, "Processing message through LangGraph");
+    const startTime = Date.now();
+
+    const state: ConversationState = {
+      messages: [new HumanMessage(message.text.body)],
+      subscriber: subscriber,
+      conversationMode: "chatting",
+      isPremium: subscriber.isPremium || false,
+      sessionStartTime: new Date(),
+      lastMessageTime: undefined
+    }
+
+    const newState = await languageBuddyAgent.processUserMessage(state);
+    const response = newState.messages[newState.messages.length - 1].text;
+
+    const processingTime = Date.now() - startTime;
+    trackMetric("message_processing_time_ms", processingTime, {
+      userPhone: userPhone.slice(-4),
+      responseLength: response?.length || 0
+    });
+
+    logger.info(response);
+    if (response && response.trim() !== "") {
+      await whatsappService.sendMessage(userPhone, response);
+      trackEvent("response_sent", {
+        userPhone: userPhone.slice(-4),
+        responseLength: response.length,
+        processingTimeMs: processingTime
+      });
+    } else {
+      logger.warn({ userPhone }, "Empty response from LangGraph agent");
+      trackEvent("empty_response", { userPhone: userPhone.slice(-4) });
+    }
+
+  } catch (error) {
+    logger.error({ err: error, userPhone }, `Error processing message through LangGraph`);
+    trackEvent("message_processing_error", {
+      userPhone: userPhone.slice(-4),
+      errorMessage: error instanceof Error ? error.message : 'Unknown error'
+    });
+    await whatsappService.sendMessage(userPhone, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
+  }
+}
 // New endpoints for LangGraph features
 
 // Feedback analytics endpoint
