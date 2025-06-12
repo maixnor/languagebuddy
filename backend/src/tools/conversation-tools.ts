@@ -4,19 +4,18 @@ import { logger } from '../config';
 import { Subscriber, FeedbackEntry } from '../types';
 import { SubscriberService } from '../services/subscriber-service';
 import { FeedbackService } from '../services/feedback-service';
+import {getContextVariable} from "@langchain/core/context";
 
 // Simple subscriber update tool
 export const updateSubscriberTool = tool(
-  async ({ phoneNumber, updates }: { 
+  async ({ updates }: {
     phoneNumber: string,
     updates: Partial<Subscriber>
   }) => {
+    const phoneNumber = getContextVariable("phone");
     try {
-      logger.info('reached the tool at least')
       const subscriberService = SubscriberService.getInstance();
       await subscriberService.updateSubscriber(phoneNumber, updates);
-      
-      logger.info({ phoneNumber, updates }, "Subscriber information updated");
       return "Profile updated successfully!";
     } catch (error) {
       logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");

@@ -53,13 +53,11 @@ export class SubscriberService {
 
   async updateSubscriber(phoneNumber: string, updates: Partial<Subscriber>): Promise<void> {
     try {
-      const subscriber = await this.getSubscriber(phoneNumber);
+      let subscriber = await this.getSubscriber(phoneNumber);
       if (!subscriber) {
-        throw new Error(`Subscriber not found: ${phoneNumber}`);
+        subscriber = await this.createSubscriber(phoneNumber);
       }
 
-      // CURSOR currently dealing with the fact that the LLM cannot correclty use the updateSubscriberTool
-      // strategy: reduce the complexity of the task to be just the learning language and the name. Then use a general approach and start adding more variables with greater detail to it
       Object.assign(subscriber, updates);
       subscriber.lastActiveAt = new Date();
       await this.cacheSubscriber(subscriber);

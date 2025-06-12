@@ -12,8 +12,6 @@ export const updateSubscriberTool = tool(
     try {
       const subscriberService = SubscriberService.getInstance();
       await subscriberService.updateSubscriber(phoneNumber, updates);
-      
-      logger.info({ phoneNumber, updates }, "Subscriber information updated");
       return "Profile updated successfully!";
     } catch (error) {
       logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");

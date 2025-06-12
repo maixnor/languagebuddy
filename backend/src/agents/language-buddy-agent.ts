@@ -8,7 +8,7 @@ import { SubscriberService } from '../services/subscriber-service';
 import { updateSubscriberTool, collectFeedbackTool } from '../tools/conversation-tools';
 
 // Define the state schema using Annotation
-const ConversationStateAnnotation = Annotation.Root({
+export const ConversationStateAnnotation = Annotation.Root({
   messages: Annotation<any[]>({
     reducer: (x: any[], y: any[]) => x.concat(y),
     default: () => [],
@@ -21,7 +21,7 @@ const ConversationStateAnnotation = Annotation.Root({
     reducer: (x: boolean, y: boolean) => y,
     default: () => false,
   }),
-  conversationMode: Annotation<'chatting' | 'tutoring'>({
+  conversationMode: Annotation<'chatting' | 'tutoring' | 'roleplaying'>({
     reducer: (x: any, y: any) => y,
     default: () => "chatting" as const,
   }),
