@@ -99,7 +99,7 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
   async *list(
     config: { configurable?: { thread_id?: string } },
     options?: { limit?: number; before?: { configurable?: { thread_id?: string } } }
-  ): AsyncGenerator<CheckpointTuple, any, any> {
+  ): AsyncGenerator<CheckpointTuple> {
     const threadId = config.configurable?.thread_id;
     if (!threadId) return;
 
@@ -120,6 +120,24 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       logger.debug({ threadId }, "Checkpoint deleted");
     } catch (error) {
       logger.error({ err: error, threadId }, "Error deleting checkpoint");
+    }
+  }
+
+  async getCheckpoint(threadId: string): Promise<CheckpointTuple | undefined> {
+    try {
+      const checkpointData = await this.redis.get(`checkpoint:${threadId}`);
+      if (!checkpointData) return undefined;
+
+      const parsed = JSON.parse(checkpointData);
+      return {
+        config: { configurable: { thread_id: threadId } },
+        checkpoint: parsed.checkpoint,
+        metadata: parsed.metadata || {},
+        parentConfig: parsed.parentConfig,
+      };
+    } catch (error) {
+      logger.error({ err: error, threadId }, "Error retrieving checkpoint");
+      return undefined;
     }
   }
 

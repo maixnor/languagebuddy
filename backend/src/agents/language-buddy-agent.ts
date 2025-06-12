@@ -3,13 +3,14 @@ import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from "@langchain/
 import { ChatOpenAI } from "@langchain/openai";
 import { ConversationState, Subscriber, SystemPromptEntry } from '../types';
 import { logger, config } from '../config';
-import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
 import { SubscriberService } from '../services/subscriber-service';
 import { collectFeedbackTool } from '../tools/feedback-tools';
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {FeedbackService} from "../services/feedback-service";
 import {updateSubscriberTool} from "../tools/subscriber-tools";
 import {setContextVariable} from "@langchain/core/context";
+import {RedisCheckpointSaver} from "../persistence/redis-checkpointer";
+import {tools} from "../tools";
 
 // Define the state schema using Annotation
 export const ConversationStateAnnotation = Annotation.Root({
@@ -63,61 +64,66 @@ export class LanguageBuddyAgent {
 
     this.agent = createReactAgent({
       llm: llm,
-      tools: [updateSubscriberTool, collectFeedbackTool],
+      tools: tools,
       checkpointer: checkpointer,
     })
   }
-  async initiate(phone: string, systemPrompt: SystemPromptEntry): Promise<string> {
+  async initiateConversation(subscriber: Subscriber, systemPrompt: string, humanMessage: string): Promise<string> {
     try {
-      let subscriber = await this.subscriberService.getSubscriber(phone);
-      if (!subscriber) {
-        subscriber = await this.subscriberService.createSubscriber(phone);
-      }
-
-      const initialState: ConversationState = {
-        messages: [new SystemMessage(systemPrompt.prompt), new HumanMessage(systemPrompt.firstUserMessage)],
-        subscriber,
-        conversationMode: "chatting",
-        isPremium: subscriber.isPremium || false,
-        sessionStartTime: new Date(),
-        lastMessageTime: undefined,
-      };
-
       const result = await this.agent.invoke(
-        { messages: initialState.messages },
-        { configurable: { thread_id: phone }}
+        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not buing initializaed by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
+        { configurable: { thread_id: subscriber.phone }}
       );
 
-      return result.messages || systemPrompt.firstUserMessage;
+      return result.messages[result.messages.length - 1].text || "initiateConversation() failed";
     } catch (error) {
-      logger.error({ err: error, phone }, "Error in initiate method");
-      return systemPrompt.firstUserMessage || "Hello! I'm your language buddy. What language would you like to practice today?";
+      logger.error({ err: error, subscriber: subscriber }, "Error in initiate method");
+      return "An error occurred while initiating the conversation. Please try again later.";
     }
   }
 
-  async initiateConversation(phone: string, systemPrompt: SystemPromptEntry): Promise<string> {
-    return this.initiate(phone, systemPrompt);
+  async processUserMessage(subscriber: Subscriber, humanMessage: string): Promise<string> {
+    if (!subscriber) {
+        logger.error("Subscriber is required to process user message");
+        throw new Error("Subscriber is required to process user message");
+    }
+    if (!humanMessage) {
+        logger.error("Invalid message provided");
+        throw new Error("Invalid message provided");
+    }
+
+    logger.info(`🔧 (${subscriber.phone.slice(-4)}) Processing user message:`, humanMessage);
+
+    setContextVariable('phone', subscriber.phone);
+    const response = await this.agent.invoke(
+        { messages: [new HumanMessage(humanMessage)] },
+        { configurable: { thread_id: subscriber.phone } }
+    );
+
+    logger.info(`🔧 (${subscriber.phone.slice(-4)}) AI response:`, response.messages[response.messages.length - 1].text);
+    return response.messages.pop().text || "processUserMessage()?";
   }
 
-  async processUserMessage(state: ConversationState): Promise<ConversationState> {
+  async clearConversation(phone: string): Promise<void> {
     try {
-      setContextVariable('phone', state.subscriber.phone);
-      const result = await this.agent.invoke(
-          { messages: state.messages },
-          { configurable: { thread_id: state.subscriber.phone }}
-      );
-
-      // update subscriber if there are changes
-      const subscriber = await this.subscriberService.getSubscriber(state.subscriber.phone);
-      if (subscriber && subscriber !== state.subscriber) {
-        state.subscriber = subscriber;
-      }
-      logger.warn(result);
-      state.messages.push(result.messages);
-      return state;
+      await this.checkpointer.clearUserHistory(phone);
+      logger.info({ phone }, "Conversation cleared successfully");
     } catch (error) {
-      logger.error({ err: error, phone: state.subscriber.phone, lastMessage: state.messages.pop().text }, "Error processing user message");
-      return state;
+      logger.error({ err: error, phone }, "Error clearing conversation");
+    }
+  }
+
+  async currentlyInActiveConversation(userPhone: string) {
+    try {
+      const checkpoint = await this.checkpointer.getCheckpoint(userPhone);
+      if (!checkpoint) {
+        logger.info({ phone: userPhone }, "No active conversation found");
+        return false;
+      }
+      return true;
+    } catch (error) {
+      logger.error({ err: error, phone: userPhone }, "Error checking active conversation status");
+      return false;
     }
   }
 }

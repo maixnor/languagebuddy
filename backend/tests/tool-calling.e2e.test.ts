@@ -1,17 +1,17 @@
-import { test, before, after, describe } from 'node:test';
-import { Redis } from 'ioredis';
-import { RedisCheckpointSaver } from '../src/persistence/redis-checkpointer';
-import { SubscriberService } from '../src/services/subscriber-service';
+import {after, before, describe, test} from 'node:test';
+import {Redis} from 'ioredis';
+import {RedisCheckpointSaver} from '../src/persistence/redis-checkpointer';
+import {SubscriberService} from '../src/services/subscriber-service';
 import {HumanMessage, SystemMessage} from "@langchain/core/messages";
 import {ChatOpenAI} from "@langchain/openai";
-import {collectFeedbackTool } from "../src/tools/feedback-tools";
+import {collectFeedbackTool} from "../src/tools/feedback-tools";
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import dotenv from "dotenv";
 import path from "path";
-import assert = require("node:assert");
 import {FeedbackService} from "../src/services/feedback-service";
 import {updateSubscriberTool} from "../src/tools/subscriber-tools";
 import {setContextVariable} from "@langchain/core/context";
+import assert = require("node:assert");
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
@@ -62,7 +62,23 @@ describe('WTF how does tool calling work?', () => {
     }
   });
 
-  test('should call the subscriber tool and update the redis record', async () => {
+  function getAgent() {
+    const llm = new ChatOpenAI({
+      model: 'gpt-4o-mini',
+      temperature: 0.3,
+      maxTokens: 1000,
+    });
+
+    return createReactAgent({
+      llm: llm,
+      tools: [updateSubscriberTool, collectFeedbackTool],
+      checkpointer: checkpointer,
+    });
+  }
+
+  test('initializing, should call the subscriber tool and update the redis record', async () => {
+    const agent = getAgent();
+
     console.log('🔍 Starting tool calling test...');
     const userMessage = 'Ich versuche gerade Spanisch zu lernen. Ich bin gerade so mittendrin. Ich brauche Hilfe bei Grammatik und Vokabeln.';
 
@@ -71,18 +87,6 @@ describe('WTF how does tool calling work?', () => {
       console.warn('Creating new subscriber for test phone:', testPhone);
       subscriber = await subscriberService.createSubscriber(testPhone);
     }
-
-    const llm = new ChatOpenAI({
-      model: 'gpt-4o-mini',
-      temperature: 0.3,
-      maxTokens: 1000,
-    });
-
-    const agent = createReactAgent({
-      llm: llm,
-      tools: [updateSubscriberTool, collectFeedbackTool],
-      checkpointer: checkpointer,
-    })
 
     setContextVariable('phone', subscriber.phone);
     const response = await agent.invoke(
@@ -96,6 +100,32 @@ describe('WTF how does tool calling work?', () => {
     assert.notEqual(updatedSubscriber, subscriber);
 
     console.log('✅ Basic message processing test passed');
+  });
+
+  test('longer conversation with tool calls', async () => {
+    const agent = getAgent();
+
+    console.log('🔍 Starting longer conversation test...');
+    const userMessage = 'Como estas? Quiero practicar mi espanol para una conversation para ti.';
+
+    let subscriber = await subscriberService.getSubscriber(testPhone);
+    if (!subscriber) {
+      console.warn('Creating new subscriber for test phone:', testPhone);
+      subscriber = await subscriberService.createSubscriber(testPhone);
+    }
+
+    setContextVariable('phone', subscriber.phone);
+    const response = await agent.invoke(
+      { messages: [new HumanMessage(userMessage)] },
+      { configurable: { thread_id: testPhone} }
+    );
+
+    console.log('🔧 AI response:', response.messages[response.messages.length - 1].text);
+
+    const updatedSubscriber = await subscriberService.getSubscriber(testPhone);
+    assert.notEqual(updatedSubscriber, subscriber);
+
+    console.log('✅ Longer conversation with tool calls test passed');
   });
 
 });

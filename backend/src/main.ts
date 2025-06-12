@@ -11,33 +11,15 @@ import "whatsapp-cloud-api-express";
 import { readFileSync } from 'fs';
 import yaml from 'js-yaml';
 
-// Import LangGraph components
 import { LanguageBuddyAgent } from './agents/language-buddy-agent';
-import { RedisCheckpointSaver } from './persistence/redis-checkpointer';
 import { SubscriberService } from './services/subscriber-service';
 import { FeedbackService } from './services/feedback-service';
 import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import {ConversationState, SystemPromptEntry} from './types';
-import {HumanMessage} from "@langchain/core/messages";
-
-// Initialize Redis
-const redisClient = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-  tls: {},
-});
-
-redisClient.on('connect', () => {
-  logger.info('Successfully connected to Redis!');
-});
-
-redisClient.on('error', (err: any) => {
-  logger.error({ err }, 'Redis connection error:');
-});
+import {SystemPromptEntry} from './types';
+import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 
 // Load system prompts
 let systemPrompts: SystemPromptEntry[] = [];
@@ -63,28 +45,31 @@ try {
   systemPrompts = [defaultSystemPrompt];
 }
 
-// Initialize services
-const stripeService = StripeService.getInstance();
-const whatsappService = WhatsAppService.getInstance();
+const redisClient = new Redis({
+  host: config.redis.host,
+  port: config.redis.port,
+  password: config.redis.password,
+  tls: {},
+});
 
-stripeService.initialize(config.stripe.secretKey!);
-whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
+redisClient.on('connect', () => {
+  logger.info('Successfully connected to Redis!');
+});
 
-// Initialize LangGraph components
-const checkpointSaver = new RedisCheckpointSaver(redisClient);
+redisClient.on('error', (err: any) => {
+  logger.error({ err }, 'Redis connection error:');
+});
+
 const subscriberService = SubscriberService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
-const languageBuddyAgent = new LanguageBuddyAgent(checkpointSaver);
 
-// Initialize scheduler service
-const schedulerService = SchedulerService.getInstance(
-  subscriberService,
-  languageBuddyAgent,
-  dailySystemPrompt
-);
+const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient));
+const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent, dailySystemPrompt);
 
-// Start scheduled tasks
-schedulerService.startSchedulers();
+const stripeService = StripeService.getInstance();
+stripeService.initialize(config.stripe.secretKey!);
+const whatsappService = WhatsAppService.getInstance();
+whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
 
 export const app = express();
 app.use(express.json());
@@ -97,17 +82,19 @@ app.post("/initiate", async (req: any, res: any) => {
     return res.status(400).send("Missing 'phone' or 'promptSlug' in request body.");
   }
 
+  let subscriber = await subscriberService.getSubscriber(phone) ?? await subscriberService.createSubscriber(phone);
+
   const hasPaid = await stripeService.checkSubscription(phone);
   if (!hasPaid) {
-    logger.info({ phone }, "/initiate: User has not paid according to Stripe.");
+    logger.info({ phone }, "/initiate: User has not paid at Stripe.");
   } else {
     logger.info({ phone }, "/initiate: User has paid. Proceeding with initiation.");
   }
 
   try {
     const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
-    const initialMessage = await languageBuddyAgent.initiate(phone, selectedPrompt);
-    
+    const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt.prompt, '');
+
     if (initialMessage) {
       await whatsappService.sendMessage(phone, initialMessage);
       res.status(200).send("Conversation initiated successfully with LangGraph.");
@@ -125,8 +112,19 @@ app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
 
   if (message?.type === "text") {
+    if (message.text.body === 'ping') {
+        logger.info("Received ping message, responding with pong.");
+        await whatsappService.sendMessage(message.from, "pong");
+        return res.sendStatus(200);
+    }
+    if (message.text.body === '!clear') {
+        logger.info("Received !clear command, clearing conversation history.");
+        await languageBuddyAgent.clearConversation(message.from);
+        await whatsappService.sendMessage(message.from, "Conversation history cleared.");
+        return res.sendStatus(200);
+    }
     try {
-      handleTextMessage(message);
+      await handleTextMessage(message);
     }
     catch (error) {
       res.sendStatus(400).send("Unexpected error while processing webhook.");
@@ -135,56 +133,52 @@ app.post("/webhook", async (req: any, res: any) => {
   res.sendStatus(200);
 });
 
+async function handleNewSubscriber(userPhone: string) {
+  logger.info({userPhone}, "New user messaging. Checking Stripe status.");
+  trackEvent("new_user_detected", {userPhone: userPhone.slice(-4)});
+
+  const hasPaid = await stripeService.checkSubscription(userPhone);
+
+  if (!hasPaid && false) { // TODO add the payment link sending
+    logger.info({userPhone}, "User has not paid. Sending payment link.");
+    trackEvent("payment_required", {userPhone: userPhone.slice(-4)});
+    await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
+    return;
+  }
+
+  //const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
+  await whatsappService.sendMessage(userPhone, "Hi, I'm your language buddy!\nI try my best to match your language level but always push you slightly out of your comfort zone.");
+  trackEvent("welcome_sent", {userPhone: userPhone.slice(-4)});
+  return;
+}
+
 const handleTextMessage = async (message: any) => {
   const userPhone = message.from;
 
   await whatsappService.markMessageAsRead(message.id);
 
-  // Track message received event
   trackEvent("text_message_received", {
-    userPhone: userPhone.slice(-4), // Only last 4 digits for privacy
+    userPhone: userPhone.slice(-4),
     messageLength: message.text.body.length,
     timestamp: new Date().toISOString()
   });
 
   try {
-    // Check if subscriber exists, create if not
     let subscriber = await subscriberService.getSubscriber(userPhone);
-
     if (!subscriber) {
-      logger.info({ userPhone }, "New user messaging. Checking Stripe status.");
-      trackEvent("new_user_detected", { userPhone: userPhone.slice(-4) });
-
-      const hasPaid = await stripeService.checkSubscription(userPhone);
-
-      if (!hasPaid && false) { // TODO add the payment link sending
-        logger.info({ userPhone }, "User has not paid. Sending payment link.");
-        trackEvent("payment_required", { userPhone: userPhone.slice(-4) });
-        await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
-        return;
-      }
-
-      //const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
-      await whatsappService.sendMessage(userPhone, "Hi, I'm your language buddy!\nI try my best to match your language level but always push you slightly out of your comfort zone.");
-      trackEvent("welcome_sent", { userPhone: userPhone.slice(-4) });
+      await handleNewSubscriber(userPhone);
       return;
     }
 
-    // Process message through LangGraph agent
-    logger.info({ userPhone, messageText: message.text.body }, "Processing message through LangGraph");
-    const startTime = Date.now();
-
-    const state: ConversationState = {
-      messages: [new HumanMessage(message.text.body)],
-      subscriber: subscriber,
-      conversationMode: "chatting",
-      isPremium: subscriber.isPremium || false,
-      sessionStartTime: new Date(),
-      lastMessageTime: undefined
+    if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
+        logger.error({ userPhone }, "No active conversation found, initiating new conversation");
+        const systemPrompt = subscriberService.getSystemPrompt(subscriber);
+        await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, message.text.body);
     }
 
-    const newState = await languageBuddyAgent.processUserMessage(state);
-    const response = newState.messages[newState.messages.length - 1].text;
+    const startTime = Date.now();
+
+    const response = await languageBuddyAgent.processUserMessage(subscriber!, message.text.body);
 
     const processingTime = Date.now() - startTime;
     trackMetric("message_processing_time_ms", processingTime, {
@@ -192,7 +186,6 @@ const handleTextMessage = async (message: any) => {
       responseLength: response?.length || 0
     });
 
-    logger.info(response);
     if (response && response.trim() !== "") {
       await whatsappService.sendMessage(userPhone, response);
       trackEvent("response_sent", {
@@ -275,12 +268,12 @@ app.get("/admin/services/status", (req: any, res: any) => {
 app.get("/subscriber/:phone", async (req: any, res: any) => {
   try {
     const subscriber = await subscriberService.getSubscriber(req.params.phone);
-    if (subscriber) {
-      // Remove sensitive information before sending
-      const { ...safeSubscriber } = subscriber;
-      res.json(safeSubscriber);
+    if (!subscriber) {
+      res.status(404).json({error: "Subscriber not found"});
     } else {
-      res.status(404).json({ error: "Subscriber not found" });
+      // Remove sensitive information before sending
+      const {...safeSubscriber} = subscriber;
+      res.json(safeSubscriber);
     }
   } catch (error) {
     logger.error({ err: error, phone: req.params.phone }, "Error getting subscriber info");

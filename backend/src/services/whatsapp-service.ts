@@ -76,7 +76,6 @@ export class WhatsAppService {
         return false;
       }
 
-      logger.info({ phone: toPhone }, "WhatsApp message sent successfully.");
       return true;
     } catch (error) {
       logger.error({ err: error, phone: toPhone }, "Exception sending WhatsApp message");
@@ -120,8 +119,6 @@ export class WhatsAppService {
         );
         return false;
       }
-
-      logger.info({ messageId }, "Message marked as read.");
       return true;
     } catch (error) {
       logger.error({ err: error, messageId }, "Exception marking message as read");

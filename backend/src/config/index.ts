@@ -21,11 +21,11 @@ const createLogger = () => {
 export const logger = createLogger();
 
 export const trackEvent = (name: string, properties?: Record<string, any>, measurements?: Record<string, number>) => {
-  logger.info({ event: name, properties, measurements }, `Custom event: ${name}`);
+  logger.trace({ event: name, properties, measurements }, `Custom event: ${name}`);
 };
 
 export const trackMetric = (name: string, value: number, properties?: Record<string, any>) => {
-  logger.info({ metric: name, value, properties }, `Custom metric: ${name} = ${value}`);
+  logger.trace({ metric: name, value, properties }, `Custom metric: ${name} = ${value}`);
 };
 
 export const config = {

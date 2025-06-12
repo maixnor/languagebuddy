@@ -81,8 +81,9 @@ export class SchedulerService {
           
           if (hoursInactive >= 8) {
             const dailyMessage = await this.languageBuddyAgent.initiateConversation(
-              subscriber.phone, 
-              this.dailyPrompt
+              subscriber,
+              this.dailyPrompt,
+              ""
             );
             
             await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);
