@@ -1,22 +1,19 @@
 import { test, before, after, describe, skip } from 'node:test';
 import { Redis } from 'ioredis';
-import {ConversationStateAnnotation, LanguageBuddyAgent} from '../src/agents/language-buddy-agent';
 import { RedisCheckpointSaver } from '../src/persistence/redis-checkpointer';
 import { SubscriberService } from '../src/services/subscriber-service';
-import {ConversationState, Subscriber} from '../src/types';
-import {BaseMessage, HumanMessage} from "@langchain/core/messages";
+import { HumanMessage} from "@langchain/core/messages";
 import {ChatOpenAI} from "@langchain/openai";
 import {config} from "../src/config";
 import {collectFeedbackTool, updateSubscriberTool} from "../src/tools/conversation-tools";
-import {END, START, StateGraph} from "@langchain/langgraph";
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import dotenv from "dotenv";
 import path from "path";
 import {RunnableLambda} from "@langchain/core/runnables";
 import {BaseChatModel} from "@langchain/core/dist/language_models/chat_models";
 import {setContextVariable} from "@langchain/core/context";
-import { ToolCall } from '@langchain/core/dist/messages/tool';
 import assert = require("node:assert");
+import {FeedbackService} from "../src/services/feedback-service";
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
@@ -24,6 +21,7 @@ describe('WTF how does tool calling work?', () => {
   let redis: Redis;
   let checkpointer: RedisCheckpointSaver;
   let subscriberService: SubscriberService;
+  let feedbackService: FeedbackService;
   let testPhone = '436804206969';
 
   before(async function() {
@@ -46,6 +44,7 @@ describe('WTF how does tool calling work?', () => {
     // Initialize services
     checkpointer = new RedisCheckpointSaver(redis);
     subscriberService = SubscriberService.getInstance(redis);
+    feedbackService = FeedbackService.getInstance(redis);
   });
 
   after(async function() {
@@ -77,6 +76,7 @@ describe('WTF how does tool calling work?', () => {
         console.log(`📞 Phone number set to: ${phone}`);
         const tools = [updateSubscriberTool];
         const llmWithTools = llm.bindTools(tools);
+
         const modelResponse = await llmWithTools.invoke(query);
 
         if (modelResponse.tool_calls.length > 0) {
@@ -106,12 +106,18 @@ describe('WTF how does tool calling work?', () => {
       maxTokens: config.openai.maxTokens,
     });
 
-    const response = await lambda.invoke({
-      query: userMessage,
-      phone: testPhone,
+    const agent = createReactAgent({
       llm: llm,
+      tools: [updateSubscriberTool, collectFeedbackTool],
+      checkpointer: checkpointer,
     })
-    console.log(response);
+
+    const response = await agent.invoke(
+      { messages: [new HumanMessage(userMessage)] },
+      { configurable: { thread_id: testPhone} }
+    );
+
+    console.log('🔧 AI response:', response.messages.pop().text);
 
     const updatedSubscriber = await subscriberService.getSubscriber(testPhone);
     assert.notEqual(updatedSubscriber, subscriber);
