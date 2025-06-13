@@ -11,8 +11,12 @@ export class WhatsAppService {
   private static instance: WhatsAppService;
   private token: string | null = null;
   private phoneId: string | null = null;
+  private cliEndpoint: string | null = null;
 
-  private constructor() {}
+  private constructor() {
+    // Check if CLI endpoint is configured
+    this.cliEndpoint = process.env.USE_LOCAL_CLI_ENDPOINT || null;
+  }
 
   static getInstance(): WhatsAppService {
     if (!WhatsAppService.instance) {
@@ -30,7 +34,12 @@ export class WhatsAppService {
     }
     this.token = token;
     this.phoneId = phoneId;
-    logger.info("WhatsApp service initialized.");
+
+    if (this.cliEndpoint) {
+      logger.info(`WhatsApp service initialized in CLI mode. Responses will be sent to: ${this.cliEndpoint}`);
+    } else {
+      logger.info("WhatsApp service initialized in normal mode.");
+    }
   }
 
   async sendMessage(toPhone: string, text: string, messageIdToContext?: string): Promise<boolean> {
@@ -39,6 +48,12 @@ export class WhatsAppService {
       return false;
     }
 
+    // If CLI endpoint is configured, send message there instead of WhatsApp API
+    if (this.cliEndpoint) {
+      return this.sendMessageToCli(toPhone, text);
+    }
+
+    // Regular WhatsApp API communication
     const payload: WhatsAppMessagePayload = {
       messaging_product: "whatsapp",
       to: toPhone,
@@ -79,6 +94,39 @@ export class WhatsAppService {
       return true;
     } catch (error) {
       logger.error({ err: error, phone: toPhone }, "Exception sending WhatsApp message");
+      return false;
+    }
+  }
+
+  /**
+   * Sends a message to the CLI tool instead of the WhatsApp API
+   */
+  private async sendMessageToCli(toPhone: string, text: string): Promise<boolean> {
+    try {
+      logger.info({ phone: toPhone }, "Sending message to CLI tool");
+
+      const response = await fetch(this.cliEndpoint!, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: this.phoneId,
+          to: toPhone,
+          text: text,
+          timestamp: new Date().toISOString()
+        })
+      });
+
+      if (!response.ok) {
+        logger.warn({ statusCode: response.status }, "Failed to send message to CLI tool");
+        return false;
+      }
+
+      logger.info("Message sent to CLI tool successfully");
+      return true;
+    } catch (error) {
+      logger.warn({ err: error }, "Error sending message to CLI tool");
       return false;
     }
   }
