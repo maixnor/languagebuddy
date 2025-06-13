@@ -85,7 +85,7 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
         `checkpoint:${threadId}`,
         JSON.stringify(checkpointData),
         'EX',
-        60 * 60 * 24 * 7 // 1 week expiration
+        60 * 60 * 24 * 3 // 3 days expiration
       );
 
       logger.debug({ threadId }, "Checkpoint saved");
