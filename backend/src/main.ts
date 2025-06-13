@@ -92,8 +92,8 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 
   try {
-    const selectedPrompt = systemPrompts.find(p => p.slug === promptSlug) || defaultSystemPrompt;
-    const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt.prompt, '');
+    const selectedPrompt = subscriberService.getSystemPrompt(subscriber);
+    const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt, '');
 
     if (initialMessage) {
       await whatsappService.sendMessage(phone, initialMessage);
@@ -137,6 +137,7 @@ async function handleNewSubscriber(userPhone: string) {
   logger.info({userPhone}, "New user messaging. Checking Stripe status.");
   trackEvent("new_user_detected", {userPhone: userPhone.slice(-4)});
 
+  const subscriber = await subscriberService.getSubscriber(userPhone) || await subscriberService.createSubscriber(userPhone, {});
   const hasPaid = await stripeService.checkSubscription(userPhone);
 
   if (!hasPaid && false) { // TODO add the payment link sending
@@ -146,8 +147,8 @@ async function handleNewSubscriber(userPhone: string) {
     return;
   }
 
-  //const welcomeMessage = await languageBuddyAgent.initiateConversation(userPhone, defaultSystemPrompt);
-  await whatsappService.sendMessage(userPhone, "Hi, I'm your language buddy!\nI try my best to match your language level but always push you slightly out of your comfort zone.");
+  const welcomeMessage = await languageBuddyAgent.initiateConversation(subscriber, subscriberService.getSystemPrompt(subscriber), 'Hi. I am new to this service. Please explain to me what you can do for me?');
+  await whatsappService.sendMessage(userPhone, welcomeMessage || "Please try again later, my resources are currently limited and I cannot take in new users. I am still in testing!");
   trackEvent("welcome_sent", {userPhone: userPhone.slice(-4)});
   return;
 }

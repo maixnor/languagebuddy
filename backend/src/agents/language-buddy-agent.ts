@@ -1,4 +1,3 @@
-import { Annotation } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { Subscriber } from '../types';
@@ -31,7 +30,7 @@ export class LanguageBuddyAgent {
   async initiateConversation(subscriber: Subscriber, systemPrompt: string, humanMessage: string): Promise<string> {
     try {
       const result = await this.agent.invoke(
-        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not buing initializaed by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
+        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { configurable: { thread_id: subscriber.phone }}
       );
 
