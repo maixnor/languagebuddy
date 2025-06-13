@@ -82,7 +82,7 @@ export class SchedulerService {
           if (hoursInactive >= 8) {
             const dailyMessage = await this.languageBuddyAgent.initiateConversation(
               subscriber,
-              this.dailyPrompt,
+              this.dailyPrompt.prompt,
               ""
             );
             
