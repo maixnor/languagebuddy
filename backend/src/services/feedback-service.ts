@@ -97,6 +97,7 @@ export class FeedbackService {
     totalFeedback: number;
     sentimentBreakdown: { positive: number; negative: number; neutral: number };
     categoryBreakdown: { [key: string]: number };
+    last5Items: FeedbackEntry[];
     recentTrends: { date: string; count: number }[];
   }> {
     try {
@@ -113,17 +114,19 @@ export class FeedbackService {
         categoryBreakdown[feedback.category] = (categoryBreakdown[feedback.category] || 0) + 1;
       });
 
+      const last5Items = allFeedback.slice(-5).reverse();
+
       // Get trends for last 7 days
       const recentTrends: { date: string; count: number }[] = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
-        
-        const dayFeedback = allFeedback.filter(f => 
+
+        const dayFeedback = allFeedback.filter(f =>
           f.timestamp.startsWith(dateStr)
         );
-        
+
         recentTrends.push({
           date: dateStr,
           count: dayFeedback.length
@@ -134,6 +137,7 @@ export class FeedbackService {
         totalFeedback: allFeedback.length,
         sentimentBreakdown,
         categoryBreakdown,
+        last5Items,
         recentTrends
       };
     } catch (error) {
@@ -142,6 +146,7 @@ export class FeedbackService {
         totalFeedback: 0,
         sentimentBreakdown: { positive: 0, negative: 0, neutral: 0 },
         categoryBreakdown: {},
+        last5Items: [],
         recentTrends: []
       };
     }
