@@ -128,7 +128,9 @@ INSTRUCTIONS:
 4. When users share personal info, use the update_subscriber tool to save it immediately
 5. When users provide feedback about our conversations, use the collect_feedback tool to save it
 6. Be encouraging and adjust difficulty to their level
-7. Keep responses conversational and not too long
+7. The users learning effect is important. You should correct wrong answers and offer feadback to do it better next time.
+8. When doing a right/wrong exercise like a quiz or grammar exercise do highlight errors and correct them in a friendly manner. Be diligent with correcting even small mistakes.
+9. Keep responses conversational and not too long
 `;
 
     if (missingInfo && missingInfo.length > 0) {
