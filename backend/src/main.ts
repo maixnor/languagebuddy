@@ -40,6 +40,7 @@ const feedbackService = FeedbackService.getInstance(redisClient);
 
 const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient));
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
+schedulerService.startSchedulers();
 
 const stripeService = StripeService.getInstance();
 stripeService.initialize(config.stripe.secretKey!);

@@ -3,7 +3,6 @@ import { logger, config } from '../config';
 import { SubscriberService } from '../services/subscriber-service';
 import { WhatsAppService } from '../services/whatsapp-service';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
-import { SystemPromptEntry } from '../types';
 
 export class SchedulerService {
   private static instance: SchedulerService;
@@ -45,52 +44,46 @@ export class SchedulerService {
       return;
     }
 
-    // Schedule daily messages at 9 AM UTC (adjust based on config)
-    const dailyTime = config.features.dailyMessages.timeToSend || '09:00';
+    // TODO start every hour and send to everyone at their local time at 9
+    // TODO add a random offset to the invocation such that users don't get a message every day like clockwork
+    const dailyTime = config.features.dailyMessages.timeToSend || '9:00';
     const [hour, minute] = dailyTime.split(':');
     
     // Cron format: minute hour day month dayOfWeek
     const cronExpression = `${minute} ${hour} * * *`;
-    
-    cron.schedule(cronExpression, async () => {
-      logger.info("Starting daily message broadcast");
-      await this.sendDailyMessages();
-    }, {
-      timezone: config.features.dailyMessages.timezone
-    });
+    cron.schedule(
+      cronExpression, 
+      async () => {
+        logger.info("Starting daily message broadcast");
+        await this.sendDailyMessages();
+      }, 
+      {timezone: config.features.dailyMessages.timezone}
+    );
 
-    logger.info({ time: dailyTime, timezone: config.features.dailyMessages.timezone }, "Daily message scheduler started");
+    logger.info(`Daily message scheduler started for ${hour}:${minute} ${config.features.dailyMessages.timezone} every day`);
   }
 
   private async sendDailyMessages(): Promise<void> {
     try {
-      const subscribers = await this.subscriberService.getAllSubscribers();
+      const subscribers = await this.subscriberService.getAllSubscribers()
       const premiumSubscribers = subscribers.filter(s => s.isPremium);
       
       logger.info({ totalSubscribers: subscribers.length, premiumSubscribers: premiumSubscribers.length }, "Starting daily message sending");
 
-      for (const subscriber of premiumSubscribers) {
+      for (const subscriber of subscribers) {
         try {
-          // Only send to users who haven't been active in the last 8 hours
-          const lastActive = subscriber.lastActiveAt ? new Date(subscriber.lastActiveAt) : new Date(0);
-          const hoursInactive = (Date.now() - lastActive.getTime()) / (1000 * 60 * 60);
+          const dailyMessage = await this.languageBuddyAgent.initiateConversation(
+            subscriber,
+            this.subscriberService.getDailySystemPrompt(subscriber),
+            ""
+          );
           
-          if (hoursInactive >= 8) {
-            const dailyMessage = await this.languageBuddyAgent.initiateConversation(
-              subscriber,
-              this.subscriberService.getDailySystemPrompt(subscriber),
-              "Hello"
-            );
-            
-            await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);
-            
-            // Add small delay to avoid rate limiting
-            await this.delay(2000);
-            
-            logger.info({ phoneNumber: subscriber.phone }, "Daily message sent");
-          } else {
-            logger.debug({ phoneNumber: subscriber.phone, hoursInactive }, "Skipping daily message - user recently active");
-          }
+          await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);
+          
+          // Add small delay to avoid rate limiting
+          await this.delay(2000);
+          
+          logger.trace({ phoneNumber: subscriber.phone }, "Daily message sent");
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.phone }, "Error sending daily message to subscriber");
         }
