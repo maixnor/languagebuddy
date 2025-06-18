@@ -1,5 +1,5 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { ChatOpenAI } from "@langchain/openai";
+import { ChatOpenAI, OpenAI, OpenAIClient } from "@langchain/openai";
 import { Subscriber } from '../types';
 import { logger } from '../config';
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
@@ -11,15 +11,8 @@ export class LanguageBuddyAgent {
   private checkpointer: RedisCheckpointSaver;
   private agent: any;
 
-  constructor(checkpointer: RedisCheckpointSaver) {
+  constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI) {
     this.checkpointer = checkpointer;
-
-    // Create LLM instance with both tools
-    const llm = new ChatOpenAI({
-      model: 'gpt-4o-mini',
-      temperature: 0.3,
-      maxTokens: 1000,
-    });
 
     this.agent = createReactAgent({
       llm: llm,

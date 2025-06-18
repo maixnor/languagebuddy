@@ -18,6 +18,7 @@ import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
 import {Subscriber} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
+import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 
 // Load system prompts
 const redisClient = new Redis({
@@ -35,10 +36,17 @@ redisClient.on('error', (err: any) => {
   logger.error({ err }, 'Redis connection error:');
 });
 
+
+const llm = new ChatOpenAI({
+  model: 'gpt-4o-mini',
+  temperature: 0.3,
+  maxTokens: 1000,
+});
+
 const subscriberService = SubscriberService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
 
-const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient));
+const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
 schedulerService.startSchedulers();
 
@@ -284,9 +292,9 @@ app.get("/health", (req: any, res: any) => {
     timestamp: new Date().toISOString(),
     services: {
       redis: redisClient.status,
-      whatsapp: whatsappService.isInitialized(),
-      langGraph: "operational",
-      schedulers: "running"
+      whatsapp: whatsappService.isInitialized() ? "running" : "failed", 
+      daily_messages: config.features.dailyMessages.enabled ? `${config.features.dailyMessages.timeToSend} ${config.features.dailyMessages.timezone}` : 'disabled',
+      openai: { model: llm.model, temperature: llm.temperature }
     }
   });
 });
