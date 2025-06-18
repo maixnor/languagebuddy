@@ -184,17 +184,7 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async clearUserHistory(phoneNumber: string): Promise<void> {
     try {
-      const threadId = `conversation:${phoneNumber}`;
-      
-      // Delete the main conversation checkpoint
-      await this.deleteCheckpoint(threadId);
-      
-      // Clear any additional user-specific data (but keep digests for premium users)
-      const userKeys = await this.redis.keys(`user_temp:${phoneNumber}:*`);
-      if (userKeys.length > 0) {
-        await this.redis.del(...userKeys);
-      }
-
+      await this.deleteCheckpoint(`checkpoint:${phoneNumber}`);
       logger.info({ phoneNumber }, "User conversation history cleared");
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error clearing user history");
