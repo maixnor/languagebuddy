@@ -10,29 +10,25 @@ export class SchedulerService {
   private subscriberService: SubscriberService;
   private whatsappService: WhatsAppService;
   private languageBuddyAgent: LanguageBuddyAgent;
-  private dailyPrompt: SystemPromptEntry;
 
   private constructor(
     subscriberService: SubscriberService, 
     languageBuddyAgent: LanguageBuddyAgent,
-    dailyPrompt: SystemPromptEntry
   ) {
     this.subscriberService = subscriberService;
     this.whatsappService = WhatsAppService.getInstance();
     this.languageBuddyAgent = languageBuddyAgent;
-    this.dailyPrompt = dailyPrompt;
   }
 
   static getInstance(
     subscriberService?: SubscriberService, 
     languageBuddyAgent?: LanguageBuddyAgent,
-    dailyPrompt?: SystemPromptEntry
   ): SchedulerService {
     if (!SchedulerService.instance) {
-      if (!subscriberService || !languageBuddyAgent || !dailyPrompt) {
+      if (!subscriberService || !languageBuddyAgent) {
         throw new Error("All parameters required for first initialization");
       }
-      SchedulerService.instance = new SchedulerService(subscriberService, languageBuddyAgent, dailyPrompt);
+      SchedulerService.instance = new SchedulerService(subscriberService, languageBuddyAgent);
     }
     return SchedulerService.instance;
   }
@@ -82,8 +78,8 @@ export class SchedulerService {
           if (hoursInactive >= 8) {
             const dailyMessage = await this.languageBuddyAgent.initiateConversation(
               subscriber,
-              this.dailyPrompt.prompt,
-              ""
+              this.subscriberService.getDailySystemPrompt(subscriber),
+              "Hello"
             );
             
             await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);

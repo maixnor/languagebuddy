@@ -8,8 +8,6 @@ import express from "express";
 import serveStatic from "serve-static";
 import Redis from 'ioredis';
 import "whatsapp-cloud-api-express";
-import { readFileSync } from 'fs';
-import yaml from 'js-yaml';
 
 import { LanguageBuddyAgent } from './agents/language-buddy-agent';
 import { SubscriberService } from './services/subscriber-service';
@@ -18,33 +16,10 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import {SystemPromptEntry} from './types';
+import {Subscriber} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 
 // Load system prompts
-let systemPrompts: SystemPromptEntry[] = [];
-let defaultSystemPrompt: SystemPromptEntry;
-let dailySystemPrompt: SystemPromptEntry;
-let fallbackSystemPrompt = {
-  slug: "default",
-  prompt: "You are a helpful language buddy trying your best to match the user's language level but are always pushing the user to be slightly out of the comfort zone.",
-  firstUserMessage: "Hi! Please ask me what language I want to learn with you and at what level I am."
-};
-
-try {
-  const promptsPath = path.join(process.cwd(), 'system_prompts.yml');
-  const promptsData = readFileSync(promptsPath, 'utf8');
-  systemPrompts = yaml.load(promptsData) as SystemPromptEntry[];
-  defaultSystemPrompt = systemPrompts.find(prompt => prompt.slug === 'default') || fallbackSystemPrompt;
-  dailySystemPrompt = systemPrompts.find(prompt => prompt.slug === 'daily') || defaultSystemPrompt;
-  logger.info(`Loaded ${systemPrompts.length} system prompts from file`);
-} catch (error) {
-  logger.error({ err: error }, 'Error loading system prompts from file:');
-  defaultSystemPrompt = fallbackSystemPrompt;
-  dailySystemPrompt = fallbackSystemPrompt;
-  systemPrompts = [defaultSystemPrompt];
-}
-
 const redisClient = new Redis({
   host: config.redis.host,
   port: config.redis.port,
@@ -64,7 +39,7 @@ const subscriberService = SubscriberService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
 
 const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient));
-const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent, dailySystemPrompt);
+const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
 
 const stripeService = StripeService.getInstance();
 stripeService.initialize(config.stripe.secretKey!);
@@ -76,9 +51,9 @@ app.use(express.json());
 
 // Legacy initiate endpoint (kept for backward compatibility)
 app.post("/initiate", async (req: any, res: any) => {
-  const { phone, promptSlug } = req.body;
+  const { phone} = req.body;
 
-  if (!phone || !promptSlug) {
+  if (!phone) {
     return res.status(400).send("Missing 'phone' or 'promptSlug' in request body.");
   }
 
@@ -92,7 +67,8 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 
   try {
-    const selectedPrompt = subscriberService.getSystemPrompt(subscriber);
+    const selectedPrompt = subscriberService.getDailySystemPrompt(subscriber);
+    await languageBuddyAgent.clearConversation(subscriber.phone);
     const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt, '');
 
     if (initialMessage) {
@@ -107,21 +83,38 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 });
 
+async function handleUserCommand(subscriber: Subscriber, message: string) {
+    if (message === 'ping') {
+        logger.info("Received ping message, responding with pong.");
+        await whatsappService.sendMessage(subscriber.phone, "pong");
+        return "ping";
+    }
+
+    if (message.startsWith('!clear')) {
+        logger.info("Received !clear command, clearing conversation history.");
+        await languageBuddyAgent.clearConversation(subscriber.phone);
+        await whatsappService.sendMessage(subscriber.phone, "Conversation history cleared.");
+        return '!clear';
+    }
+
+    if (message.startsWith('!help') || message.startsWith('help')) {
+      logger.info(`User ${subscriber.phone} requested help`);
+      await whatsappService.sendMessage(subscriber.phone, 'Help is currently under development and just available in English. Commands are:\n- "!help": Display again what you are reading right now\n- "!clear": clear the current chat history\n- "ping" sends a pong message to test connectivity');
+    }
+
+    return "nothing";
+}
+
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  const subscriber = await subscriberService.getSubscriber(message.from) ?? await subscriberService.createSubscriber(message.from, {});
+
+  const test = subscriber.phone.startsWith('69');
 
   if (message?.type === "text") {
-    if (message.text.body === 'ping') {
-        logger.info("Received ping message, responding with pong.");
-        await whatsappService.sendMessage(message.from, "pong");
-        return res.sendStatus(200);
-    }
-    if (message.text.body === '!clear') {
-        logger.info("Received !clear command, clearing conversation history.");
-        await languageBuddyAgent.clearConversation(message.from);
-        await whatsappService.sendMessage(message.from, "Conversation history cleared.");
-        return res.sendStatus(200);
+    if (await handleUserCommand(subscriber, message.text.body) !== 'nothing') {
+      return res.sendStatus(200);
     }
     try {
       await handleTextMessage(message);
@@ -147,7 +140,7 @@ async function handleNewSubscriber(userPhone: string) {
     return;
   }
 
-  const welcomeMessage = await languageBuddyAgent.initiateConversation(subscriber, subscriberService.getSystemPrompt(subscriber), 'Hi. I am new to this service. Please explain to me what you can do for me?');
+  const welcomeMessage = await languageBuddyAgent.initiateConversation(subscriber, subscriberService.getDefaultSystemPrompt(subscriber), 'Hi. I am new to this service. Please explain to me what you can do for me?');
   await whatsappService.sendMessage(userPhone, welcomeMessage || "Please try again later, my resources are currently limited and I cannot take in new users. I am still in testing!");
   trackEvent("welcome_sent", {userPhone: userPhone.slice(-4)});
   return;
@@ -171,10 +164,11 @@ const handleTextMessage = async (message: any) => {
       return;
     }
 
+    logger.warn(subscriber);
+
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
         logger.error({ userPhone }, "No active conversation found, initiating new conversation");
-        const systemPrompt = subscriberService.getSystemPrompt(subscriber);
-        await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, message.text.body);
+        const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
     }
 
     const startTime = Date.now();

@@ -51,7 +51,7 @@ export class LanguageBuddyAgent {
         throw new Error("Invalid message provided");
     }
 
-    logger.info(`🔧 (${subscriber.phone.slice(-4)}) Processing user message:`, humanMessage);
+    logger.info(`🔧 (${subscriber.phone.slice(-4)}) Processing user message: ${humanMessage}`);
 
     setContextVariable('phone', subscriber.phone);
     const response = await this.agent.invoke(
@@ -59,7 +59,7 @@ export class LanguageBuddyAgent {
         { configurable: { thread_id: subscriber.phone } }
     );
 
-    logger.info(`🔧 (${subscriber.phone.slice(-4)}) AI response:`, response.messages[response.messages.length - 1].text);
+    logger.info(`🔧 (${subscriber.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].text}`);
     return response.messages.pop().text || "processUserMessage()?";
   }
 

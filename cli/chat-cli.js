@@ -118,6 +118,22 @@ async function checkHealth() {
   }
 }
 
+async function sendDailyInit() {
+  try {
+    const repsose = await fetch(`${config.serverUrl}/initiate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({phone: config.userPhone}),
+    });
+    console.log(`initiated new conversation for ${config.userPhone}`)
+  } catch (error) {
+    console.error('initiating failed');
+    return false;
+  }
+}
+
 // Set up local HTTP server to receive responses
 function setupResponseServer() {
   const server = http.createServer((req, res) => {
@@ -172,11 +188,12 @@ function initCLI() {
   console.log('=========================');
   console.log(`Connected to server: ${config.serverUrl}`);
   console.log(`Using phone number: ${config.userPhone}`);
-  console.log(`Listening for responses on port: ${config.responsePort}`);
+  console.log(`Listening for responses at: http://localhost:${config.responsePort}/cli-response`);
   console.log('\nCommands:');
   console.log('  /health - Check server health');
   console.log('  /exit - Exit the CLI');
   console.log('  /clear - Send !clear command to reset conversation');
+  console.log('  /daily - Initiate a daily conversation')
   console.log('  /phone <number> - Change your simulated phone number');
   console.log('  /server <url> - Change server URL');
   console.log('\nType a message and press Enter to send it.\n');
@@ -205,6 +222,11 @@ function initCLI() {
           console.log('Sending clear command...');
           await sendMessage('!clear');
           console.log('Conversation history cleared.');
+          break;
+
+        case 'daily':
+          console.log('initiating a new conversation');
+          await sendDailyInit();
           break;
 
         case 'phone':
