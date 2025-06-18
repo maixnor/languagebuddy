@@ -55,7 +55,7 @@ export const config = {
   features: {
     dailyMessages: {
       enabled: true,
-      timeToSend: '09:00',
+      timeToSend: '20:30',
       timezone: 'UTC',
     },
     feedback: {
