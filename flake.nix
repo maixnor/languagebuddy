@@ -19,9 +19,14 @@
       {
         devShell = pkgs.mkShell {
           buildInputs = with pkgs; [
-            deno
+            nodejs_24
             ngrok
           ];
         };
-      });
+        packages = rec {
+          backend = ./backend/default.nix;
+          default = backend;
+        };
+      }
+    );
 }
