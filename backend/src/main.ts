@@ -25,7 +25,7 @@ const redisClient = new Redis({
   host: config.redis.host,
   port: config.redis.port,
   password: config.redis.password,
-  tls: {},
+  // tls: {},
 });
 
 redisClient.on('connect', () => {
@@ -63,7 +63,7 @@ app.post("/initiate", async (req: any, res: any) => {
   const { phone} = req.body;
 
   if (!phone) {
-    return res.status(400).send("Missing 'phone' or 'promptSlug' in request body.");
+    return res.status(400).send("Missing 'phone' in request body.");
   }
 
   let subscriber = await subscriberService.getSubscriber(phone) ?? await subscriberService.createSubscriber(phone);
@@ -175,14 +175,17 @@ const handleTextMessage = async (message: any) => {
 
     logger.warn(subscriber);
 
-    if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
-        logger.error({ userPhone }, "No active conversation found, initiating new conversation");
-        const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
-    }
-
     const startTime = Date.now();
 
-    const response = await languageBuddyAgent.processUserMessage(subscriber!, message.text.body);
+    let response = "";
+    if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
+      logger.error({ userPhone }, "No active conversation found, initiating new conversation");
+      const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
+      await languageBuddyAgent.clearConversation(subscriber.phone);
+      response = await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, '');
+    } else {
+      response = await languageBuddyAgent.processUserMessage(subscriber!, message.text.body);
+    }
 
     const processingTime = Date.now() - startTime;
     trackMetric("message_processing_time_ms", processingTime, {
