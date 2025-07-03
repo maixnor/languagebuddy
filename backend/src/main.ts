@@ -21,17 +21,12 @@ import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 
 // Load system prompts
-let redisClient = new Redis({
+const redisClient = new Redis({
   host: config.redis.host,
   port: config.redis.port,
   password: config.redis.password,
   // tls: {},
 });
-if (config.redis.url) {
-  redisClient = new Redis({
-    host: config.redis.url,
-  })
-}
 
 redisClient.on('connect', () => {
   logger.info('Successfully connected to Redis!');
