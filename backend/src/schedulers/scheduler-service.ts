@@ -80,9 +80,6 @@ export class SchedulerService {
           
           await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);
           
-          // Add small delay to avoid rate limiting
-          await this.delay(2000);
-          
           logger.trace({ phoneNumber: subscriber.phone }, "Daily message sent");
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.phone }, "Error sending daily message to subscriber");
