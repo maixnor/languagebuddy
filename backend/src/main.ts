@@ -318,7 +318,7 @@ app.get("/webhook", (req: any, res: any) => {
 
 app.get("/", (req: any, res: any) => {
   logger.info("/");
-  res.send("Language Buddy Backend - LangGraph Edition");
+  res.send("Language Buddy Backend - Powered by LangGraph");
 });
 
 // Set up static file serving for HTML files
