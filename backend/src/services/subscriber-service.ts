@@ -37,10 +37,18 @@ export class SubscriberService {
 
   async createSubscriber(phoneNumber: string, initialData?: Partial<Subscriber>): Promise<Subscriber> {
     const subscriber: Subscriber = {
-      phone: phoneNumber,
-      name: "New User",
-      speakingLanguages: [],
-      learningLanguages: [],
+      connections: {
+        phone: phoneNumber,
+      },
+      profile: {
+        name: "New User",
+        speakingLanguages: [],
+        learningLanguages: [],
+      },
+      metadata: {
+        digests: [],
+        personality: "A friendly language buddy talking about everything",
+      },
       isPremium: false,
       lastActiveAt: new Date(),
       ...initialData
@@ -98,20 +106,20 @@ export class SubscriberService {
       // Cache for 7 days
       const expireTime = 7 * 24 * 60 * 60;
       await this.redis.setex(
-        `subscriber:${subscriber.phone}`, 
+        `subscriber:${subscriber.connections.phone}`, 
         expireTime, 
         JSON.stringify(subscriber)
       );
     } catch (error) {
-      logger.error({ err: error, phone: subscriber.phone }, "Error caching subscriber");
+      logger.error({ err: error, phone: subscriber.connections.phone }, "Error caching subscriber");
     }
   }
 
   public getDailySystemPrompt(subscriber: Subscriber): string {
     const missingInfo = this.identifyMissingInfo(subscriber);
-    const primary = subscriber.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
-    const objectives = subscriber.learningLanguages
+    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const objectives = subscriber.profile.learningLanguages
       ?.flatMap(l => l.currentObjectives || [])
       .filter(obj => !!obj);
 
@@ -122,7 +130,7 @@ export class SubscriberService {
     let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
 
 CURRENT USER INFO:
-- Name: ${subscriber.name}
+- Name: ${subscriber.profile.name}
 - Speaking languages: ${primary}
 - Learning languages: ${learning}
 - Topic for today: ${topic}
@@ -176,13 +184,13 @@ Be natural and conversational. Proactively gather missing information but weave 
 
   public getDefaultSystemPrompt(subscriber: Subscriber): string {
     const missingInfo = this.identifyMissingInfo(subscriber);
-    const primary = subscriber.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
 
     let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
 
 CURRENT USER INFO:
-- Name: ${subscriber.name}
+- Name: ${subscriber.profile.name}
 - Speaking languages: ${primary}
 - Learning languages: ${learning}
 
@@ -235,31 +243,31 @@ Be natural and conversational. Proactively gather missing information but weave 
   private identifyMissingInfo(subscriber: Subscriber): string[] {
     const missing: string[] = [];
 
-    if (!subscriber.name || subscriber.name === "New User") {
+    if (!subscriber.profile.name || subscriber.profile.name === "New User") {
       missing.push("name");
     }
 
-    if (!subscriber.speakingLanguages || subscriber.speakingLanguages.length === 0) {
+    if (!subscriber.profile.speakingLanguages || subscriber.profile.speakingLanguages.length === 0) {
       missing.push("native/speaking languages");
     }
 
-    if (!subscriber.learningLanguages || subscriber.learningLanguages.length === 0) {
+    if (!subscriber.profile.learningLanguages || subscriber.profile.learningLanguages.length === 0) {
       missing.push("learning languages");
     }
 
-    subscriber.learningLanguages?.forEach((lang, index) => {
+    subscriber.profile.learningLanguages?.forEach((lang, index) => {
       if (!lang.level) {
         missing.push(`${lang.languageName} level`);
       }
     });
 
-    subscriber.speakingLanguages?.forEach((lang, index) => {
+    subscriber.profile.speakingLanguages?.forEach((lang, index) => {
       if (!lang.level) {
         missing.push(`${lang.languageName} level`);
       }
     });
 
-    if (!subscriber.timezone) {
+    if (!subscriber.profile.timezone) {
       missing.push("timezone/location");
     }
 

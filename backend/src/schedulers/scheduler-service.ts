@@ -78,11 +78,11 @@ export class SchedulerService {
             ""
           );
           
-          await this.whatsappService.sendMessage(subscriber.phone, dailyMessage);
+          await this.whatsappService.sendMessage(subscriber.connections.phone, dailyMessage);
           
-          logger.trace({ phoneNumber: subscriber.phone }, "Daily message sent");
+          logger.trace({ phoneNumber: subscriber.connections.phone }, "Daily message sent");
         } catch (error) {
-          logger.error({ err: error, phoneNumber: subscriber.phone }, "Error sending daily message to subscriber");
+          logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending daily message to subscriber");
         }
       }
       
@@ -90,10 +90,6 @@ export class SchedulerService {
     } catch (error) {
       logger.error({ err: error }, "Error during daily message broadcast");
     }
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   // Manual methods for testing

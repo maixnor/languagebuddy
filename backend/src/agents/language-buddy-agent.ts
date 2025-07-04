@@ -24,7 +24,7 @@ export class LanguageBuddyAgent {
     try {
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
-        { configurable: { thread_id: subscriber.phone }}
+        { configurable: { thread_id: subscriber.connections.phone }}
       );
 
       return result.messages[result.messages.length - 1].text || "initiateConversation() failed";
@@ -44,15 +44,15 @@ export class LanguageBuddyAgent {
         throw new Error("Invalid message provided");
     }
 
-    logger.info(`🔧 (${subscriber.phone.slice(-4)}) Processing user message: ${humanMessage}`);
+    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Processing user message: ${humanMessage}`);
 
-    setContextVariable('phone', subscriber.phone);
+    setContextVariable('phone', subscriber.connections.phone);
     const response = await this.agent.invoke(
         { messages: [new HumanMessage(humanMessage)] },
-        { configurable: { thread_id: subscriber.phone } }
+        { configurable: { thread_id: subscriber.connections.phone } }
     );
 
-    logger.info(`🔧 (${subscriber.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].text}`);
+    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].text}`);
     return response.messages.pop().text || "processUserMessage()?";
   }
 

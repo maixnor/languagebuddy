@@ -77,7 +77,7 @@ app.post("/initiate", async (req: any, res: any) => {
 
   try {
     const selectedPrompt = subscriberService.getDailySystemPrompt(subscriber);
-    await languageBuddyAgent.clearConversation(subscriber.phone);
+    await languageBuddyAgent.clearConversation(subscriber.connections.phone);
     const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt, '');
 
     if (initialMessage) {
@@ -95,21 +95,21 @@ app.post("/initiate", async (req: any, res: any) => {
 async function handleUserCommand(subscriber: Subscriber, message: string) {
     if (message === 'ping') {
         logger.info("Received ping message, responding with pong.");
-        await whatsappService.sendMessage(subscriber.phone, "pong");
+        await whatsappService.sendMessage(subscriber.connections.phone, "pong");
         return "ping";
     }
 
     if (message.startsWith('!clear')) {
         logger.info("Received !clear command, clearing conversation history.");
         // TODO does not work
-        await languageBuddyAgent.clearConversation(subscriber.phone);
-        await whatsappService.sendMessage(subscriber.phone, "Conversation history cleared.");
+        await languageBuddyAgent.clearConversation(subscriber.connections.phone);
+        await whatsappService.sendMessage(subscriber.connections.phone, "Conversation history cleared.");
         return '!clear';
     }
 
     if (message.startsWith('!help') || message.startsWith('help')) {
-      logger.info(`User ${subscriber.phone} requested help`);
-      await whatsappService.sendMessage(subscriber.phone, 'Help is currently under development and just available in English. Commands are:\n- "!help": Display again what you are reading right now\n- "!clear": clear the current chat history\n- "ping" sends a pong message to test connectivity');
+      logger.info(`User ${subscriber.connections.phone} requested help`);
+      await whatsappService.sendMessage(subscriber.connections.phone, 'Help is currently under development and just available in English. Commands are:\n- "!help": Display again what you are reading right now\n- "!clear": clear the current chat history\n- "ping" sends a pong message to test connectivity');
     }
 
     return "nothing";
@@ -120,7 +120,7 @@ app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
   const subscriber = await subscriberService.getSubscriber(message.from) ?? await subscriberService.createSubscriber(message.from, {});
 
-  const test = subscriber.phone.startsWith('69');
+  const test = subscriber.connections.phone.startsWith('69');
   // use test somewhere in here
 
   if (message?.type === "text") {
@@ -183,7 +183,7 @@ const handleTextMessage = async (message: any) => {
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.error({ userPhone }, "No active conversation found, initiating new conversation");
       const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
-      await languageBuddyAgent.clearConversation(subscriber.phone);
+      await languageBuddyAgent.clearConversation(subscriber.connections.phone);
       response = await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, '');
     } else {
       response = await languageBuddyAgent.processUserMessage(subscriber!, message.text.body);

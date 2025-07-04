@@ -5,19 +5,32 @@ export interface Language {
 }
 
 export interface Subscriber {
-  phone: string;
-  name: string;
-  speakingLanguages?: Language[];
-  learningLanguages?: Language[];
+  connections: {
+    phone: string;
+    // discord: string;
+    // telegram: string;
+    // instagram: string;
+  }
+  profile: {
+    name: string;
+    speakingLanguages?: Language[];
+    learningLanguages?: Language[];
+    timezone?: string;
+  }
+  metadata: {
+    digests: Digest[];
+    personality: string;
+  }
   isPremium?: boolean;
-  timezone?: string;
   lastActiveAt?: Date;
 }
 
-export interface SystemPromptEntry {
-  slug: string;
-  prompt: string;
-  firstUserMessage: string;
+export interface Digest {
+  timestamp: string;
+  vocabulary: string[];
+  phrases: string[];
+  grammar: string[];
+  summary: string;
 }
 
 export interface FeedbackEntry {
@@ -28,14 +41,4 @@ export interface FeedbackEntry {
   sentiment: 'positive' | 'negative' | 'neutral';
   actionItems: string[];
   category: 'content' | 'technical' | 'suggestion' | 'other';
-}
-
-// Simplified LangGraph State Interface
-export interface ConversationState {
-  messages: any[];
-  subscriber: Subscriber;
-  conversationMode: 'chatting' | 'tutoring' | 'roleplaying';
-  isPremium: boolean;
-  sessionStartTime: Date;
-  lastMessageTime?: Date;
 }
