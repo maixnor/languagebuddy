@@ -197,7 +197,7 @@ const handleTextMessage = async (message: any) => {
     });
 
     if (response && response.trim() !== "") {
-      await whatsappService.sendMessageWithTyping(userPhone, response);
+      await whatsappService.sendMessage(userPhone, response);
       trackEvent("response_sent", {
         userPhone: userPhone.slice(-4),
         responseLength: response.length,
