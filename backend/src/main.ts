@@ -101,7 +101,6 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 
     if (message.startsWith('!clear')) {
         logger.info("Received !clear command, clearing conversation history.");
-        // TODO does not work
         await languageBuddyAgent.clearConversation(subscriber.connections.phone);
         await whatsappService.sendMessage(subscriber.connections.phone, "Conversation history cleared.");
         return '!clear';
@@ -120,6 +119,7 @@ app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
   const subscriber = await subscriberService.getSubscriber(message.from) ?? await subscriberService.createSubscriber(message.from, {});
 
+
   const test = subscriber.connections.phone.startsWith('69');
   // use test somewhere in here
 
@@ -128,6 +128,7 @@ app.post("/webhook", async (req: any, res: any) => {
       return res.sendStatus(200);
     }
     try {
+      // TODO add throttling to non-paying users here, even before sending requests to GPT
       await handleTextMessage(message);
     }
     catch (error) {

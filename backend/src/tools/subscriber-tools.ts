@@ -24,7 +24,7 @@ export const updateSubscriberTool = tool(
     }
   },
   {
-    name: "update_subscriber",
+    name: "update_subscriber_profile",
     description: "Update subscriber profile information when they share personal details",
     schema: z.object({
       updates: z.object({
