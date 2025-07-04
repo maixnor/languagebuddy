@@ -101,6 +101,7 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 
     if (message.startsWith('!clear')) {
         logger.info("Received !clear command, clearing conversation history.");
+        // TODO does not work
         await languageBuddyAgent.clearConversation(subscriber.phone);
         await whatsappService.sendMessage(subscriber.phone, "Conversation history cleared.");
         return '!clear';
@@ -120,6 +121,7 @@ app.post("/webhook", async (req: any, res: any) => {
   const subscriber = await subscriberService.getSubscriber(message.from) ?? await subscriberService.createSubscriber(message.from, {});
 
   const test = subscriber.phone.startsWith('69');
+  // use test somewhere in here
 
   if (message?.type === "text") {
     if (await handleUserCommand(subscriber, message.text.body) !== 'nothing') {
@@ -194,7 +196,7 @@ const handleTextMessage = async (message: any) => {
     });
 
     if (response && response.trim() !== "") {
-      await whatsappService.sendMessage(userPhone, response);
+      await whatsappService.sendMessageWithTyping(userPhone, response);
       trackEvent("response_sent", {
         userPhone: userPhone.slice(-4),
         responseLength: response.length,
