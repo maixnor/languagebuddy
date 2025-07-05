@@ -55,8 +55,8 @@ export const config = {
   features: {
     dailyMessages: {
       enabled: true,
-      timeToSend: '20:30',
-      timezone: 'UTC',
+      timeToSend: '11:10',
+      timezone: 'CEST',
     },
     feedback: {
       collectionProbability: 0.1, // 10% chance to ask for feedback
