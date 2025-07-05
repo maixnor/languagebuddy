@@ -46,7 +46,7 @@ export class SchedulerService {
 
     // TODO start every hour and send to everyone at their local time at 9
     // TODO add a random offset to the invocation such that users don't get a message every day like clockwork
-    const dailyTime = config.features.dailyMessages.timeToSend || '9:00';
+    const dailyTime = config.features.dailyMessages.localTime || '9:00';
     const [hour, minute] = dailyTime.split(':');
     
     // Cron format: minute hour day month dayOfWeek
@@ -57,10 +57,9 @@ export class SchedulerService {
         logger.info("Starting daily message broadcast");
         await this.sendDailyMessages();
       }, 
-      {timezone: config.features.dailyMessages.timezone}
     );
 
-    logger.info(`Daily message scheduler started for ${hour}:${minute} ${config.features.dailyMessages.timezone} every day`);
+    logger.info(`Daily message scheduler started for ${hour}:${minute} ${config.features.dailyMessages.localTime} every day`);
   }
 
   private async sendDailyMessages(): Promise<void> {

@@ -115,6 +115,15 @@ export class SubscriberService {
     }
   }
 
+  public async createDigest(subscriber: Subscriber): Promise<void> {
+    // fetch conversation from redis
+    // convert conversation into a machine-readable format
+    // send one-shot conversation to GPT to extract necessary info and pack into a Digest object
+    // append digest to subscriber
+    // save subscriber
+    // delete conversation in redis
+  }
+
   public getDailySystemPrompt(subscriber: Subscriber): string {
     const missingInfo = this.identifyMissingInfo(subscriber);
     const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';

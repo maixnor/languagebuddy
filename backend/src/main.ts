@@ -117,14 +117,22 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
-  const subscriber = await subscriberService.getSubscriber(message.from) ?? await subscriberService.createSubscriber(message.from, {});
-
-
-  const test = subscriber.connections.phone.startsWith('69');
   // use test somewhere in here
+  const test = message.from.startsWith('69');
 
+  let existingSubscriber = await subscriberService.getSubscriber(message.from);
+  if (!existingSubscriber) {
+    if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
+      await subscriberService.createSubscriber(message.from);
+    } else {
+      whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
+      return;
+    }
+  }
+
+  const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
   if (message?.type === "text") {
-    if (await handleUserCommand(subscriber, message.text.body) !== 'nothing') {
+    if (await handleUserCommand(subscriber!, message.text.body) !== 'nothing') {
       return res.sendStatus(200);
     }
     try {
@@ -299,7 +307,7 @@ app.get("/health", (req: any, res: any) => {
     services: {
       redis: redisClient.status,
       whatsapp: whatsappService.isInitialized() ? "running" : "failed", 
-      daily_messages: config.features.dailyMessages.enabled ? `${config.features.dailyMessages.timeToSend} ${config.features.dailyMessages.timezone}` : 'disabled',
+      daily_messages: config.features.dailyMessages.enabled ? `${config.features.dailyMessages.localTime} local time` : 'disabled',
       openai: { model: llm.model, temperature: llm.temperature }
     }
   });
