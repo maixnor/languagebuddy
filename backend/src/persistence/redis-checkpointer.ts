@@ -114,12 +114,12 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     }
   }
 
-  async deleteCheckpoint(threadId: string): Promise<void> {
+  async deleteCheckpoint(phone: string): Promise<void> {
     try {
       await this.redis.del(`checkpoint:${threadId}`);
-      logger.debug({ threadId }, "Checkpoint deleted");
+      logger.debug({ phone }, "Checkpoint deleted");
     } catch (error) {
-      logger.error({ err: error, threadId }, "Error deleting checkpoint");
+      logger.error({ err: error, phone }, "Error deleting checkpoint");
     }
   }
 
@@ -184,7 +184,7 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async clearUserHistory(phoneNumber: string): Promise<void> {
     try {
-      await this.deleteCheckpoint(`checkpoint:${phoneNumber}`);
+      await this.deleteCheckpoint(phoneNumber); // Pass only the raw phone number
       logger.info({ phoneNumber }, "User conversation history cleared");
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error clearing user history");
