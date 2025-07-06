@@ -55,7 +55,7 @@ export const config = {
   features: {
     dailyMessages: {
       enabled: true,
-      localTime: '17:55',
+      localTime: '18:00',
     },
     feedback: {
       collectionProbability: 0.1, // 10% chance to ask for feedback
