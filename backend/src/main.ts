@@ -117,8 +117,9 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  logger.info(message);
   // use test somewhere in here
-  const test = message.from.startsWith('69');
+  // const test = message.from.startsWith('69');
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
