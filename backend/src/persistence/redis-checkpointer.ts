@@ -116,7 +116,7 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async deleteCheckpoint(phone: string): Promise<void> {
     try {
-      await this.redis.del(`checkpoint:${threadId}`);
+      await this.redis.del(`checkpoint:${phone}`);
       logger.debug({ phone }, "Checkpoint deleted");
     } catch (error) {
       logger.error({ err: error, phone }, "Error deleting checkpoint");
