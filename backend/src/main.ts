@@ -121,7 +121,6 @@ app.post("/webhook", async (req: any, res: any) => {
   // use test somewhere in here
   // const test = message.from.startsWith('69');
   logger.info(message.from);
-  return;
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
@@ -149,6 +148,7 @@ app.post("/webhook", async (req: any, res: any) => {
     }
   }
   res.sendStatus(200);
+  logger.error("I am done and successful");
 });
 
 async function handleNewSubscriber(userPhone: string) {
