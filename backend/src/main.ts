@@ -18,7 +18,7 @@ import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
 import {Subscriber} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
-import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
+import { ChatOpenAI } from "@langchain/openai";
 
 // Load system prompts
 const redisClient = new Redis({
@@ -120,20 +120,22 @@ app.post("/webhook", async (req: any, res: any) => {
   logger.info(message);
   // use test somewhere in here
   // const test = message.from.startsWith('69');
+  logger.info(message.from);
+  return;
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
     if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
       await subscriberService.createSubscriber(message.from);
     } else {
-      whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
+      await whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
       return;
     }
   }
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
   if (message?.type !== "text") {
-    whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
+    await whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
     return;
   } else {
     if (await handleUserCommand(subscriber!, message.text.body) !== 'nothing') {
@@ -191,7 +193,7 @@ const handleTextMessage = async (message: any) => {
 
     const startTime = Date.now();
 
-    let response = "";
+    let response;
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.error({ userPhone }, "No active conversation found, initiating new conversation");
       const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
