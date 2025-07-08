@@ -4,7 +4,8 @@ import { logger } from '../config';
 const MESSAGE_ID_TTL_SECONDS = 30 * 60; // 30 minutes
 const THROTTLE_TTL_SECONDS = 10; // 10 seconds
 
-export class WhatsAppDeduplicationService {
+export class WhatsappDeduplicationService {
+  private static instance: WhatsappDeduplicationService;
   private redis: Redis;
 
   constructor(redis: Redis) {
@@ -31,5 +32,16 @@ export class WhatsAppDeduplicationService {
     }
     await this.redis.set(key, '1', 'EX', THROTTLE_TTL_SECONDS);
     return false;
+  }
+
+  static getInstance(redis: Redis) {
+    if (!WhatsappDeduplicationService.instance) {
+      if (!redis) {
+        throw new Error("Redis instance required for first initialization");
+      }
+      WhatsappDeduplicationService.instance = new WhatsappDeduplicationService(redis);
+    }
+    return WhatsappDeduplicationService.instance;
+
   }
 }
