@@ -3,3 +3,6 @@ run:
 
 test:
   npm run build && npm run test
+
+stream-logs:
+  ssh wb.maixnor.com 'journalctl -u languagebuddy-api.service -n 50 -f'
