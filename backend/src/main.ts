@@ -132,15 +132,17 @@ app.post("/webhook", async (req: any, res: any) => {
   }
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
-  if (message?.type === "text") {
+  if (message?.type !== "text") {
+    whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
+    return;
+  } else {
     if (await handleUserCommand(subscriber!, message.text.body) !== 'nothing') {
       return res.sendStatus(200);
     }
     try {
       // TODO add throttling to non-paying users here, even before sending requests to GPT
       await handleTextMessage(message);
-    }
-    catch (error) {
+    } catch (error) {
       res.sendStatus(400).send("Unexpected error while processing webhook.");
     }
   }
