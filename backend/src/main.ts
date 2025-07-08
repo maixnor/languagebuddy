@@ -19,6 +19,7 @@ import { logger, config, trackEvent, trackMetric } from './config';
 import { Subscriber, WebhookMessage } from './types';
 import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";
 import { ChatOpenAI } from "@langchain/openai";
+import { WhatsAppDeduplicationService } from './services/whatsapp-deduplication-service';
 
 // Load system prompts
 const redisClient = new Redis({
@@ -54,6 +55,7 @@ const stripeService = StripeService.getInstance();
 stripeService.initialize(config.stripe.secretKey!);
 const whatsappService = WhatsAppService.getInstance();
 whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
+const webhookDeduplicationService = new WhatsAppDeduplicationService(redisClient);
 
 export const app = express();
 app.use(express.json());
@@ -121,8 +123,19 @@ app.post("/webhook", async (req: any, res: any) => {
       logger.error("Invalid message format received in webhook.");
       return res.sendStatus(400);
   }
-  // TODO use test somewhere in here
-  // const test = message.from.startsWith('69');
+
+  // Deduplication check
+  if (await webhookDeduplicationService.isDuplicateMessage(message.id)) {
+    logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
+    return res.sendStatus(200);
+  }
+
+  // Throttling check
+  if (await webhookDeduplicationService.isThrottled(message.from)) {
+    logger.info({ phone: message.from }, 'User is throttled, message ignored.');
+    await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
+    return res.sendStatus(200);
+  }
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
@@ -143,7 +156,7 @@ app.post("/webhook", async (req: any, res: any) => {
       return res.sendStatus(200);
     }
     try {
-      // TODO add throttling to non-paying users here, even before sending requests to GPT
+      // TODO add throttling (1 conversation per day) to non-paying users here, even before sending requests to GPT
       await handleTextMessage(message);
     } catch (error) {
       res.sendStatus(400).send("Unexpected error while processing webhook.");

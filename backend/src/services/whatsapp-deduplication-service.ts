@@ -1,0 +1,35 @@
+import { Redis } from 'ioredis';
+import { logger } from '../config';
+
+const MESSAGE_ID_TTL_SECONDS = 30 * 60; // 30 minutes
+const THROTTLE_TTL_SECONDS = 10; // 10 seconds
+
+export class WhatsAppDeduplicationService {
+  private redis: Redis;
+
+  constructor(redis: Redis) {
+    this.redis = redis;
+  }
+
+  async isDuplicateMessage(messageId: string): Promise<boolean> {
+    const key = `whatsapp:msgid:${messageId}`;
+    const exists = await this.redis.exists(key);
+    if (exists) {
+      logger.warn({ messageId }, 'Duplicate message detected');
+      return true;
+    }
+    await this.redis.set(key, '1', 'EX', MESSAGE_ID_TTL_SECONDS);
+    return false;
+  }
+
+  async isThrottled(phone: string): Promise<boolean> {
+    const key = `whatsapp:throttle:${phone}`;
+    const exists = await this.redis.exists(key);
+    if (exists) {
+      logger.warn({ phone }, 'User is throttled');
+      return true;
+    }
+    await this.redis.set(key, '1', 'EX', THROTTLE_TTL_SECONDS);
+    return false;
+  }
+}
