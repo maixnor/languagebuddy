@@ -42,3 +42,13 @@ export interface FeedbackEntry {
   actionItems: string[];
   category: 'content' | 'technical' | 'suggestion' | 'other';
 }
+
+export interface WebhookMessage {
+  id: string;
+  from: string;
+  type: string;
+  text?: {
+    body: string;
+  };
+}
+

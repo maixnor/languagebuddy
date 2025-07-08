@@ -16,8 +16,8 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import {Subscriber} from './types';
-import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
+import { Subscriber, WebhookMessage } from './types';
+import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";
 import { ChatOpenAI } from "@langchain/openai";
 
 // Load system prompts
@@ -116,15 +116,17 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
-  const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
-  logger.info(message);
-  // use test somewhere in here
+  const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  if (!message || !message.from || !message.text) {
+      logger.error("Invalid message format received in webhook.");
+      return res.sendStatus(400);
+  }
+  // TODO use test somewhere in here
   // const test = message.from.startsWith('69');
-  logger.info(message.from);
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
-    if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
+    if (message.text?.body.toLowerCase().indexOf("accept") >= 0) {
       await subscriberService.createSubscriber(message.from);
     } else {
       await whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
