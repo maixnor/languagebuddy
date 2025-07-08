@@ -123,20 +123,20 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     }
   }
 
-  async getCheckpoint(threadId: string): Promise<CheckpointTuple | undefined> {
+  async getCheckpoint(phone: string): Promise<CheckpointTuple | undefined> {
     try {
-      const checkpointData = await this.redis.get(`checkpoint:${threadId}`);
+      const checkpointData = await this.redis.get(`checkpoint:${phone}`);
       if (!checkpointData) return undefined;
 
       const parsed = JSON.parse(checkpointData);
       return {
-        config: { configurable: { thread_id: threadId } },
+        config: { configurable: { thread_id: phone } },
         checkpoint: parsed.checkpoint,
         metadata: parsed.metadata || {},
         parentConfig: parsed.parentConfig,
       };
     } catch (error) {
-      logger.error({ err: error, threadId }, "Error retrieving checkpoint");
+      logger.error({ err: error, threadId: phone }, "Error retrieving checkpoint");
       return undefined;
     }
   }

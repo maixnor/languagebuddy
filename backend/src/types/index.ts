@@ -23,6 +23,7 @@ export interface Subscriber {
   }
   isPremium?: boolean;
   lastActiveAt?: Date;
+  onboarding?: 'not_started' | 'in_progress' | 'completed';
 }
 
 export interface Digest {
@@ -51,4 +52,3 @@ export interface WebhookMessage {
     body: string;
   };
 }
-

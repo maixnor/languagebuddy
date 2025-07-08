@@ -59,7 +59,7 @@ export class SchedulerService {
       }, 
     );
 
-    logger.info(`Daily message scheduler started for ${hour}:${minute} ${config.features.dailyMessages.localTime} every day`);
+    logger.info(`Daily message scheduler started for ${hour}:${minute} every day`);
   }
 
   private async sendDailyMessages(): Promise<void> {

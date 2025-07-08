@@ -16,12 +16,10 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import { Subscriber, WebhookMessage } from './types';
-import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";
-import { ChatOpenAI } from "@langchain/openai";
-import { WhatsAppDeduplicationService } from './services/whatsapp-deduplication-service';
+import {Subscriber} from './types';
+import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
+import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 
-// Load system prompts
 const redisClient = new Redis({
   host: config.redis.host,
   port: config.redis.port,
@@ -55,7 +53,6 @@ const stripeService = StripeService.getInstance();
 stripeService.initialize(config.stripe.secretKey!);
 const whatsappService = WhatsAppService.getInstance();
 whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
-const webhookDeduplicationService = new WhatsAppDeduplicationService(redisClient);
 
 export const app = express();
 app.use(express.json());
@@ -118,31 +115,17 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
-  const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
-  if (!message || !message.from || !message.text) {
-      logger.error("Invalid message format received in webhook.");
-      return res.sendStatus(400);
-  }
-
-  // Deduplication check
-  if (await webhookDeduplicationService.isDuplicateMessage(message.id)) {
-    logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
-    return res.sendStatus(200);
-  }
-
-  // Throttling check
-  if (await webhookDeduplicationService.isThrottled(message.from)) {
-    logger.info({ phone: message.from }, 'User is throttled, message ignored.');
-    await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
-    return res.sendStatus(200);
-  }
+  const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  logger.info(message);
+  // use test somewhere in here
+  // const test = message.from.startsWith('69');
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
-    if (message.text?.body.toLowerCase().indexOf("accept") >= 0) {
+    if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
       await subscriberService.createSubscriber(message.from);
     } else {
-      await whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
+      whatsappService.sendMessage(message.from, "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
       return;
     }
   }
@@ -156,14 +139,14 @@ app.post("/webhook", async (req: any, res: any) => {
       return res.sendStatus(200);
     }
     try {
-      // TODO add throttling (1 conversation per day) to non-paying users here, even before sending requests to GPT
+      // TODO add throttling to non-paying users here, even before sending requests to GPT
       await handleTextMessage(message);
-    } catch (error) {
+    }
+    catch (error) {
       res.sendStatus(400).send("Unexpected error while processing webhook.");
     }
   }
   res.sendStatus(200);
-  logger.error("I am done and successful");
 });
 
 async function handleNewSubscriber(userPhone: string) {
@@ -208,7 +191,7 @@ const handleTextMessage = async (message: any) => {
 
     const startTime = Date.now();
 
-    let response;
+    let response = "";
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.error({ userPhone }, "No active conversation found, initiating new conversation");
       const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);

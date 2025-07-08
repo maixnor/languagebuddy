@@ -88,7 +88,7 @@ describe('WTF how does tool calling work?', () => {
       subscriber = await subscriberService.createSubscriber(testPhone);
     }
 
-    setContextVariable('phone', subscriber.phone);
+    setContextVariable('phone', subscriber.connections.phone);
     const response = await agent.invoke(
       { messages: [new SystemMessage(subscriberService.getSystemPrompt(subscriber)), new HumanMessage(userMessage)] },
       { configurable: { thread_id: testPhone} }

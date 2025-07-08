@@ -59,7 +59,6 @@ export class LanguageBuddyAgent {
   async clearConversation(phone: string): Promise<void> {
     try {
       await this.checkpointer.clearUserHistory(phone);
-      logger.info({ phone }, "Conversation cleared successfully");
     } catch (error) {
       logger.error({ err: error, phone }, "Error clearing conversation");
     }
