@@ -17,7 +17,7 @@ export const updateSubscriberTool = tool(
     try {
       const subscriberService = SubscriberService.getInstance();
       const existingSubscriber = await subscriberService.getSubscriber(phoneNumber);
-      Object.assign(existingSubscriber!, updates);
+      Object.assign(existingSubscriber!.profile, updates);
       await subscriberService.updateSubscriber(phoneNumber, existingSubscriber!);
       return "Subscriber profile updated successfully!";
     } catch (error) {

@@ -66,7 +66,7 @@ export class SubscriberService {
         subscriber = await this.createSubscriber(phoneNumber);
       }
 
-      Object.assign(subscriber.profile, updates);
+      Object.assign(subscriber, updates);
       subscriber.lastActiveAt = new Date();
       await this.cacheSubscriber(subscriber);
 
