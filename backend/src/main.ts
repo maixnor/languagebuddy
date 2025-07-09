@@ -124,7 +124,7 @@ app.post("/webhook", async (req: any, res: any) => {
     return res.sendStatus(200);
   }
 
-  if (!message || !message.from || !message.text) {
+  if (!message || !message.from) {
     logger.error("Invalid message format received in webhook.");
     return res.sendStatus(400);
   }
