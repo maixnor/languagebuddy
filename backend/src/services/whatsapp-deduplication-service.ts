@@ -2,7 +2,7 @@ import { Redis } from 'ioredis';
 import { logger } from '../config';
 
 const MESSAGE_ID_TTL_SECONDS = 30 * 60; // 30 minutes
-const THROTTLE_TTL_SECONDS = 10; // 10 seconds
+const THROTTLE_TTL_SECONDS = 5; // 5 seconds
 
 export class WhatsappDeduplicationService {
   private static instance: WhatsappDeduplicationService;
