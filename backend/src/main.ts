@@ -118,14 +118,15 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+
+  if (message && message.id && await whatsappDeduplicationService.isDuplicateMessage(message.id)) {
+    logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
+    return res.sendStatus(200);
+  }
+
   if (!message || !message.from || !message.text) {
     logger.error("Invalid message format received in webhook.");
     return res.sendStatus(400);
-  }
-
-  if (await whatsappDeduplicationService.isDuplicateMessage(message.id)) {
-    logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
-    return res.sendStatus(200);
   }
 
   if (await whatsappDeduplicationService.isThrottled(message.from)) {
