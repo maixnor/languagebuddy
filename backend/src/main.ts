@@ -19,6 +19,7 @@ import { logger, config, trackEvent, trackMetric } from './config';
 import {Subscriber, WebhookMessage} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
+import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -44,6 +45,7 @@ const llm = new ChatOpenAI({
 
 const subscriberService = SubscriberService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
+const whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(redisClient);
 
 const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
@@ -116,9 +118,20 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
-  if (!message || !message.from) {
-    logger.info('Incorrect message format');
-    res.send(200);
+  if (!message || !message.from || !message.text) {
+    logger.error("Invalid message format received in webhook.");
+    return res.sendStatus(400);
+  }
+
+  if (await whatsappDeduplicationService.isDuplicateMessage(message.id)) {
+    logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
+    return res.sendStatus(200);
+  }
+
+  if (await whatsappDeduplicationService.isThrottled(message.from)) {
+    logger.info({ phone: message.from }, 'User is throttled, message ignored.');
+    await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
+    return res.sendStatus(200);
   }
   // use test somewhere in here
   // const test = message.from.startsWith('69');
