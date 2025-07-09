@@ -116,7 +116,10 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
-  logger.info(message);
+  if (!message || !message.from) {
+    logger.info('Incorrect message format');
+    res.send(200);
+  }
   // use test somewhere in here
   // const test = message.from.startsWith('69');
 
@@ -125,7 +128,7 @@ app.post("/webhook", async (req: any, res: any) => {
     if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
       await subscriberService.createSubscriber(message.from);
     } else {
-      whatsappService.sendMessage(message.from , "Hi. I'm an automated system. I save yourphone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
+      whatsappService.sendMessage(message.from , "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
       return;
     }
   }

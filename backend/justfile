@@ -6,3 +6,7 @@ test:
 
 stream-logs:
   ssh wb.maixnor.com 'journalctl -u languagebuddy-api.service -n 50 -f'
+
+vps-restart:
+  ssh wb.maixnor.com 'sudo systemctl start languagebuddy-update.service && sudo systemctl restart languagebuddy-api.service'
+
