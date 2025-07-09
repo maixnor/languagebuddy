@@ -16,7 +16,7 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import {Subscriber} from './types';
+import {Subscriber, WebhookMessage} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 
@@ -115,17 +115,21 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
-  const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
   if (!message || !message.from) {
     logger.info('Incorrect message format');
     res.send(200);
   }
   // use test somewhere in here
   // const test = message.from.startsWith('69');
+  if (message?.type !== "text") {
+    await whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
+    return;
+  }
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
-    if (message.text.body.toLowerCase().indexOf("accept") >= 0) {
+    if (message.text!.body.toLowerCase().indexOf("accept") >= 0) {
       await subscriberService.createSubscriber(message.from);
     } else {
       whatsappService.sendMessage(message.from , "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
@@ -134,20 +138,15 @@ app.post("/webhook", async (req: any, res: any) => {
   }
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
-  if (message?.type !== "text") {
-    await whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
-    return;
-  } else {
-    if (await handleUserCommand(subscriber!, message.text.body) !== 'nothing') {
-      return res.sendStatus(200);
-    }
-    try {
-      // TODO add throttling to non-paying users here, even before sending requests to GPT
-      await handleTextMessage(message);
-    }
-    catch (error) {
-      res.sendStatus(400).send("Unexpected error while processing webhook.");
-    }
+  if (await handleUserCommand(subscriber!, message.text!.body) !== 'nothing') {
+    return res.sendStatus(200);
+  }
+  try {
+    // TODO add throttling to non-paying users here, even before sending requests to GPT
+    await handleTextMessage(message);
+  }
+  catch (error) {
+    res.sendStatus(400).send("Unexpected error while processing webhook.");
   }
   res.sendStatus(200);
 });
