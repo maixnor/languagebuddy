@@ -118,6 +118,8 @@ async function handleUserCommand(subscriber: Subscriber, message: string) {
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {
   const message: WebhookMessage = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
+  // use test somewhere in here
+  // const test = message.from.startsWith('69');
 
   if (message && message.id && await whatsappDeduplicationService.isDuplicateMessage(message.id)) {
     logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
@@ -134,9 +136,9 @@ app.post("/webhook", async (req: any, res: any) => {
     await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
     return res.sendStatus(200);
   }
-  // use test somewhere in here
-  // const test = message.from.startsWith('69');
+
   if (message?.type !== "text") {
+    logger.info(message.type, "unsupported type of message")
     await whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
     return;
   }
