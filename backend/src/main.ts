@@ -145,14 +145,24 @@ app.post("/webhook", async (req: any, res: any) => {
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
   if (!existingSubscriber) {
+    let onboarding = await subscriberService.isCurrentlyOnboarding(message.from);
+    if (onboarding) {
+      // gather:
+      // - speaking language -> adjust to dialects too
+      // - learning language -> find out about the level of the learner with a short conversation
+      // - interests/motivation to learn language
+      // - time zone
+      // last step -> subscriberService.createSubscriber() with all info from onboarding
+    }
     if (message.text!.body.toLowerCase().indexOf("accept") >= 0) {
-      await subscriberService.createSubscriber(message.from);
+      await subscriberService.startOnboarding(message.from); // TODO
     } else {
       whatsappService.sendMessage(message.from , "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
       return;
     }
   }
 
+  // onboarding is complete by now
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
   if (await handleUserCommand(subscriber!, message.text!.body) !== 'nothing') {
     return res.sendStatus(200);
