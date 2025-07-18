@@ -20,10 +20,15 @@ export interface Subscriber {
   metadata: {
     digests: Digest[];
     personality: string;
+    messagingPreferences?: {
+      type: 'morning' | 'midday' | 'evening' | 'fixed';
+      times?: string[]; // for fixed
+    };
   }
   isPremium?: boolean;
   lastActiveAt?: Date;
   onboarding?: 'not_started' | 'in_progress' | 'completed';
+  nextPushMessageAt?: string; // ISO string in UTC
 }
 
 export interface Digest {

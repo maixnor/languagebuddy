@@ -56,6 +56,12 @@ export const config = {
     dailyMessages: {
       enabled: true,
       localTime: '12:07',
+      defaultWindows: {
+        morning: { start: '07:00', end: '10:00' },
+        midday: { start: '11:00', end: '14:00' },
+        evening: { start: '18:00', end: '21:00' },
+        fuzzinessMinutes: 30
+      }
     },
     feedback: {
       collectionProbability: 0.1, // 10% chance to ask for feedback
