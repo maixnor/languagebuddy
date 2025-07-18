@@ -9,7 +9,7 @@ const http = require('http');
 // Configuration
 const config = {
   serverUrl: 'http://localhost:8080', // Default local server URL (matches PORT in .env)
-  userPhone: '436802456552', // Default test phone number
+  userPhone: '69123132', // Default test phone number
   apiVersion: 'v18.0', // Match WhatsApp API version
   responsePort: 3333, // Port for the local server to receive responses
 };
