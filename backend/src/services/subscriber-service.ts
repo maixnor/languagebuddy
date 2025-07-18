@@ -104,10 +104,8 @@ export class SubscriberService {
   private async cacheSubscriber(subscriber: Subscriber): Promise<void> {
     try {
       // Cache for 7 days
-      const expireTime = 7 * 24 * 60 * 60;
-      await this.redis.setex(
+      await this.redis.set(
         `subscriber:${subscriber.connections.phone}`, 
-        expireTime, 
         JSON.stringify(subscriber)
       );
     } catch (error) {
