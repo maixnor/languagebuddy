@@ -20,6 +20,7 @@ import {Subscriber, WebhookMessage} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
+import { handleUserCommand } from './user-commands';
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -47,13 +48,13 @@ const subscriberService = SubscriberService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
 const whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(redisClient);
 
-const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
+export const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
 schedulerService.startSchedulers();
 
 const stripeService = StripeService.getInstance();
 stripeService.initialize(config.stripe.secretKey!);
-const whatsappService = WhatsAppService.getInstance();
+export const whatsappService = WhatsAppService.getInstance();
 whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
 
 export const app = express();
@@ -93,27 +94,6 @@ app.post("/initiate", async (req: any, res: any) => {
   }
 });
 
-async function handleUserCommand(subscriber: Subscriber, message: string) {
-    if (message === 'ping') {
-        logger.info("Received ping message, responding with pong.");
-        await whatsappService.sendMessage(subscriber.connections.phone, "pong");
-        return "ping";
-    }
-
-    if (message.startsWith('!clear')) {
-        logger.info("Received !clear command, clearing conversation history.");
-        await languageBuddyAgent.clearConversation(subscriber.connections.phone);
-        await whatsappService.sendMessage(subscriber.connections.phone, "Conversation history cleared.");
-        return '!clear';
-    }
-
-    if (message.startsWith('!help') || message.startsWith('help')) {
-      logger.info(`User ${subscriber.connections.phone} requested help`);
-      await whatsappService.sendMessage(subscriber.connections.phone, 'Help is currently under development and just available in English. Commands are:\n- "!help": Display again what you are reading right now\n- "!clear": clear the current chat history\n- "ping" sends a pong message to test connectivity');
-    }
-
-    return "nothing";
-}
 
 // Main webhook endpoint - now uses LangGraph
 app.post("/webhook", async (req: any, res: any) => {

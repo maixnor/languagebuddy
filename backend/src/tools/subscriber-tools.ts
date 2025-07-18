@@ -17,7 +17,16 @@ export const updateSubscriberTool = tool(
     try {
       const subscriberService = SubscriberService.getInstance();
       const existingSubscriber = await subscriberService.getSubscriber(phoneNumber);
-      Object.assign(existingSubscriber!.profile, updates);
+      // Merge profile and metadata updates
+      if (updates.profile) {
+        Object.assign(existingSubscriber!.profile, updates.profile);
+      }
+      if (updates.metadata) {
+        existingSubscriber!.metadata = {
+          ...existingSubscriber!.metadata,
+          ...updates.metadata,
+        };
+      }
       await subscriberService.updateSubscriber(phoneNumber, existingSubscriber!);
       return "Subscriber profile updated successfully!";
     } catch (error) {
@@ -27,22 +36,30 @@ export const updateSubscriberTool = tool(
   },
   {
     name: "update_subscriber_profile",
-    description: "Update subscriber profile information when they share personal details",
+    description: "Update subscriber profile information, preferences, and notification settings when they share personal details",
     schema: z.object({
       updates: z.object({
-        name: z.string().optional(),
-        speakingLanguages: z.array(z.object({
-          languageName: z.string(),
-          level: z.string().optional(),
-          currentObjectives: z.array(z.string()).optional()
-        })).optional(),
-        learningLanguages: z.array(z.object({
-          languageName: z.string(),
-          level: z.string().optional(),
-          currentObjectives: z.array(z.string()).optional()
-        })).optional(),
-        timezone: z.string().optional(),
-      })
+        profile: z.object({
+          name: z.string().optional(),
+          speakingLanguages: z.array(z.object({
+            languageName: z.string(),
+            level: z.string().optional(),
+            currentObjectives: z.array(z.string()).optional()
+          })).optional(),
+          learningLanguages: z.array(z.object({
+            languageName: z.string(),
+            level: z.string().optional(),
+            currentObjectives: z.array(z.string()).optional()
+          })).optional(),
+          timezone: z.string().optional(),
+        }).partial().optional(),
+        metadata: z.object({
+          messagingPreferences: z.object({
+            type: z.enum(['morning', 'midday', 'evening', 'fixed']).optional(),
+            times: z.array(z.string()).optional(),
+          }).partial().optional(),
+        }).partial().optional(),
+      }).partial(),
     }),
   }
 );
