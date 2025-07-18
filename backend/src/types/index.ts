@@ -16,6 +16,7 @@ export interface Subscriber {
     speakingLanguages?: Language[];
     learningLanguages?: Language[];
     timezone?: string;
+    // favoriteColor?: string;
   }
   metadata: {
     digests: Digest[];

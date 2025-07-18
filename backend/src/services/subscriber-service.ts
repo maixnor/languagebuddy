@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { Subscriber } from '../types';
 import { logger } from '../config';
+import { getMissingProfileFieldsReflective } from '../util/profile-reflection';
 
 export class SubscriberService {
   private static instance: SubscriberService;
@@ -54,6 +55,12 @@ export class SubscriberService {
       ...initialData
     };
 
+    // Check if profile is missing required fields (reflection-based)
+    const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
+    if (missingFields.length > 0) {
+      logger.info({ missingFields, phoneNumber }, "Subscriber created with missing profile fields");
+    }
+
     await this.cacheSubscriber(subscriber);
     logger.info({ phoneNumber }, "New subscriber created");
     return subscriber;
@@ -69,6 +76,12 @@ export class SubscriberService {
       Object.assign(subscriber, updates);
       subscriber.lastActiveAt = new Date();
       await this.cacheSubscriber(subscriber);
+
+      // Re-check missing fields after update (reflection-based)
+      const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
+      if (missingFields.length > 0) {
+        logger.info({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
+      }
 
       logger.info({updates: updates}, `Updated user ${phoneNumber} with this info:`)
     } catch (error) {
@@ -123,7 +136,6 @@ export class SubscriberService {
   }
 
   public getDailySystemPrompt(subscriber: Subscriber): string {
-    const missingInfo = this.identifyMissingInfo(subscriber);
     const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
     const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
     const objectives = subscriber.profile.learningLanguages
@@ -156,12 +168,6 @@ INSTRUCTIONS:
 9. Keep responses conversational and not too long
 `;
 
-    if (missingInfo && missingInfo.length > 0) {
-      prompt += `
-  PROACTIVE INFORMATION GATHERING:
-  ${this.generateInfoGatheringInstructions(missingInfo)}
-  `
-    }
     prompt +=
         `
 PROFILE UPDATES:
@@ -215,12 +221,6 @@ INSTRUCTIONS:
 9. Keep responses conversational and not too long
 `;
 
-    if (missingInfo && missingInfo.length > 0) {
-      prompt += `
-  PROACTIVE INFORMATION GATHERING:
-  ${this.generateInfoGatheringInstructions(missingInfo)}
-  `
-    }
     prompt +=
         `
 PROFILE UPDATES:
@@ -279,39 +279,5 @@ Be natural and conversational. Proactively gather missing information but weave 
     }
 
     return missing;
-  }
-
-  private generateInfoGatheringInstructions(missingInfo: string[]): string {
-    if (missingInfo.length === 0) {
-      return "✅ Profile complete! Focus on natural conversation.";
-    }
-
-    const instructions: string[] = [];
-
-    if (missingInfo.includes("name")) {
-      instructions.push("- Ask for their name early in conversation: 'What should I call you?'");
-    }
-
-    if (missingInfo.includes("native/speaking languages")) {
-      instructions.push("- Ask about their native or proficient language(s).");
-    }
-
-    if (missingInfo.includes("learning languages")) {
-      instructions.push("- Ask what language(s) they want to learn.");
-    }
-
-    if (missingInfo.some(info => info.includes("level"))) {
-      instructions.push("- Ask about their language level in the learning language.");
-    }
-
-    if (missingInfo.includes("timezone/location")) {
-      instructions.push("- Ask about approximate location for the time zone");
-    }
-
-    instructions.push(`
-⚠️ PRIORITY: Ask for the most important missing info (${missingInfo.join(', ')}) in the first few messages.
-📋 ASK ONE QUESTION AT A TIME - don't overwhelm the user with multiple questions at once.`);
-
-    return instructions.join('\n');
   }
 }

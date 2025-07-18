@@ -122,12 +122,6 @@ export class SchedulerService {
     return DateTime.fromFormat(times[0], 'HH:mm', { zone: tz, setZone: true }).plus({ days: 1 });
   }
 
-  // Manual methods for testing
-  // async triggerDailyMessages(): Promise<void> {
-  //   logger.info("Manually triggering daily messages");
-  //   await this.sendDailyMessages();
-  // }
-
   async triggerNightlyDigests(): Promise<void> {
     logger.info("TODO Manually triggering nightly digests");
     //await this.createNightlyDigests();

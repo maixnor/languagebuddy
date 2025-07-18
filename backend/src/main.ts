@@ -21,6 +21,8 @@ import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
 import { handleUserCommand } from './user-commands';
+import { getNextMissingField, getPromptForField } from './util/info-gathering';
+import { getMissingProfileFieldsReflective } from './util/profile-reflection';
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -236,17 +238,6 @@ app.get("/analytics/feedback", async (req: any, res: any) => {
   } catch (error) {
     logger.error({ err: error }, "Error getting feedback analytics");
     res.status(500).json({ error: "Failed to get feedback analytics" });
-  }
-});
-
-// Manual scheduler triggers (for testing)
-app.post("/admin/trigger-daily-messages", async (req: any, res: any) => {
-  try {
-    await schedulerService.triggerDailyMessages();
-    res.json({ message: "Daily messages triggered successfully" });
-  } catch (error) {
-    logger.error({ err: error }, "Error triggering daily messages");
-    res.status(500).json({ error: "Failed to trigger daily messages" });
   }
 });
 
