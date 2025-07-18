@@ -77,12 +77,12 @@ export class SchedulerService {
     }
   }
 
-  private calculateNextPushTime(subscriber: any): DateTime | undefined {
+  public calculateNextPushTime(subscriber: any, nowOverride?: DateTime): DateTime | undefined {
     // Determine user timezone
     const tz = subscriber.profile.timezone || 'UTC';
     const prefs = subscriber.metadata.messagingPreferences;
     const windows = config.features.dailyMessages.defaultWindows;
-    const now = DateTime.now().setZone(tz);
+    const now = nowOverride ? nowOverride.setZone(tz) : DateTime.now().setZone(tz);
     let next: DateTime | undefined;
     if (!prefs || !prefs.type) {
       // Default: morning

@@ -11,8 +11,8 @@
     "dev:cli": "tsc -w & USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response nodemon dist/src/main.js",
     "cli": "node ../cli/chat-cli.js",
     "lint": "eslint . --ext .ts",
-    "test": "node --test --require tsx/cjs tests/**/*.test.ts",
-    "test:watch": "node --test --watch --require tsx/cjs tests/**/*.test.ts",
+    "test": "npx jest",
+    "test:watch": "npx jest --watch",
     "test:coverage": "node --test --experimental-test-coverage --require tsx/cjs tests/**/*.test.ts",
     "test:e2e": "RUN_E2E_TESTS=true node --test --require tsx/cjs tests/**/*.e2e.test.ts --timeout 120000"
   },
@@ -27,6 +27,7 @@
     "express": "^4.19.2",
     "ioredis": "^5.6.1",
     "js-yaml": "^4.1.0",
+    "luxon": "^3.7.1",
     "node-cron": "^4.1.0",
     "openai": "^4.73.0",
     "pino": "^9.7.0",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@testcontainers/redis": "^11.0.0",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/luxon": "^3.6.2",
     "@types/node": "^20.12.12",
@@ -46,8 +48,10 @@
     "@typescript-eslint/eslint-plugin": "^7.10.0",
     "@typescript-eslint/parser": "^7.10.0",
     "eslint": "^8.57.0",
+    "jest": "^30.0.4",
     "nodemon": "^3.1.0",
     "testcontainers": "^11.0.0",
+    "ts-jest": "^29.4.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.5"
   }
