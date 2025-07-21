@@ -1,15 +1,17 @@
-import { tool } from "@langchain/core/tools";
+import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { logger } from '../config';
 import { FeedbackEntry } from '../types';
 import { FeedbackService } from '../services/feedback-service';
+import { getContextVariable } from "@langchain/core/context";
 
+// @ts-ignore
 export const collectFeedbackTool = tool(
-  async ({ originalMessage, userFeedback, userPhone }: { 
+  async ({ originalMessage, userFeedback }: { 
     originalMessage: string, 
     userFeedback: string, 
-    userPhone: string 
   }) => {
+    const userPhone = getContextVariable('phone');
     try {
       const feedbackService = FeedbackService.getInstance();
       const feedbackEntry: FeedbackEntry = {
@@ -35,7 +37,6 @@ export const collectFeedbackTool = tool(
     schema: z.object({
       originalMessage: z.string(),
       userFeedback: z.string(),
-      userPhone: z.string(),
     }),
   }
 );

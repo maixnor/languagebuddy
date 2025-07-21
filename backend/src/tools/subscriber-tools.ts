@@ -5,6 +5,7 @@ import { logger } from "../config";
 import z from "zod";
 import {getContextVariable} from "@langchain/core/context";
 
+// @ts-ignore
 export const updateSubscriberTool = tool(
   async ({ updates }: {
     updates: Partial<Subscriber>
