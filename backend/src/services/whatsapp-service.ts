@@ -119,14 +119,14 @@ export class WhatsAppService {
       });
 
       if (!response.ok) {
-        logger.warn({ statusCode: response.status }, "Failed to send message to CLI tool");
+        logger.error({ statusCode: response.status }, "Failed to send message to CLI tool");
         return false;
       }
 
       logger.info("Message sent to CLI tool successfully");
       return true;
     } catch (error) {
-      logger.warn({ err: error }, "Error sending message to CLI tool");
+      logger.error({ err: error }, "Error sending message to CLI tool");
       return false;
     }
   }
@@ -181,8 +181,8 @@ export class WhatsAppService {
     }
 
     try {
-      // Send typing indicator
-      const response = await fetch(
+      // Send 'typing_on' status
+      let response = await fetch(
         `https://graph.facebook.com/v18.0/${this.phoneId}/messages`,
         {
           method: "POST",
@@ -194,22 +194,41 @@ export class WhatsAppService {
             messaging_product: "whatsapp",
             recipient_type: "individual",
             to: toPhone,
-            type: "text",
-            text: {
-              preview_url: false,
-              body: "typing..."
-            }
+            status: "typing"
           })
         }
       );
 
       if (!response.ok) {
-        logger.warn({ phone: toPhone }, "Failed to send typing indicator");
+        logger.error({ phone: toPhone, status: response.status, statusText: response.statusText }, "Failed to send typing_on indicator");
         return false;
       }
 
-      // Wait for specified duration
-      await new Promise(resolve => setTimeout(resolve, Math.min(durationMs, 10000))); // Cap at 10 seconds
+      // Wait for specified duration (max 10 seconds)
+      await new Promise(resolve => setTimeout(resolve, Math.min(durationMs, 10000)));
+
+      // Send 'typing_off' status
+      response = await fetch(
+        `https://graph.facebook.com/v18.0/${this.phoneId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${this.token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: toPhone,
+            status: "idle"
+          })
+        }
+      );
+
+      if (!response.ok) {
+        logger.error({ phone: toPhone, status: response.status, statusText: response.statusText }, "Failed to send typing_off indicator");
+        return false;
+      }
 
       logger.debug({ phone: toPhone, durationMs }, "Typing indicator sent");
       return true;

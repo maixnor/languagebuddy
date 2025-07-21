@@ -79,6 +79,8 @@ app.post("/initiate", async (req: any, res: any) => {
     logger.info({ phone }, "/initiate: User has paid. Proceeding with initiation.");
   }
 
+  // TODO TESTING NEEDS TO BE DONE FOR SCHEDULING AND DYNAMIC INFORMATION GATHERING
+
   try {
     const selectedPrompt = subscriberService.getDailySystemPrompt(subscriber);
     await languageBuddyAgent.clearConversation(subscriber.connections.phone);
@@ -113,12 +115,6 @@ app.post("/webhook", async (req: any, res: any) => {
     return res.sendStatus(400);
   }
 
-  if (await whatsappDeduplicationService.isThrottled(message.from)) {
-    logger.info({ phone: message.from }, 'User is throttled, message ignored.');
-    await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
-    return res.sendStatus(200);
-  }
-
   if (message?.type !== "text") {
     logger.info(message.type, "unsupported type of message")
     await whatsappService.sendMessage(message.from, "I currently only support text messages. Please send a text message to continue.");
@@ -137,14 +133,28 @@ app.post("/webhook", async (req: any, res: any) => {
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
   if (await handleUserCommand(subscriber!, message.text!.body) !== 'nothing') {
+    await whatsappService.markMessageAsRead(message.id);
     return res.sendStatus(200);
   }
   try {
     // TODO add throttling to non-paying users here, even before sending requests to GPT
+    if (await whatsappDeduplicationService.isThrottled(message.from)) {
+      logger.info({ phone: message.from }, 'User is throttled, message ignored.');
+      await whatsappService.sendMessage(message.from, "You are sending messages too quickly. Please wait a few seconds between messages.");
+      return res.sendStatus(200);
+    }
+
+    let missingField = getNextMissingField(subscriber!)
+    if (missingField != null) {
+      languageBuddyAgent.oneShotMessage(getPromptForField(missingField), subscriber!.profile.speakingLanguages[0].languageName || "english")
+    }
+
     await handleTextMessage(message);
   }
   catch (error) {
     res.sendStatus(400).send("Unexpected error while processing webhook.");
+    whatsappService.sendMessage(message.from, "An unexpected error occurred while processing your message. Please try again later.");
+    logger.error({ err: error, message, health: getHealth() }, "Error processing webhook message");
   }
   res.sendStatus(200);
 });
@@ -186,8 +196,6 @@ const handleTextMessage = async (message: any) => {
       await handleNewSubscriber(userPhone);
       return;
     }
-
-    logger.warn(subscriber);
 
     const startTime = Date.now();
 
@@ -291,18 +299,20 @@ app.get("/subscriber/:phone", async (req: any, res: any) => {
   }
 });
 
-// Health check endpoint
-app.get("/health", (req: any, res: any) => {
-  res.json({ 
-    status: "healthy", 
+function getHealth() {
+  return {
     timestamp: new Date().toISOString(),
     services: {
       redis: redisClient.status,
       whatsapp: whatsappService.isInitialized() ? "running" : "failed", 
-      daily_messages: config.features.dailyMessages.enabled ? `${config.features.dailyMessages.localTime} local time` : 'disabled',
       openai: { model: llm.model, temperature: llm.temperature }
     }
-  });
+  }
+}
+
+// Health check endpoint
+app.get("/health", (req: any, res: any) => {
+  res.json(getHealth());
 });
 
 // WhatsApp webhook verification

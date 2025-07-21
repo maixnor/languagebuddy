@@ -17,7 +17,7 @@ export class StripeService {
 
   initialize(apiKey: string): void {
     if (!apiKey) {
-      logger.warn("STRIPE_SECRET_KEY is not set. Stripe integration will be disabled.");
+      logger.error("STRIPE_SECRET_KEY is not set. Stripe integration will be disabled.");
       this.stripe = null;
       return;
     }

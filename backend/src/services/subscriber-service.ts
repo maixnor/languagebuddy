@@ -80,7 +80,7 @@ export class SubscriberService {
       // Re-check missing fields after update (reflection-based)
       const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
       if (missingFields.length > 0) {
-        logger.info({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
+        logger.trace({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
       }
 
       logger.info({updates: updates}, `Updated user ${phoneNumber} with this info:`)
@@ -106,7 +106,7 @@ export class SubscriberService {
         }
       }
 
-      logger.info({ count: subscribers.length }, "Retrieved all subscribers");
+      logger.trace({ count: subscribers.length }, "Retrieved all subscribers");
       return subscribers;
     } catch (error) {
       logger.error({ err: error }, "Error getting all subscribers");

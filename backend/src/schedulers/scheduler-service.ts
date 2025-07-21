@@ -41,10 +41,8 @@ export class SchedulerService {
   private startPushMessageScheduler(): void {
     // Run every minute
     cron.schedule('* * * * *', async () => {
-      logger.info('Running push message scheduler');
       await this.sendPushMessages();
     });
-    logger.info('Push message scheduler started (every minute)');
   }
 
   private async sendPushMessages(): Promise<void> {
@@ -71,7 +69,6 @@ export class SchedulerService {
           logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
         }
       }
-      logger.info("Push message sending completed");
     } catch (error) {
       logger.error({ err: error }, "Error during push message broadcast");
     }
@@ -80,7 +77,7 @@ export class SchedulerService {
   public calculateNextPushTime(subscriber: any, nowOverride?: DateTime): DateTime | undefined {
     // Determine user timezone
     const tz = subscriber.profile.timezone || 'UTC';
-    const prefs = subscriber.metadata.messagingPreferences;
+    const prefs = subscriber.profile.messagingPreferences;
     const windows = config.features.dailyMessages.defaultWindows;
     const now = nowOverride ? nowOverride.setZone(tz) : DateTime.now().setZone(tz);
     let next: DateTime | undefined;

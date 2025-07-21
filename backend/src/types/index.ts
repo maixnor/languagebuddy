@@ -13,18 +13,18 @@ export interface Subscriber {
   }
   profile: {
     name: string;
-    speakingLanguages?: Language[];
+    speakingLanguages: Language[];
     learningLanguages?: Language[];
     timezone?: string;
+    messagingPreferences?: {
+      type: 'morning' | 'midday' | 'evening' | 'fixed';
+      times?: string[]; // for fixed
+    };
     // favoriteColor?: string;
   }
   metadata: {
     digests: Digest[];
     personality: string;
-    messagingPreferences?: {
-      type: 'morning' | 'midday' | 'evening' | 'fixed';
-      times?: string[]; // for fixed
-    };
   }
   isPremium?: boolean;
   lastActiveAt?: Date;

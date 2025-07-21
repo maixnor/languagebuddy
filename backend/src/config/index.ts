@@ -55,7 +55,6 @@ export const config = {
   features: {
     dailyMessages: {
       enabled: true,
-      localTime: '12:07',
       defaultWindows: {
         morning: { start: '07:00', end: '10:00' },
         midday: { start: '11:00', end: '14:00' },

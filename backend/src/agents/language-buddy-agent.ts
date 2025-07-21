@@ -77,4 +77,19 @@ export class LanguageBuddyAgent {
       return false;
     }
   }
+
+  async oneShotMessage(systemPrompt: string, language: string): Promise<string> {
+    // Compose a system prompt that instructs the LLM to respond in the target language
+    const prompt = `${systemPrompt}\nONLY RESPONSE IN THE LANGUAGE ${language}.`;
+    try {
+      const result = await this.agent.invoke(
+        { messages: [new SystemMessage(prompt)] },
+        { configurable: {} }
+      );
+      return result.messages[result.messages.length - 1].text || "oneShotMessage() failed";
+    } catch (error) {
+      logger.error({ err: error }, "Error in oneShotMessage");
+      return "An error occurred while generating the message.";
+    }
+  }
 }

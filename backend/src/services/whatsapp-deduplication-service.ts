@@ -16,7 +16,7 @@ export class WhatsappDeduplicationService {
     const key = `whatsapp:msgid:${messageId}`;
     const exists = await this.redis.exists(key);
     if (exists) {
-      logger.warn({ messageId }, 'Duplicate message detected');
+      logger.trace({ messageId }, 'Duplicate message detected');
       return true;
     }
     await this.redis.set(key, '1', 'EX', MESSAGE_ID_TTL_SECONDS);
@@ -27,7 +27,7 @@ export class WhatsappDeduplicationService {
     const key = `whatsapp:throttle:${phone}`;
     const exists = await this.redis.exists(key);
     if (exists) {
-      logger.warn({ phone }, 'User is throttled');
+      logger.trace({ phone }, 'User is throttled');
       return true;
     }
     await this.redis.set(key, '1', 'EX', THROTTLE_TTL_SECONDS);

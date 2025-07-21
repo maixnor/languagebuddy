@@ -13,6 +13,8 @@ export function getNextMissingField(subscriber: Subscriber): string | null {
 /**
  * Returns a prompt for the next missing field
  */
+// TODO change to use reflection of the field and provide a good prompt to find out the info of the user
+// should also work with enums such that the llm can target specifically those values
 export function getPromptForField(field: string): string {
   switch (field) {
     case 'name':
