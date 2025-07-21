@@ -152,11 +152,12 @@ app.post("/webhook", async (req: any, res: any) => {
     await handleTextMessage(message);
   }
   catch (error) {
-    res.sendStatus(400).send("Unexpected error while processing webhook.");
     whatsappService.sendMessage(message.from, "An unexpected error occurred while processing your message. Please try again later.");
     logger.error({ err: error, message, health: getHealth() }, "Error processing webhook message");
+    res.sendStatus(400);
+    return;
   }
-  res.sendStatus(200);
+  //res.sendStatus(200);
 });
 
 async function handleNewSubscriber(userPhone: string) {
