@@ -2,6 +2,7 @@ import Redis from 'ioredis';
 import { Subscriber } from '../types';
 import { logger } from '../config';
 import { getMissingProfileFieldsReflective } from '../util/profile-reflection';
+import { DateTime } from 'luxon';
 
 export class SubscriberService {
   private static instance: SubscriberService;
@@ -60,6 +61,7 @@ export class SubscriberService {
       },
       isPremium: false,
       lastActiveAt: new Date(),
+      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toISO(),
       ...initialData
     };
 
