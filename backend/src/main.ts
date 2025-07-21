@@ -146,7 +146,11 @@ app.post("/webhook", async (req: any, res: any) => {
 
     let missingField = getNextMissingField(subscriber!)
     if (missingField != null) {
-      languageBuddyAgent.oneShotMessage(getPromptForField(missingField), subscriber!.profile.speakingLanguages[0].languageName || "english")
+      if (subscriber!.profile.speakingLanguages[0] != null) {
+        languageBuddyAgent.oneShotMessage(getPromptForField(missingField), subscriber!.profile.speakingLanguages[0].languageName || "english")
+      } else {
+        languageBuddyAgent.oneShotMessage(getPromptForField("speakinglanguages"), "english")
+      }
     }
 
     await handleTextMessage(message);
