@@ -50,7 +50,7 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
-        if (!subscriber.nextPushMessageAt) continue;
+        if (!subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = DateTime.now().plus({ hours: 2 }).toUTC().toISO();
         const nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
         if (nowUtc < nextPush) continue;
         // Send message

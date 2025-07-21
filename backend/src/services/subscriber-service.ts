@@ -49,6 +49,14 @@ export class SubscriberService {
       metadata: {
         digests: [],
         personality: "A friendly language buddy talking about everything",
+        streakData: {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastActiveDate: new Date(),
+        },
+        predictedChurnRisk: 0,
+        engagementScore: 0,
+        difficultyPreference: "moderate"
       },
       isPremium: false,
       lastActiveAt: new Date(),
@@ -56,7 +64,7 @@ export class SubscriberService {
     };
 
     // Check if profile is missing required fields (reflection-based)
-    const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
+    const missingFields = getMissingProfileFieldsReflective(subscriber.profile!);
     if (missingFields.length > 0) {
       logger.info({ missingFields, phoneNumber }, "Subscriber created with missing profile fields");
     }
@@ -136,8 +144,8 @@ export class SubscriberService {
   }
 
   public getDailySystemPrompt(subscriber: Subscriber): string {
-    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
+    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
     const objectives = subscriber.profile.learningLanguages
       ?.flatMap(l => l.currentObjectives || [])
       .filter(obj => !!obj);
@@ -197,8 +205,8 @@ Be natural and conversational. Proactively gather missing information but weave 
 
   public getDefaultSystemPrompt(subscriber: Subscriber): string {
     const missingInfo = this.identifyMissingInfo(subscriber);
-    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.level || 'unknown level'})`).join(', ') || 'Not specified';
+    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
+    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
 
     let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
 
@@ -263,13 +271,13 @@ Be natural and conversational. Proactively gather missing information but weave 
     }
 
     subscriber.profile.learningLanguages?.forEach((lang, index) => {
-      if (!lang.level) {
+      if (!lang.overallLevel) {
         missing.push(`${lang.languageName} level`);
       }
     });
 
     subscriber.profile.speakingLanguages?.forEach((lang, index) => {
-      if (!lang.level) {
+      if (!lang.overallLevel) {
         missing.push(`${lang.languageName} level`);
       }
     });

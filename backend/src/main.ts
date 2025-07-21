@@ -20,7 +20,7 @@ import {Subscriber, WebhookMessage} from './types';
 import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
-import { handleUserCommand } from './user-commands';
+import { handleUserCommand } from './util/user-commands';
 import { getNextMissingField, getPromptForField } from './util/info-gathering';
 import { getMissingProfileFieldsReflective } from './util/profile-reflection';
 
