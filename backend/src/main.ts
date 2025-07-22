@@ -147,9 +147,18 @@ app.post("/webhook", async (req: any, res: any) => {
     let missingField = getNextMissingField(subscriber!)
     if (missingField != null) {
       if (subscriber!.profile.speakingLanguages[0] != null) {
-        languageBuddyAgent.oneShotMessage(getPromptForField(missingField), subscriber!.profile.speakingLanguages[0].languageName || "english")
+        languageBuddyAgent.oneShotMessage(
+          getPromptForField(missingField),
+          subscriber!.profile.speakingLanguages[0].languageName || "english",
+          subscriber!.connections.phone
+        );
       } else {
-        languageBuddyAgent.oneShotMessage(getPromptForField("speakinglanguages"), "english")
+        // not even the speakingLanguage is set
+        languageBuddyAgent.oneShotMessage(
+          getPromptForField("speakinglanguages"),
+          "english",
+          subscriber!.connections.phone
+        )
       }
     }
 
@@ -168,16 +177,7 @@ async function handleNewSubscriber(userPhone: string) {
   logger.info({userPhone}, "New user messaging. Checking Stripe status.");
   trackEvent("new_user_detected", {userPhone: userPhone.slice(-4)});
 
-  const subscriber = await subscriberService.getSubscriber(userPhone) || await subscriberService.createSubscriber(userPhone, {});
-  const hasPaid = await stripeService.checkSubscription(userPhone);
-
-  if (!hasPaid && false) { // TODO add the payment link sending
-    logger.info({userPhone}, "User has not paid. Sending payment link.");
-    trackEvent("payment_required", {userPhone: userPhone.slice(-4)});
-    await whatsappService.sendMessage(userPhone, "Welcome! To use me as your language buddy please complete your registration here: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nI am still in testing!\n\n\nWillkommen! Um mich zu verwenden registriere dich bitte hier: https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01 \nIch bin noch im Test-Stadium!");
-    return;
-  }
-
+  const subscriber = await subscriberService.createSubscriber(userPhone, {});
   const welcomeMessage = await languageBuddyAgent.initiateConversation(subscriber, subscriberService.getDefaultSystemPrompt(subscriber), 'Hi. I am new to this service. Please explain to me what you can do for me?');
   await whatsappService.sendMessage(userPhone, welcomeMessage || "Please try again later, my resources are currently limited and I cannot take in new users. I am still in testing!");
   trackEvent("welcome_sent", {userPhone: userPhone.slice(-4)});

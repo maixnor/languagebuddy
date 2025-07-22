@@ -78,13 +78,14 @@ export class LanguageBuddyAgent {
     }
   }
 
-  async oneShotMessage(systemPrompt: string, language: string): Promise<string> {
+  // TODO don't save oneShotMessages to the normal conversational thread
+  async oneShotMessage(systemPrompt: string, language: string, phone: string): Promise<string> {
     // Compose a system prompt that instructs the LLM to respond in the target language
-    const prompt = `${systemPrompt}\nONLY RESPONSE IN THE LANGUAGE ${language}.`;
+    const prompt = `${systemPrompt}\nONLY RESPOND IN THE LANGUAGE ${language}.`;
     try {
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(prompt)] },
-        { configurable: {} }
+        { configurable: { thread_id: phone } }
       );
       return result.messages[result.messages.length - 1].text || "oneShotMessage() failed";
     } catch (error) {
