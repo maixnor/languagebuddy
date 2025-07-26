@@ -66,7 +66,7 @@ export const updateOnboardingProfile = new DynamicStructuredTool({
 
     await onboardingService.updateOnboardingState(phone, {
       tempData,
-      currentStep: 'language_switching'
+      currentStep: 'target_language'
     });
 
     logger.info({ phone, name, nativeLanguages, timezone }, "Updated onboarding profile");

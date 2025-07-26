@@ -3,7 +3,7 @@ import { logger } from '../config';
 
 export interface OnboardingState {
   phone: string;
-  currentStep: 'gdpr_consent' | 'profile_gathering' | 'language_switching' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
+  currentStep: 'gdpr_consent' | 'profile_gathering' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
   gdprConsented: boolean;
   tempData?: {
     name?: string;
@@ -40,7 +40,7 @@ export class OnboardingService {
       gdprConsented: false
     };
     
-    await this.redis.set(`onboarding:${phone}`, JSON.stringify(onboardingState), 'EX', 3600 * 24); // 24 hours expiry
+    await this.redis.set(`onboarding:${phone}`, JSON.stringify(onboardingState), 'EX', 60 * 60 * 24); // 24 hours expiry
     logger.info({ phone }, "Started onboarding process");
   }
 
@@ -62,7 +62,7 @@ export class OnboardingService {
       }
 
       const updatedState = { ...currentState, ...updates };
-      await this.redis.set(`onboarding:${phone}`, JSON.stringify(updatedState), 'EX', 3600 * 24);
+      await this.redis.set(`onboarding:${phone}`, JSON.stringify(updatedState), 'EX', 60 * 60 * 24);
       logger.info({ phone, updates }, "Updated onboarding state");
     } catch (error) {
       logger.error({ err: error, phone, updates }, "Error updating onboarding state");
