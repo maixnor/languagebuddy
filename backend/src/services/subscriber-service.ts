@@ -290,4 +290,41 @@ Be natural and conversational. Proactively gather missing information but weave 
 
     return missing;
   }
+
+  async addLanguageDeficiencyToSubscriber(
+    phoneNumber: string, 
+    languageName: string, 
+    deficiency: Omit<import('../types').LanguageDeficiency, 'firstDetected' | 'lastOccurrence'>
+  ): Promise<void> {
+    try {
+      const subscriber = await this.getSubscriber(phoneNumber);
+      if (!subscriber) {
+        throw new Error(`Subscriber with phone ${phoneNumber} not found`);
+      }
+
+      // Find the language in speaking or learning languages
+      let targetLanguage = subscriber.profile.learningLanguages?.find(lang => lang.languageName === languageName);
+
+      if (!targetLanguage) {
+        throw new Error(`Language ${languageName} not found in subscriber's profile`);
+      }
+
+      // Create the complete deficiency object
+      const completeDeficiency = {
+        ...deficiency,
+        firstDetected: new Date(),
+        lastOccurrence: new Date()
+      };
+
+      // Add the deficiency
+      targetLanguage.deficiencies.push(completeDeficiency);
+
+      // Update the subscriber
+      await this.cacheSubscriber(subscriber);
+      logger.info({ phoneNumber, languageName, deficiency: completeDeficiency }, "Added language deficiency to subscriber");
+    } catch (error) {
+      logger.error({ err: error, phoneNumber, languageName, deficiency }, "Error adding language deficiency");
+      throw error;
+    }
+  }
 }

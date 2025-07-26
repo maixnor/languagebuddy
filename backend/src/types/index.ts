@@ -75,7 +75,17 @@ export interface Subscriber {
   }
   isPremium?: boolean;
   lastActiveAt?: Date;
-  onboarding?: 'not_started' | 'in_progress' | 'completed';
+  onboarding?: {
+    status: 'not_started' | 'gdpr_pending' | 'phone_saved' | 'profile_gathering' | 'language_switching' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
+    gdprConsent?: boolean;
+    currentStep?: string;
+    assessmentData?: {
+      conversationStarted: boolean;
+      messagesCount: number;
+      languageDeficiencies: string[];
+      skillLevel?: 'beginner' | 'elementary' | 'intermediate' | 'upper_intermediate' | 'advanced' | 'proficient';
+    };
+  };
   nextPushMessageAt?: string; // ISO string in UTC
 }
 

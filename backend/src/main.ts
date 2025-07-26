@@ -11,6 +11,7 @@ import "whatsapp-cloud-api-express";
 
 import { LanguageBuddyAgent } from './agents/language-buddy-agent';
 import { SubscriberService } from './services/subscriber-service';
+import { OnboardingService } from './services/onboarding-service';
 import { FeedbackService } from './services/feedback-service';
 import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
@@ -23,6 +24,8 @@ import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-
 import { handleUserCommand } from './util/user-commands';
 import { getNextMissingField, getPromptForField } from './util/info-gathering';
 import { getMissingProfileFieldsReflective } from './util/profile-reflection';
+import { generateOnboardingSystemPrompt, generateRegularSystemPrompt } from './util/system-prompts';
+import { initializeOnboardingTools } from './tools/onboarding-tools';
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -47,8 +50,12 @@ const llm = new ChatOpenAI({
 });
 
 const subscriberService = SubscriberService.getInstance(redisClient);
+const onboardingService = OnboardingService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
 const whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(redisClient);
+
+// Initialize onboarding tools with Redis client
+initializeOnboardingTools(redisClient);
 
 export const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
@@ -121,17 +128,46 @@ app.post("/webhook", async (req: any, res: any) => {
   }
 
   let existingSubscriber = await subscriberService.getSubscriber(message.from);
-  if (!existingSubscriber) {
-    if (message.text!.body.toLowerCase().indexOf("accept") >= 0) {
-      await subscriberService.createSubscriber(message.from);
-    } else {
-      whatsappService.sendMessage(message.from , "Hi. I'm an automated system. I save your phone number and your name. You can find more info in the privacy statement at https://languagebuddy-test.maixnor.com/static/privacy.html. If you accept this reply with 'ACCEPT'");
-      return;
+  const isInOnboarding = await onboardingService.isInOnboarding(message.from);
+
+  // Handle new users and onboarding flow
+  if (!existingSubscriber && !isInOnboarding) {
+    // Start onboarding for completely new users
+    await onboardingService.startOnboarding(message.from);
+    const onboardingState = await onboardingService.getOnboardingState(message.from);
+    if (onboardingState) {
+      const systemPrompt = generateOnboardingSystemPrompt(onboardingState);
+      const welcomeMessage = await languageBuddyAgent.initiateConversation(
+        { connections: { phone: message.from } } as Subscriber, 
+        systemPrompt, 
+        message.text!.body
+      );
+      await whatsappService.sendMessage(message.from, welcomeMessage);
     }
+    return res.sendStatus(200);
+  }
+
+  // Handle users still in onboarding
+  if (isInOnboarding) {
+    const onboardingState = await onboardingService.getOnboardingState(message.from);
+    if (onboardingState) {
+      const systemPrompt = generateOnboardingSystemPrompt(onboardingState);
+      const response = await languageBuddyAgent.processUserMessage(
+        { connections: { phone: message.from } } as Subscriber,
+        message.text!.body
+      );
+      await whatsappService.sendMessage(message.from, response);
+    }
+    return res.sendStatus(200);
   }
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
-  if (await handleUserCommand(subscriber!, message.text!.body) !== 'nothing') {
+  if (!subscriber) {
+    logger.error({ phone: message.from }, "Subscriber should exist at this point but doesn't");
+    return res.sendStatus(500);
+  }
+
+  if (await handleUserCommand(subscriber, message.text!.body) !== 'nothing') {
     await whatsappService.markMessageAsRead(message.id);
     return res.sendStatus(200);
   }
@@ -143,21 +179,26 @@ app.post("/webhook", async (req: any, res: any) => {
       return res.sendStatus(200);
     }
 
-    let missingField = getNextMissingField(subscriber!)
+    // For existing subscribers, use regular conversation flow
+    let missingField = getNextMissingField(subscriber)
     if (missingField != null) {
-      if (subscriber!.profile.speakingLanguages[0] != null) {
-        languageBuddyAgent.oneShotMessage(
+      if (subscriber.profile.speakingLanguages[0] != null) {
+        const response = await languageBuddyAgent.oneShotMessage(
           getPromptForField(missingField),
-          subscriber!.profile.speakingLanguages[0].languageName || "english",
-          subscriber!.connections.phone
+          subscriber.profile.speakingLanguages[0].languageName || "english",
+          subscriber.connections.phone
         );
+        await whatsappService.sendMessage(message.from, response);
+        return res.sendStatus(200);
       } else {
         // not even the speakingLanguage is set
-        languageBuddyAgent.oneShotMessage(
+        const response = await languageBuddyAgent.oneShotMessage(
           getPromptForField("speakinglanguages"),
           "english",
-          subscriber!.connections.phone
-        )
+          subscriber.connections.phone
+        );
+        await whatsappService.sendMessage(message.from, response);
+        return res.sendStatus(200);
       }
     }
 
@@ -172,16 +213,7 @@ app.post("/webhook", async (req: any, res: any) => {
   //res.sendStatus(200);
 });
 
-async function handleNewSubscriber(userPhone: string) {
-  logger.info({userPhone}, "New user messaging. Checking Stripe status.");
-  trackEvent("new_user_detected", {userPhone: userPhone.slice(-4)});
-
-  const subscriber = await subscriberService.createSubscriber(userPhone, {});
-  const welcomeMessage = await languageBuddyAgent.initiateConversation(subscriber, subscriberService.getDefaultSystemPrompt(subscriber), 'Hi. I am new to this service. Please explain to me what you can do for me?');
-  await whatsappService.sendMessage(userPhone, welcomeMessage || "Please try again later, my resources are currently limited and I cannot take in new users. I am still in testing!");
-  trackEvent("welcome_sent", {userPhone: userPhone.slice(-4)});
-  return;
-}
+// Removed handleNewSubscriber - now handled through onboarding flow
 
 const handleTextMessage = async (message: any) => {
   const userPhone = message.from;
@@ -197,7 +229,7 @@ const handleTextMessage = async (message: any) => {
   try {
     let subscriber = await subscriberService.getSubscriber(userPhone);
     if (!subscriber) {
-      await handleNewSubscriber(userPhone);
+      logger.error({ userPhone }, "Subscriber should exist at this point (handleTextMessage)");
       return;
     }
 
@@ -206,11 +238,11 @@ const handleTextMessage = async (message: any) => {
     let response = "";
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.error({ userPhone }, "No active conversation found, initiating new conversation");
-      const systemPrompt = subscriberService.getDefaultSystemPrompt(subscriber);
+      const systemPrompt = generateRegularSystemPrompt(subscriber);
       await languageBuddyAgent.clearConversation(subscriber.connections.phone);
-      response = await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, '');
+      response = await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, message.text.body);
     } else {
-      response = await languageBuddyAgent.processUserMessage(subscriber!, message.text.body);
+      response = await languageBuddyAgent.processUserMessage(subscriber, message.text.body);
     }
 
     const processingTime = Date.now() - startTime;
