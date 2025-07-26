@@ -1,19 +1,6 @@
 import Redis from 'ioredis';
 import { logger } from '../config';
-
-export interface OnboardingState {
-  phone: string;
-  currentStep: 'gdpr_consent' | 'profile_gathering' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
-  gdprConsented: boolean;
-  tempData?: {
-    name?: string;
-    nativeLanguages?: string[];
-    timezone?: string;
-    targetLanguage?: string;
-    assessmentStarted?: boolean;
-    messagesInAssessment?: number;
-  };
-}
+import { OnboardingState } from '../types';
 
 export class OnboardingService {
   private static instance: OnboardingService;

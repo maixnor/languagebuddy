@@ -1,4 +1,18 @@
 
+export interface OnboardingState {
+  phone: string;
+  currentStep: 'gdpr_consent' | 'profile_gathering' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
+  gdprConsented: boolean;
+  tempData?: {
+    name?: string;
+    nativeLanguages?: string[];
+    timezone?: string;
+    targetLanguage?: string;
+    assessmentStarted?: boolean;
+    messagesInAssessment?: number;
+  };
+}
+
 export interface LanguageSkillAssessment {
   skill: 'grammar' | 'vocabulary' | 'comprehension' | 'spelling' | 'punctuation' | 'text-coherence';
   level: 'beginner' | 'elementary' | 'intermediate' | 'upper-intermediate' | 'advanced' | 'proficient';

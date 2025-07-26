@@ -1,4 +1,4 @@
-import { OnboardingState } from '../services/onboarding-service';
+import { OnboardingState } from '../types';
 
 export function generateOnboardingSystemPrompt(onboardingState: OnboardingState): string {
   const { currentStep, gdprConsented, tempData } = onboardingState;
