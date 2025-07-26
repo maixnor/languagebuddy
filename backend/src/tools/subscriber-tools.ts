@@ -52,7 +52,7 @@ export const updateSubscriberTool = tool(
             level: z.string().optional(),
             currentObjectives: z.array(z.string()).optional()
           })).optional(),
-          timezone: z.string().optional(),
+          timezone: z.string().describe("A standard ISO 8601 time zone.").optional(),
         }).partial().optional(),
         metadata: z.object({
           messagingPreferences: z.object({
