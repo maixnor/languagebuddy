@@ -22,6 +22,7 @@ export class LanguageBuddyAgent {
   }
   async initiateConversation(subscriber: Subscriber, systemPrompt: string, humanMessage: string): Promise<string> {
     try {
+      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber: ${subscriber.profile.name}`);
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { configurable: { thread_id: subscriber.connections.phone }}
