@@ -46,6 +46,7 @@ export class SchedulerService {
   }
 
   private async sendPushMessages(): Promise<void> {
+    if (config.features.dailyMessages.enabled === false) return;
     try {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
