@@ -50,7 +50,7 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
-        if (!subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = DateTime.now().plus({ hours: 2 }).toUTC().toISO();
+        if (!subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = nowUtc.plus({hours: 2}).toISO();
         const nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
         if (nowUtc < nextPush) continue;
         // Send message
@@ -76,7 +76,12 @@ export class SchedulerService {
 
   public calculateNextPushTime(subscriber: any, nowOverride?: DateTime): DateTime | undefined {
     // Determine user timezone
-    const tz = subscriber.profile.timezone || 'UTC';
+    let tz = subscriber.profile.timezone || 'UTC';
+    // check if the time zone is not just some random string
+    if (!DateTime.local().setZone(tz).isValid) {
+      logger.warn({ timezone: tz }, "Invalid timezone for subscriber, defaulting to UTC");
+      tz = 'UTC';
+    }
     const prefs = subscriber.profile.messagingPreferences;
     const windows = config.features.dailyMessages.defaultWindows;
     const now = nowOverride ? nowOverride.setZone(tz) : DateTime.now().setZone(tz);
