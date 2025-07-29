@@ -235,7 +235,6 @@ const handleTextMessage = async (message: any) => {
     }
 
     const startTime = Date.now();
-
     let response = "";
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.info({ userPhone }, "No active conversation found, initiating new conversation");
