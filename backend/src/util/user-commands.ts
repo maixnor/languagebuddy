@@ -1,9 +1,14 @@
 import { Subscriber } from '../types';
-import { whatsappService } from '../main';
-import { languageBuddyAgent } from '../main';
 import { logger } from '../config';
+import { WhatsAppService } from '../services/whatsapp-service';
+import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 
-export async function handleUserCommand(subscriber: Subscriber, message: string) {
+export async function handleUserCommand(
+    subscriber: Subscriber, 
+    message: string,
+    whatsappService: WhatsAppService,
+    languageBuddyAgent: LanguageBuddyAgent
+) {
     if (message === 'ping' || message === '!ping') {
         await whatsappService.sendMessage(subscriber.connections.phone, "pong");
         return "ping";

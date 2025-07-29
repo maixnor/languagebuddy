@@ -168,7 +168,7 @@ app.post("/webhook", async (req: any, res: any) => {
     return res.sendStatus(500);
   }
 
-  if (await handleUserCommand(subscriber, message.text!.body) !== 'nothing') {
+  if (await handleUserCommand(subscriber, message.text!.body, whatsappService, languageBuddyAgent) !== 'nothing') {
     await whatsappService.markMessageAsRead(message.id);
     return res.sendStatus(200);
   }
