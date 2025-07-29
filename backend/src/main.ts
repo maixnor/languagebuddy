@@ -26,6 +26,7 @@ import { getNextMissingField, getPromptForField } from './util/info-gathering';
 import { getMissingProfileFieldsReflective } from './util/profile-reflection';
 import { generateOnboardingSystemPrompt, generateRegularSystemPrompt } from './util/system-prompts';
 import { initializeOnboardingTools } from './tools/onboarding-tools';
+import { getFirstLearningLanguage } from "./util/subscriber-utils";
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -237,9 +238,8 @@ const handleTextMessage = async (message: any) => {
 
     let response = "";
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
-      logger.error({ userPhone }, "No active conversation found, initiating new conversation");
-      const systemPrompt = generateRegularSystemPrompt(subscriber);
-      await languageBuddyAgent.clearConversation(subscriber.connections.phone);
+      logger.info({ userPhone }, "No active conversation found, initiating new conversation");
+      const systemPrompt = generateRegularSystemPrompt(subscriber, getFirstLearningLanguage(subscriber)); // TODO alternate every few days
       response = await languageBuddyAgent.initiateConversation(subscriber, systemPrompt, message.text.body);
     } else {
       response = await languageBuddyAgent.processUserMessage(subscriber, message.text.body);

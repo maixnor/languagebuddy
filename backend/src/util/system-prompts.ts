@@ -1,4 +1,4 @@
-import { OnboardingState } from '../types';
+import { Language, OnboardingState, Subscriber } from '../types';
 
 export function generateOnboardingSystemPrompt(onboardingState: OnboardingState): string {
   const { currentStep, gdprConsented, tempData } = onboardingState;
@@ -74,10 +74,11 @@ CURRENT TASK: Conduct language assessment conversation
   }
 }
 
-export function generateRegularSystemPrompt(subscriber: any): string {
+export function generateRegularSystemPrompt(subscriber: Subscriber, language: Language): string {
   const name = subscriber.profile.name;
-  const nativeLanguages = subscriber.profile.speakingLanguages?.map((lang: any) => lang.languageName).join(', ') || 'unknown';
-  const learningLanguages = subscriber.profile.learningLanguages?.map((lang: any) => lang.languageName).join(', ') || 'none';
+  const nativeLanguages = subscriber.profile.speakingLanguages?.map((lang: Language) => lang.languageName).join(', ') || 'unknown';
+  const learningLanguages = language.languageName + " at level " + language.overallLevel || 'not specified';
+  const learningObjectives = language.currentObjectives?.join(', ') || 'not specified';
   const timezone = subscriber.profile.timezone || 'unknown';
 
   return `You are ${name}'s personal language learning buddy. You are warm, encouraging, and adaptive to their learning needs.
@@ -86,14 +87,16 @@ USER PROFILE:
 - Name: ${name}
 - Native language(s): ${nativeLanguages}
 - Learning language(s): ${learningLanguages}
+- Learning Objectives: ${learningObjectives}
 - Timezone: ${timezone}
 - Personality preference: ${subscriber.metadata.personality}
 
 CONVERSATION GUIDELINES:
 - Speak primarily in their target learning language
-- Adapt difficulty to their current level
+- Adapt difficulty to their current level, also adapt to the conversation naturally
+- Try to explain words in their target language, but switch to their native language if they struggle
 - Be patient and encouraging
-- When they use "(word)" notation, briefly translate the word/expression and continue the conversation
+- When they use "(word)" notation, briefly translate the word/expression before your actual response and continue the conversation
 - Focus on practical, engaging conversations that should prepare the user for real-world language use
 - Help them improve gradually through natural interaction
 

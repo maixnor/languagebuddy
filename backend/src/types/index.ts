@@ -63,7 +63,7 @@ export interface Subscriber {
   profile: {
     name: string;
     speakingLanguages: Language[];
-    learningLanguages?: Language[];
+    learningLanguages: Language[];
     timezone?: string;
     messagingPreferences?: {
       type: 'morning' | 'midday' | 'evening' | 'fixed';
