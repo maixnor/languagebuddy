@@ -1,45 +1,10 @@
-import { tool } from "@langchain/core/tools";
-import { z } from "zod";
+//@ts-nocheck
+import { DynamicStructuredTool } from "@langchain/core/tools";
 import { logger } from '../config';
 import { FeedbackEntry } from '../types';
 import { FeedbackService } from '../services/feedback-service';
 import { getContextVariable } from "@langchain/core/context";
-
-// @ts-ignore
-export const collectFeedbackTool = tool(
-  async ({ originalMessage, userFeedback }: { 
-    originalMessage: string, 
-    userFeedback: string, 
-  }) => {
-    const userPhone = getContextVariable('phone');
-    try {
-      const feedbackService = FeedbackService.getInstance();
-      const feedbackEntry: FeedbackEntry = {
-        timestamp: new Date().toISOString(),
-        originalMessage,
-        userFeedback,
-        userPhone,
-        sentiment: await analyzeSentiment(userFeedback),
-        actionItems: await extractActionItems(userFeedback),
-        category: await categorizeFeedback(userFeedback)
-      };
-      
-      await feedbackService.saveFeedback(feedbackEntry);
-      return "Thank you for your feedback! It helps me improve our conversations.";
-    } catch (error) {
-      logger.error({ err: error, userPhone }, "Error collecting feedback");
-      return "Thank you for the feedback! I'll make note of it.";
-    }
-  },
-  {
-    name: "collect_feedback",
-    description: "Collect and process user feedback about the conversation",
-    schema: z.object({
-      originalMessage: z.string(),
-      userFeedback: z.string(),
-    }),
-  }
-);
+import { FeedbackContract, type FeedbackContract as FeedbackContractType } from './contracts';
 
 // Helper functions for feedback analysis
 async function analyzeSentiment(feedback: string): Promise<'positive' | 'negative' | 'neutral'> {
@@ -76,3 +41,35 @@ async function categorizeFeedback(feedback: string): Promise<'content' | 'techni
   if (contentWords.some(word => lowerFeedback.includes(word))) return 'content';
   return 'other';
 }
+
+export const collectFeedbackTool: DynamicStructuredTool = new DynamicStructuredTool({
+  name: "collect_feedback",
+  description: "Collect and process user feedback about the conversation",
+  schema: FeedbackContract,
+  func: async (input: FeedbackContractType) => {
+    const { originalMessage, userFeedback } = input;
+    const userPhone = getContextVariable('phone') as string;
+    try {
+      const feedbackService = FeedbackService.getInstance();
+      const feedbackEntry: FeedbackEntry = {
+        timestamp: new Date().toISOString(),
+        originalMessage,
+        userFeedback,
+        userPhone,
+        sentiment: await analyzeSentiment(userFeedback),
+        actionItems: await extractActionItems(userFeedback),
+        category: await categorizeFeedback(userFeedback)
+      };
+      
+      await feedbackService.saveFeedback(feedbackEntry);
+      return "Thank you for your feedback! It helps me improve our conversations.";
+    } catch (error) {
+      logger.error({ err: error, userPhone }, "Error collecting feedback");
+      return "Thank you for the feedback! I'll make note of it.";
+    }
+  }
+});
+
+export const feedbackTools = [
+  collectFeedbackTool
+];

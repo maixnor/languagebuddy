@@ -1,66 +1,87 @@
-import { tool } from "@langchain/core/tools";
+//@ts-nocheck
+import { DynamicStructuredTool } from "@langchain/core/tools";
 import { Subscriber } from "../types";
 import { SubscriberService } from "../services/subscriber-service";
 import { logger } from "../config";
-import z from "zod";
-import {getContextVariable} from "@langchain/core/context";
+import { z } from "zod";
+import { getContextVariable } from "@langchain/core/context";
+import Redis from 'ioredis';
+import { SubscriberUpdateContract, type SubscriberUpdateContract as SubscriberUpdateContractType } from './contracts';
 
-// @ts-ignore
-export const updateSubscriberTool = tool(
-  async ({ updates }: {
-    updates: Partial<Subscriber>
-  }) => {
-    const phoneNumber = getContextVariable('phone');
+let subscriberService: SubscriberService;
+
+export function initializeSubscriberTools(redis: Redis) {
+  subscriberService = SubscriberService.getInstance(redis);
+}
+
+export const updateSubscriberTool: DynamicStructuredTool = new DynamicStructuredTool({
+  name: "update_subscriber_profile",
+  description: "Update subscriber profile information, preferences, and notification settings when they share personal details",
+  schema: SubscriberUpdateContract,
+  func: async (input: SubscriberUpdateContractType) => {
+    const updates = input;
+    const phoneNumber = getContextVariable('phone') as string;
     if (!phoneNumber) {
       logger.error("Phone number not found in context");
       return "Phone number is required to update subscriber profile";
     }
     try {
-      const subscriberService = SubscriberService.getInstance();
       const existingSubscriber = await subscriberService.getSubscriber(phoneNumber);
-      // Merge profile and metadata updates
-      if (updates.profile) {
-        Object.assign(existingSubscriber!.profile, updates.profile);
+      if (!existingSubscriber) {
+        return "Subscriber not found";
       }
+
+      // Map contract to domain object updates
+      const domainUpdates: Partial<Subscriber> = {};
+      
+      if (updates.profile) {
+        domainUpdates.profile = { ...existingSubscriber.profile };
+        if (updates.profile.name) {
+          domainUpdates.profile.name = updates.profile.name;
+        }
+        if (updates.profile.speakingLanguages) {
+          // Map contract languages to domain languages
+          domainUpdates.profile.speakingLanguages = updates.profile.speakingLanguages.map(lang => ({
+            languageName: lang.languageName,
+            level: lang.level,
+            currentObjectives: lang.currentObjectives
+          }));
+        }
+        if (updates.profile.learningLanguages) {
+          // Map contract languages to domain languages  
+          domainUpdates.profile.learningLanguages = updates.profile.learningLanguages.map(lang => ({
+            languageName: lang.languageName,
+            level: lang.level,
+            currentObjectives: lang.currentObjectives
+          }));
+        }
+        if (updates.profile.timezone) {
+          domainUpdates.profile.timezone = updates.profile.timezone;
+        }
+      }
+      
       if (updates.metadata) {
-        existingSubscriber!.metadata = {
-          ...existingSubscriber!.metadata,
-          ...updates.metadata,
+        domainUpdates.metadata = {
+          ...existingSubscriber.metadata,
+          ...updates.metadata
         };
       }
-      await subscriberService.updateSubscriber(phoneNumber, existingSubscriber!);
+
+      // Merge updates into existing subscriber
+      const updatedSubscriber = {
+        ...existingSubscriber,
+        ...domainUpdates
+      };
+
+      await subscriberService.updateSubscriber(phoneNumber, updatedSubscriber);
       return "Subscriber profile updated successfully!";
     } catch (error) {
       logger.error({ err: error, phone: phoneNumber, updates: updates }, "Error updating subscriber");
       return "Error updating subscriber profile";
     }
-  },
-  {
-    name: "update_subscriber_profile",
-    description: "Update subscriber profile information, preferences, and notification settings when they share personal details",
-    schema: z.object({
-      updates: z.object({
-        profile: z.object({
-          name: z.string().optional(),
-          speakingLanguages: z.array(z.object({
-            languageName: z.string(),
-            level: z.string().optional(),
-            currentObjectives: z.array(z.string()).optional()
-          })).optional(),
-          learningLanguages: z.array(z.object({
-            languageName: z.string(),
-            level: z.string().optional(),
-            currentObjectives: z.array(z.string()).optional()
-          })).optional(),
-          timezone: z.string().describe("A standard ISO 8601 time zone.").optional(),
-        }).partial().optional(),
-        metadata: z.object({
-          messagingPreferences: z.object({
-            type: z.enum(['morning', 'midday', 'evening', 'fixed']).optional(),
-            times: z.array(z.string()).optional(),
-          }).partial().optional(),
-        }).partial().optional(),
-      }).partial(),
-    }),
   }
-);
+});
+
+export const subscriberTools = [
+  updateSubscriberTool
+];

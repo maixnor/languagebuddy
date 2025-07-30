@@ -17,15 +17,13 @@ import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
 import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
-import {Subscriber, WebhookMessage} from './types';
-import {RedisCheckpointSaver} from "./persistence/redis-checkpointer";
+import { Subscriber, WebhookMessage } from './types';
+import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";
 import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
 import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
 import { handleUserCommand } from './util/user-commands';
 import { getNextMissingField, getPromptForField } from './util/info-gathering';
-import { getMissingProfileFieldsReflective } from './util/profile-reflection';
 import { generateOnboardingSystemPrompt, generateRegularSystemPrompt } from './util/system-prompts';
-import { initializeOnboardingTools } from './tools/onboarding-tools';
 import { getFirstLearningLanguage } from "./util/subscriber-utils";
 
 const redisClient = new Redis({
@@ -43,7 +41,6 @@ redisClient.on('error', (err: any) => {
   logger.error({ err }, 'Redis connection error:');
 });
 
-
 const llm = new ChatOpenAI({
   model: 'gpt-4o-mini',
   temperature: 0.3,
@@ -54,9 +51,6 @@ const subscriberService = SubscriberService.getInstance(redisClient);
 const onboardingService = OnboardingService.getInstance(redisClient);
 const feedbackService = FeedbackService.getInstance(redisClient);
 const whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(redisClient);
-
-// Initialize onboarding tools with Redis client
-initializeOnboardingTools(redisClient);
 
 export const languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(redisClient), llm);
 const schedulerService = SchedulerService.getInstance(subscriberService, languageBuddyAgent);
@@ -214,8 +208,6 @@ app.post("/webhook", async (req: any, res: any) => {
   //res.sendStatus(200);
 });
 
-// Removed handleNewSubscriber - now handled through onboarding flow
-
 const handleTextMessage = async (message: any) => {
   const userPhone = message.from;
 
@@ -271,7 +263,6 @@ const handleTextMessage = async (message: any) => {
     await whatsappService.sendMessage(userPhone, "Hey, I'm currently suffering from bugs. The exterminator has been called already!");
   }
 }
-// New endpoints for LangGraph features
 
 // Feedback analytics endpoint
 app.get("/analytics/feedback", async (req: any, res: any) => {

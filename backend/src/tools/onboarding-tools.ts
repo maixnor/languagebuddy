@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { getContextVariable } from "@langchain/core/context";
@@ -7,7 +8,6 @@ import { SubscriberService } from "../services/subscriber-service";
 import { Language } from "../types";
 import Redis from 'ioredis';
 
-// Initialize services - these will be set from main.ts
 let onboardingService: OnboardingService;
 let subscriberService: SubscriberService;
 

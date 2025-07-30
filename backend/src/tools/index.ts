@@ -1,10 +1,10 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { collectFeedbackTool } from "./feedback-tools";
-import { updateSubscriberTool } from "./subscriber-tools";
+import { feedbackTools } from "./feedback-tools";
+import { subscriberTools } from "./subscriber-tools";
 import { onboardingTools } from "./onboarding-tools";
 
 export const tools: DynamicStructuredTool[] = [
-    updateSubscriberTool,
-    collectFeedbackTool,
+    ...subscriberTools,
+    ...feedbackTools,
     ...onboardingTools,
 ];
