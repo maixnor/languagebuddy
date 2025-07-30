@@ -15,7 +15,7 @@ describe('SchedulerService', () => {
     it('schedules next morning message in user timezone', () => {
       const now = DateTime.fromISO('2025-07-18T06:00:00', { zone: 'Europe/Berlin' });
       const subscriber: any = {
-        profile: { timezone: 'Europe/Berlin' }, messagingPreferences: { type: 'morning' }
+        profile: { timezone: 'Europe/Berlin', messagingPreferences: { type: 'morning' } }
       };
       const next = scheduler.calculateNextPushTime(subscriber, now);
       expect(next).toBeDefined();
@@ -29,7 +29,7 @@ describe('SchedulerService', () => {
     it('schedules next fixed time correctly', () => {
       const now = DateTime.fromISO('2025-07-18T10:00:00', { zone: 'UTC' });
       const subscriber: any = {
-        profile: { timezone: 'UTC' }, messagingPreferences: { type: 'fixed', times: ['11:00', '18:00'] }
+        profile: { timezone: 'UTC', messagingPreferences: { type: 'fixed', times: ['11:00', '18:00'] } }
       };
       const next = scheduler.calculateNextPushTime(subscriber, now);
       expect(next).toBeDefined();

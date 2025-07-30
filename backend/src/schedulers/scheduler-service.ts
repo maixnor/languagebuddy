@@ -121,8 +121,8 @@ export class SchedulerService {
     const todayTimes = times.map(t => DateTime.fromFormat(t, 'HH:mm', { zone: tz, setZone: true }).set({ year: now.year, month: now.month, day: now.day }));
     const future = todayTimes.find(dt => dt > now);
     if (future) return future;
-    // Otherwise, pick the first time tomorrow
-    return DateTime.fromFormat(times[0], 'HH:mm', { zone: tz, setZone: true }).plus({ days: 1 });
+    const tomorrow = now.plus({ days: 1 });
+    return DateTime.fromFormat(times[0], 'HH:mm', { zone: tz, setZone: true }).set({ year: tomorrow.year, month: tomorrow.month, day: tomorrow.day });
   }
 
   async triggerNightlyDigests(): Promise<void> {
