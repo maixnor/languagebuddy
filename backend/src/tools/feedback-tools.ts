@@ -6,6 +6,12 @@ import { FeedbackService } from '../services/feedback-service';
 import { getContextVariable } from "@langchain/core/context";
 import { FeedbackContract, type FeedbackContract as FeedbackContractType } from './contracts';
 
+let feedbackService: FeedbackService;
+
+export function initializeFeedbackTools(redis: Redis) {
+  feedbackService = FeedbackService.getInstance(redis);
+}
+
 // Helper functions for feedback analysis
 async function analyzeSentiment(feedback: string): Promise<'positive' | 'negative' | 'neutral'> {
   const positiveWords = ['good', 'great', 'excellent', 'love', 'like', 'helpful', 'useful', 'amazing'];

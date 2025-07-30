@@ -25,6 +25,7 @@ import { handleUserCommand } from './util/user-commands';
 import { getNextMissingField, getPromptForField } from './util/info-gathering';
 import { generateOnboardingSystemPrompt, generateRegularSystemPrompt } from './util/system-prompts';
 import { getFirstLearningLanguage } from "./util/subscriber-utils";
+import { initializeTools } from "./tools";
 
 const redisClient = new Redis({
   host: config.redis.host,
@@ -46,6 +47,9 @@ const llm = new ChatOpenAI({
   temperature: 0.3,
   maxTokens: 1000,
 });
+
+// Initialize tools with Redis client
+initializeTools(redisClient);
 
 const subscriberService = SubscriberService.getInstance(redisClient);
 const onboardingService = OnboardingService.getInstance(redisClient);
@@ -131,7 +135,7 @@ app.post("/webhook", async (req: any, res: any) => {
     await onboardingService.startOnboarding(message.from);
     const onboardingState = await onboardingService.getOnboardingState(message.from);
     if (onboardingState) {
-      const systemPrompt = generateOnboardingSystemPrompt(onboardingState);
+      const systemPrompt = generateOnboardingSystemPrompt();
       const welcomeMessage = await languageBuddyAgent.initiateConversation(
         { connections: { phone: message.from } } as Subscriber, 
         systemPrompt, 
@@ -143,10 +147,9 @@ app.post("/webhook", async (req: any, res: any) => {
   }
 
   // Handle users still in onboarding
-  if (isInOnboarding) {
+  if (!existingSubscriber && isInOnboarding) {
     const onboardingState = await onboardingService.getOnboardingState(message.from);
     if (onboardingState) {
-      const systemPrompt = generateOnboardingSystemPrompt(onboardingState);
       const response = await languageBuddyAgent.processUserMessage(
         { connections: { phone: message.from } } as Subscriber,
         message.text!.body
@@ -154,6 +157,11 @@ app.post("/webhook", async (req: any, res: any) => {
       await whatsappService.sendMessage(message.from, response);
     }
     return res.sendStatus(200);
+  }
+
+  if (existingSubscriber && isInOnboarding) {
+    await onboardingService.completeOnboarding(message.from);
+    await languageBuddyAgent.clearConversation(existingSubscriber.connections.phone);
   }
 
   const subscriber = existingSubscriber ?? await subscriberService.getSubscriber(message.from);
