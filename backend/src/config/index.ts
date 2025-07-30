@@ -28,7 +28,7 @@ export const trackMetric = (name: string, value: number, properties?: Record<str
   logger.trace({ metric: name, value, properties }, `Custom metric: ${name} = ${value}`);
 };
 
-export const config = {
+export const getConfig = () => ({
   openai: {
     apiKey: process.env.OPENAI_API_KEY!,
     model: process.env.OPENAI_MODEL_NAME!,
@@ -87,4 +87,16 @@ export const config = {
   server: {
     port: process.env.PORT || 8080,
   }
-};
+});
+
+// Lazy-loaded config that gets the fresh env vars when accessed
+let _config: ReturnType<typeof getConfig> | null = null;
+
+export const config = new Proxy({} as ReturnType<typeof getConfig>, {
+  get(target, prop) {
+    if (!_config) {
+      _config = getConfig();
+    }
+    return (_config as any)[prop];
+  }
+});

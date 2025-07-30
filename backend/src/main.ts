@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import path from 'path';
 
 // Load environment variables first, before importing config
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 import express from "express";
 import serveStatic from "serve-static";
