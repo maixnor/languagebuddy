@@ -4,9 +4,9 @@ run:
 test:
   npm run build && npm run test
 
-stream-logs:
-  ssh wb.maixnor.com 'journalctl -u languagebuddy-api.service -n 50 -f'
+stream-logs instance:
+  ssh wb.maixnor.com 'journalctl -u languagebuddy-api-{{instance}}.service -n 50 -f'
 
-test-restart:
-  ssh wb.maixnor.com 'cd ~/repo/languagebuddy && git pull && sudo systemctl restart languagebuddy-api-test.service'
+restart instance:
+  ssh wb.maixnor.com 'cd ~/repo/languagebuddy && git pull && sudo systemctl restart languagebuddy-api-{{instance}}.service'
 
