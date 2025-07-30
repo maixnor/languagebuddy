@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2024",
+    "target": "ES2022",
     "module": "commonjs",
     "rootDir": "./src",
     "outDir": "./dist",
@@ -12,7 +12,12 @@
     "resolveJsonModule": false,
     "moduleResolution": "node",
     "incremental": true,
-    "tsBuildInfoFile": "./dist/.tsbuildinfo"
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "preserveWatchOutput": true,
+    "assumeChangesOnlyAffectDirectDependencies": true,
+    "disableSourceOfProjectReferenceRedirect": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true
   },
   "include": [
     "src/**/*"
