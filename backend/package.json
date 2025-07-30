@@ -11,6 +11,7 @@
     "build:swc-watch": "swc src -d dist --copy-files --watch",
     "type-check": "tsc --noEmit",
     "build:full": "npm run type-check && npm run build:swc",
+    "start": "node dist/src/main.js",
     "start:cli": "USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response node dist/src/main.js",
     "dev": "node --max-old-space-size=512 node_modules/typescript/bin/tsc -w & nodemon dist/src/main.js",
     "dev:swc": "swc src -d dist --copy-files --watch & nodemon dist/src/main.js",
