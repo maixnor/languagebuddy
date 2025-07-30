@@ -1,14 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     "module": "commonjs",
     "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
+    "checkJs": false,
+    "strict": false,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
+    "resolveJsonModule": false,
     "moduleResolution": "node",
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo"

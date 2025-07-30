@@ -257,14 +257,11 @@ describe('Onboarding E2E Test', () => {
       host: config.redis.host,
       port: config.redis.port,
       password: config.redis.password,
+      lazyConnect: true, // Don't connect immediately
     });
 
-    // Wait for Redis connection
-    await new Promise((resolve, reject) => {
-      redisClient.on('connect', resolve);
-      redisClient.on('error', reject);
-      setTimeout(() => reject(new Error('Redis connection timeout')), 5000);
-    });
+    // Connect manually with proper cleanup
+    await redisClient.connect();
   });
 
   beforeEach(async () => {
@@ -287,17 +284,9 @@ describe('Onboarding E2E Test', () => {
 
   afterAll(async () => {
     // Close Redis connection properly
-    if (redisClient) {
-      try {
-        await redisClient.quit();
-      } catch (error) {
-        // Force disconnect if quit fails
-        redisClient.disconnect();
-      }
+    if (redisClient && redisClient.status !== 'end') {
+      await redisClient.quit();
     }
-    
-    // Ensure all async operations are completed
-    await new Promise(resolve => setTimeout(resolve, 500));
   });
 
   it('should complete the full onboarding process', async () => {

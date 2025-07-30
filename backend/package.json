@@ -4,8 +4,8 @@
   "description": "Language Buddy Backend",
   "main": "dist/main.js",
   "scripts": {
-    "build": "node --max-old-space-size=2048 node_modules/typescript/bin/tsc",
-    "build:watch": "node --max-old-space-size=2048 node_modules/typescript/bin/tsc --watch",
+    "build": "node node_modules/typescript/bin/tsc",
+    "build:watch": "node node_modules/typescript/bin/tsc --watch",
     "start:cli": "USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response node dist/src/main.js",
     "dev": "tsc -w & nodemon dist/src/main.js",
     "dev:cli": "tsc -w & USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response nodemon dist/src/main.js",
