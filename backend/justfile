@@ -7,6 +7,6 @@ test:
 stream-logs:
   ssh wb.maixnor.com 'journalctl -u languagebuddy-api.service -n 50 -f'
 
-vps-restart:
-  ssh wb.maixnor.com 'cd ~/repo/languagebuddy && git pull && sudo systemctl restart languagebuddy-api.service'
+test-restart:
+  ssh wb.maixnor.com 'cd ~/repo/languagebuddy && git pull && sudo systemctl restart languagebuddy-api-test.service'
 
