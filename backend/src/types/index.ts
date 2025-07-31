@@ -1,18 +1,4 @@
 
-export interface OnboardingState {
-  phone: string;
-  currentStep: 'gdpr_consent' | 'profile_gathering' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
-  gdprConsented: boolean;
-  tempData?: {
-    name?: string;
-    nativeLanguages?: string[];
-    timezone?: string;
-    targetLanguage?: string;
-    assessmentStarted?: boolean;
-    messagesInAssessment?: number;
-  };
-}
-
 export interface LanguageSkillAssessment {
   skill: 'grammar' | 'vocabulary' | 'comprehension' | 'spelling' | 'punctuation' | 'text-coherence';
   level: 'beginner' | 'elementary' | 'intermediate' | 'upper-intermediate' | 'advanced' | 'proficient';
@@ -89,17 +75,6 @@ export interface Subscriber {
   }
   isPremium?: boolean;
   lastActiveAt?: Date;
-  onboarding?: {
-    status: 'not_started' | 'gdpr_pending' | 'phone_saved' | 'profile_gathering' | 'language_switching' | 'target_language' | 'explaining_features' | 'assessment_conversation' | 'completed';
-    gdprConsent?: boolean;
-    currentStep?: string;
-    assessmentData?: {
-      conversationStarted: boolean;
-      messagesCount: number;
-      languageDeficiencies: string[];
-      skillLevel?: 'beginner' | 'elementary' | 'intermediate' | 'upper_intermediate' | 'advanced' | 'proficient';
-    };
-  };
   nextPushMessageAt?: string; // ISO string in UTC
 }
 

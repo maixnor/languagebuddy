@@ -151,6 +151,11 @@ export const createSubscriberTool: DynamicStructuredTool = new DynamicStructured
       };
 
       const newSubscriber = await subscriberService.createSubscriber(phoneNumber, subscriberData);
+
+      if (onboardingService.isInOnboarding(phoneNumber)) {
+        await onboardingService.completeOnboarding(phoneNumber);
+      }
+
       logger.info({ phoneNumber, name: input.name, targetLanguage: input.targetLanguage }, "New subscriber created from onboarding");
       
       return `Successfully created subscriber profile for ${input.name}! They're ready to start learning ${input.targetLanguage} at ${input.assessedLevel} level.`;
