@@ -87,7 +87,7 @@ export const createSubscriberTool: DynamicStructuredTool = new DynamicStructured
   description: "Create a new subscriber after completing the onboarding process with all collected information",
   schema: z.object({
     name: z.string().describe("The user's name"),
-    nativeLanguages: z.array(z.string()).describe("Languages the user speaks natively"),
+    nativeLanguage: z.string().describe("Language the user speaks natively"),
     targetLanguage: z.string().describe("The language the user wants to learn"),
     timezone: z.string().describe("The user's timezone"),
     assessedLevel: z.enum(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']).describe("The assessed language level from the conversation"),
@@ -122,13 +122,13 @@ export const createSubscriberTool: DynamicStructuredTool = new DynamicStructured
       const subscriberData: Partial<Subscriber> = {
         profile: {
           name: input.name,
-          speakingLanguages: input.nativeLanguages.map(lang => ({
-            languageName: lang,
+          speakingLanguages: [{
+            languageName: input.nativeLanguage,
             overallLevel: 'C2' as const, // Native level
             skillAssessments: [],
             deficiencies: [],
             firstEncountered: new Date()
-          })),
+          }],
           learningLanguages: [{
             languageName: input.targetLanguage,
             overallLevel: input.assessedLevel,
