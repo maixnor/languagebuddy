@@ -57,6 +57,7 @@ export interface Subscriber {
     };
     // favoriteColor?: string;
   }
+  signedUpAt?: string; // ISO timestamp
   metadata: {
     digests: Digest[];
     personality: string;

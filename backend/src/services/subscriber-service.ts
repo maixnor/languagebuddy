@@ -47,6 +47,7 @@ export class SubscriberService {
         speakingLanguages: [],
         learningLanguages: [],
       },
+      signedUpAt: new Date().toISOString(),
       metadata: {
         digests: [],
         personality: "A friendly language buddy talking about everything",
