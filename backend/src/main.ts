@@ -88,12 +88,27 @@ app.post("/initiate", async (req: any, res: any) => {
   // TODO TESTING NEEDS TO BE DONE FOR SCHEDULING AND DYNAMIC INFORMATION GATHERING
 
   try {
+    if (subscriberService.shouldThrottle(subscriber)) {
+      const canStart = await subscriberService.canStartConversationToday(phone);
+      if (!canStart) {
+        const paymentLink = await stripeService.getPaymentLink(phone);
+        await whatsappService.sendMessage(phone, `⏳ You have reached your daily limit. Subscribe for unlimited conversations: ${paymentLink}`);
+        return res.status(200).send("Daily conversation limit reached. Please subscribe for unlimited access.");
+      }
+    }
+
     const selectedPrompt = subscriberService.getDailySystemPrompt(subscriber);
     await languageBuddyAgent.clearConversation(subscriber.connections.phone);
     const initialMessage = await languageBuddyAgent.initiateConversation(subscriber, selectedPrompt, '');
 
     if (initialMessage) {
+      await subscriberService.incrementConversationCount(phone);
       await whatsappService.sendMessage(phone, initialMessage);
+      if (subscriberService.shouldPromptForSubscription(subscriber)) {
+        const paymentLink = await stripeService.getPaymentLink(phone);
+        const paymentMsg = `Your trial period has ended. To continue unlimited conversations, please subscribe here: ${paymentLink}`;
+        await whatsappService.sendMessage(phone, paymentMsg);
+      }
       res.status(200).send("Conversation initiated successfully with LangGraph.");
     } else {
       res.status(500).send("Failed to initiate conversation.");

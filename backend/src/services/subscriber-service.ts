@@ -5,8 +5,65 @@ import { getMissingProfileFieldsReflective } from '../util/profile-reflection';
 import { DateTime } from 'luxon';
 
 export class SubscriberService {
+  /**
+   * Returns true if the user can start a conversation today (throttle logic).
+   * Only allows one conversation per day for non-premium users after trial.
+   */
+  public async canStartConversationToday(phoneNumber: string): Promise<boolean> {
+    const today = DateTime.now().toISODate();
+    const key = `conversation_count:${phoneNumber}:${today}`;
+    const count = await this.redis.get(key);
+    return !count || parseInt(count) < 1;
+  }
+
+  /**
+   * Increments the daily conversation count for the user.
+   */
+  public async incrementConversationCount(phoneNumber: string): Promise<void> {
+    const today = DateTime.now().toISODate();
+    const key = `conversation_count:${phoneNumber}:${today}`;
+    const count = await this.redis.get(key);
+    if (!count) {
+      await this.redis.set(key, "1", "EX", 86400); // expire after 1 day
+    } else {
+      await this.redis.incr(key);
+    }
+  }
   private static instance: SubscriberService;
   private redis: Redis;
+
+  /**
+   * Returns the number of days since the user signed up.
+   */
+  public getDaysSinceSignup(subscriber: Subscriber): number {
+    if (!subscriber.signedUpAt) return 0;
+    const signedUp = DateTime.fromISO(subscriber.signedUpAt);
+    return Math.floor(DateTime.now().diff(signedUp, 'days').days);
+  }
+
+  /**
+   * Returns true if the user should see a subscription warning (days 3-6, not premium).
+   */
+  public shouldShowSubscriptionWarning(subscriber: Subscriber): boolean {
+    const days = this.getDaysSinceSignup(subscriber);
+    return !subscriber.isPremium && days >= 3 && days < 7;
+  }
+
+  /**
+   * Returns true if the user should be throttled (after day 7, not premium).
+   */
+  public shouldThrottle(subscriber: Subscriber): boolean {
+    const days = this.getDaysSinceSignup(subscriber);
+    return !subscriber.isPremium && days > 7;
+  }
+
+  /**
+   * Returns true if the user should be prompted to subscribe (after day 7, not premium).
+   */
+  public shouldPromptForSubscription(subscriber: Subscriber): boolean {
+    const days = this.getDaysSinceSignup(subscriber);
+    return !subscriber.isPremium && days > 7;
+  }
 
   private constructor(redis: Redis) {
     this.redis = redis;

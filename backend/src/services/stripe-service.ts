@@ -63,4 +63,13 @@ export class StripeService {
       return false;
     }
   }
+
+  /**
+   * Returns the Stripe payment link for subscription.
+   * This can be static or generated per user if needed.
+   */
+  async getPaymentLink(phoneNumber: string): Promise<string> {
+    // For now, return a static payment link. Replace with dynamic logic if needed.
+    return "https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01";
+  }
 }
