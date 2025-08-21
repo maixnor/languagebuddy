@@ -36,7 +36,10 @@ export class SubscriberService {
    * Returns the number of days since the user signed up.
    */
   public getDaysSinceSignup(subscriber: Subscriber): number {
-    if (!subscriber.signedUpAt) return 0;
+    if (!subscriber.signedUpAt || typeof subscriber.signedUpAt !== 'string') {
+      subscriber.signedUpAt = new Date().toISOString();
+      this.cacheSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
+    }
     const signedUp = DateTime.fromISO(subscriber.signedUpAt);
     return Math.floor(DateTime.now().diff(signedUp, 'days').days);
   }
