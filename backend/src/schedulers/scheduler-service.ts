@@ -51,8 +51,17 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
-        if (!subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = nowUtc.plus({hours: 2}).toISO();
-        const nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
+        let nextPush: DateTime | undefined;
+        if (!subscriber.nextPushMessageAt) {
+          // If not set, schedule blindly for +24h from now
+          nextPush = nowUtc.plus({ hours: 24 });
+        } else {
+          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
+          if (!nextPush.isValid) {
+            // If invalid, also schedule +24h from now
+            nextPush = nowUtc.plus({ hours: 24 });
+          }
+        }
         if (nowUtc < nextPush) continue;
         // Send message
         try {
