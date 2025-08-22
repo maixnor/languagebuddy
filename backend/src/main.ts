@@ -217,7 +217,7 @@ app.post("/webhook", async (req: any, res: any) => {
     await handleTextMessage(message);
   }
   catch (error) {
-    whatsappService.sendMessage(message.from, "An unexpected error occurred while processing your message. Please try again later.");
+    await whatsappService.sendMessage(message.from, "An unexpected error occurred while processing your message. Please try again later.");
     logger.error({ err: error, message, health: getHealth() }, "Error processing webhook message");
     res.sendStatus(400);
     return;
@@ -290,39 +290,6 @@ app.get("/analytics/feedback", async (req: any, res: any) => {
     logger.error({ err: error }, "Error getting feedback analytics");
     res.status(500).json({ error: "Failed to get feedback analytics" });
   }
-});
-
-app.post("/admin/trigger-nightly-digests", async (req: any, res: any) => {
-  try {
-    await schedulerService.triggerNightlyDigests();
-    res.json({ message: "Nightly digests triggered successfully" });
-  } catch (error) {
-    logger.error({ err: error }, "Error triggering nightly digests");
-    res.status(500).json({ error: "Failed to trigger nightly digests" });
-  }
-});
-
-app.post("/admin/trigger-history-cleanup", async (req: any, res: any) => {
-  try {
-    await schedulerService.triggerHistoryCleanup();
-    res.json({ message: "History cleanup triggered successfully" });
-  } catch (error) {
-    logger.error({ err: error }, "Error triggering history cleanup");
-    res.status(500).json({ error: "Failed to trigger history cleanup" });
-  }
-});
-
-// Service status endpoint
-app.get("/admin/services/status", (req: any, res: any) => {
-  res.json({
-    redis: redisClient.status,
-    whatsapp: whatsappService.getStatus(),
-    stripe: {
-      initialized: true // StripeService doesn't expose detailed status yet
-    },
-    langGraph: "operational",
-    schedulers: "running"
-  });
 });
 
 // Subscriber info endpoint
