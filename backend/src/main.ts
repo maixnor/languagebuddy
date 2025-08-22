@@ -19,7 +19,7 @@ import { SchedulerService } from './schedulers/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
 import { Subscriber, WebhookMessage } from './types';
 import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";
-import { ChatOpenAI, OpenAIClient } from "@langchain/openai";
+import { ChatOpenAI } from "@langchain/openai";
 import { WhatsappDeduplicationService } from "./services/whatsapp-deduplication-service";
 import { handleUserCommand } from './util/user-commands';
 import { getNextMissingField, getPromptForField } from './util/info-gathering';
@@ -148,29 +148,23 @@ app.post("/webhook", async (req: any, res: any) => {
   if (!existingSubscriber && !isInOnboarding) {
     // Start onboarding for completely new users
     await onboardingService.startOnboarding(message.from);
-    const onboardingState = await onboardingService.getOnboardingState(message.from);
-    if (onboardingState) {
-      const systemPrompt = generateOnboardingSystemPrompt();
-      const welcomeMessage = await languageBuddyAgent.initiateConversation(
-        { connections: { phone: message.from } } as Subscriber, 
-        systemPrompt, 
-        message.text!.body
-      );
-      await whatsappService.sendMessage(message.from, welcomeMessage);
-    }
+    const systemPrompt = generateOnboardingSystemPrompt();
+    const welcomeMessage = await languageBuddyAgent.initiateConversation(
+      { connections: { phone: message.from } } as Subscriber,
+      systemPrompt,
+      message.text!.body
+    );
+    await whatsappService.sendMessage(message.from, welcomeMessage);
     return res.sendStatus(200);
   }
 
   // Handle users still in onboarding
   if (!existingSubscriber && isInOnboarding) {
-    const onboardingState = await onboardingService.getOnboardingState(message.from);
-    if (onboardingState) {
-      const response = await languageBuddyAgent.processUserMessage(
-        { connections: { phone: message.from } } as Subscriber,
-        message.text!.body
-      );
-      await whatsappService.sendMessage(message.from, response);
-    }
+    const response = await languageBuddyAgent.processUserMessage(
+      { connections: { phone: message.from } } as Subscriber,
+      message.text!.body
+    );
+    await whatsappService.sendMessage(message.from, response);
     return res.sendStatus(200);
   }
 
@@ -250,7 +244,7 @@ const handleTextMessage = async (message: any) => {
     }
 
     const startTime = Date.now();
-    let response = "";
+    let response: string;
     if (!await languageBuddyAgent.currentlyInActiveConversation(userPhone)) {
       logger.info({ userPhone }, "No active conversation found, initiating new conversation");
       const systemPrompt = generateRegularSystemPrompt(subscriber, getFirstLearningLanguage(subscriber)); // TODO alternate every few days
@@ -354,7 +348,8 @@ function getHealth() {
     services: {
       redis: redisClient.status,
       whatsapp: whatsappService.isInitialized() ? "running" : "failed", 
-      openai: { model: llm.model, temperature: llm.temperature }
+      openai: { model: llm.model, temperature: llm.temperature },
+      dailyMessages: config.features.dailyMessages.enabled ? "enabled" : "disabled"
     }
   }
 }
