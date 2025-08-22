@@ -314,7 +314,7 @@ function getHealth() {
     timestamp: new Date().toISOString(),
     services: {
       redis: redisClient.status,
-      whatsapp: whatsappService.isInitialized() ? "running" : "failed", 
+      whatsapp: whatsappService.isInitialized() ? "enabled" : "failed",
       openai: { model: llm.model, temperature: llm.temperature },
       dailyMessages: config.features.dailyMessages.enabled ? "enabled" : "disabled"
     }
