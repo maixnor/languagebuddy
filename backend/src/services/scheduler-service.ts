@@ -79,14 +79,19 @@ export class SchedulerService {
             this.subscriberService.getDailySystemPrompt(subscriber),
             ""
           );
-          await this.whatsappService.sendMessage(subscriber.connections.phone, message);
-          logger.trace({ phoneNumber: subscriber.connections.phone }, "Push message sent");
           
-          // Schedule next message after successful send
-          const nextTime = this.calculateNextPushTime(subscriber);
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: nextTime ? nextTime.toUTC().toISO() : undefined 
-          });
+          const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
+          
+          if (messageSent) {
+            logger.trace({ phoneNumber: subscriber.connections.phone }, "Push message sent successfully");
+            const nextTime = this.calculateNextPushTime(subscriber);
+            await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+              nextPushMessageAt: nextTime ? nextTime.toUTC().toISO() : undefined 
+            });
+          } else {
+            logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send push message to subscriber");
+            // Don't update nextPushMessageAt if message failed to send - will retry next time
+          }
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
         }
