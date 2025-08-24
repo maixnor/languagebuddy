@@ -62,6 +62,7 @@ export class SchedulerService {
             nextPush = nowUtc.plus({ hours: 24 });
           }
         }
+        await this.subscriberService.updateSubscriber(subscriber.connections.phone, { nextPushMessageAt: nextPush.toUTC().toISO() });
         if (nowUtc < nextPush) continue;
         // Send message
         try {
