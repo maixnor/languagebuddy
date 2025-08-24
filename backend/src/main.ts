@@ -15,7 +15,7 @@ import { OnboardingService } from './services/onboarding-service';
 import { FeedbackService } from './services/feedback-service';
 import { StripeService } from './services/stripe-service';
 import { WhatsAppService } from './services/whatsapp-service';
-import { SchedulerService } from './schedulers/scheduler-service';
+import { SchedulerService } from './services/scheduler-service';
 import { logger, config, trackEvent, trackMetric } from './config';
 import { Subscriber, WebhookMessage } from './types';
 import { RedisCheckpointSaver } from "./persistence/redis-checkpointer";

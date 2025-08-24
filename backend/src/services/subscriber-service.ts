@@ -198,6 +198,7 @@ export class SubscriberService {
   }
 
   public async createDigest(subscriber: Subscriber): Promise<void> {
+    // TODO
     // fetch conversation from redis
     // convert conversation into a machine-readable format
     // send one-shot conversation to GPT to extract necessary info and pack into a Digest object
@@ -223,7 +224,7 @@ CURRENT USER INFO:
 - Name: ${subscriber.profile.name}
 - Speaking languages: ${primary}
 - Learning languages: ${learning}
-- Topic for today: ${topic}
+- Topic/Goal for today: ${topic}
 
 INSTRUCTIONS:
 1. Initiate a conversation about the topic of the day (${topic}) in ${learning}. Don't ask the user if they want to have a conversation or practice something, just do it with them, don't ask for their opinion, don't introduce any topic. Disguise your conversation starters as trying to find out more information about the user.

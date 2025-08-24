@@ -1,7 +1,7 @@
 import * as cron from 'node-cron';
 import { logger, config } from '../config';
-import { SubscriberService } from '../services/subscriber-service';
-import { WhatsAppService } from '../services/whatsapp-service';
+import { SubscriberService } from './subscriber-service';
+import { WhatsAppService } from './whatsapp-service';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 import { DateTime } from 'luxon';
 
@@ -52,18 +52,26 @@ export class SchedulerService {
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
         let nextPush: DateTime | undefined;
+        let shouldSendMessage = false;
+        
         if (!subscriber.nextPushMessageAt) {
-          // If not set, schedule blindly for +24h from now
+          // If not set, send message immediately and schedule for +24h from now
+          shouldSendMessage = true;
           nextPush = nowUtc.plus({ hours: 24 });
         } else {
           nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
           if (!nextPush.isValid) {
-            // If invalid, also schedule +24h from now
+            // If invalid, send message immediately and schedule for +24h from now
+            shouldSendMessage = true;
             nextPush = nowUtc.plus({ hours: 24 });
+          } else {
+            // Check if it's time to send the message
+            shouldSendMessage = nowUtc >= nextPush;
           }
         }
-        await this.subscriberService.updateSubscriber(subscriber.connections.phone, { nextPushMessageAt: nextPush.toUTC().toISO() });
-        if (nowUtc < nextPush) continue;
+        
+        if (!shouldSendMessage) continue;
+        
         // Send message
         try {
           const message = await this.languageBuddyAgent.initiateConversation(
@@ -73,9 +81,12 @@ export class SchedulerService {
           );
           await this.whatsappService.sendMessage(subscriber.connections.phone, message);
           logger.trace({ phoneNumber: subscriber.connections.phone }, "Push message sent");
-          // Schedule next message
+          
+          // Schedule next message after successful send
           const nextTime = this.calculateNextPushTime(subscriber);
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { nextPushMessageAt: nextTime ? nextTime.toUTC().toISO() || undefined : undefined });
+          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+            nextPushMessageAt: nextTime ? nextTime.toUTC().toISO() : undefined 
+          });
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
         }
