@@ -2,6 +2,7 @@ import express from "express";
 import { ServiceContainer } from './services/service-container';
 import { WebhookService } from './services/webhook-service';
 import { logger, config } from './config';
+import { getCommitHash, getPackageVersion } from './util/version-info';
 
 export function setupRoutes(app: express.Application, services: ServiceContainer): void {
   const webhookService = new WebhookService(services);
@@ -58,6 +59,10 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
   app.get("/health", (req: any, res: any) => {
     const health = {
       timestamp: new Date().toISOString(),
+      version: {
+        package: getPackageVersion(),
+        commit: getCommitHash()
+      },
       services: {
         redis: services.redisClient.status,
         whatsapp: services.whatsappService.isInitialized() ? "enabled" : "failed",

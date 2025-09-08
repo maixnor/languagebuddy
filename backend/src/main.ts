@@ -11,9 +11,13 @@ import "whatsapp-cloud-api-express";
 import { ServiceContainer } from './services/service-container';
 import { setupRoutes } from './routes';
 import { logger, config } from './config';
+import { loadVersionInfo } from './util/version-info';
 
 async function main() {
   try {
+    // Load version info on startup
+    loadVersionInfo();
+    
     // Create Express app
     const app = express();
     app.use(express.json());
