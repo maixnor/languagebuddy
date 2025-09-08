@@ -38,7 +38,7 @@ export class SubscriberService {
   public getDaysSinceSignup(subscriber: Subscriber): number {
     if (!subscriber.signedUpAt || typeof subscriber.signedUpAt !== 'string') {
       subscriber.signedUpAt = new Date().toISOString();
-      this.cacheSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
+      this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
     }
     const signedUp = DateTime.fromISO(subscriber.signedUpAt);
     return Math.floor(DateTime.now().diff(signedUp, 'days').days);
@@ -132,7 +132,7 @@ export class SubscriberService {
       logger.info({ missingFields, phoneNumber }, "Subscriber created with missing profile fields");
     }
 
-    await this.cacheSubscriber(subscriber);
+    await this.saveSubscriber(subscriber);
     logger.info({ phoneNumber }, "New subscriber created");
     return subscriber;
   }
@@ -146,7 +146,7 @@ export class SubscriberService {
 
       Object.assign(subscriber, updates);
       subscriber.lastActiveAt = new Date();
-      await this.cacheSubscriber(subscriber);
+      await this.saveSubscriber(subscriber);
 
       // Re-check missing fields after update (reflection-based)
       const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
@@ -185,9 +185,8 @@ export class SubscriberService {
     }
   }
 
-  private async cacheSubscriber(subscriber: Subscriber): Promise<void> {
+  private async saveSubscriber(subscriber: Subscriber): Promise<void> {
     try {
-      // Cache for 7 days
       await this.redis.set(
         `subscriber:${subscriber.connections.phone}`, 
         JSON.stringify(subscriber)
@@ -268,7 +267,6 @@ Be natural and conversational. Proactively gather missing information but weave 
   }
 
   public getDefaultSystemPrompt(subscriber: Subscriber): string {
-    const missingInfo = this.identifyMissingInfo(subscriber);
     const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
     const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
 
@@ -278,8 +276,6 @@ CURRENT USER INFO:
 - Name: ${subscriber.profile.name}
 - Speaking languages: ${primary}
 - Learning languages: ${learning}
-
-MISSING PROFILE INFO: ${missingInfo.length > 0 ? missingInfo.join(', ') : 'None'}
 
 INSTRUCTIONS:
 1. Have natural, friendly conversations in ${primary}
@@ -295,12 +291,6 @@ INSTRUCTIONS:
 
     prompt +=
         `
-PROFILE UPDATES:
-- When users mention their name ("I'm John", "Call me Maria") → update name
-- When they mention languages ("I speak French", "I'm learning Spanish") → update languages  
-- When they mention their level ("I'm a beginner", "I'm intermediate") → update level
-- When they mention location/timezone → update timezone
-
 FEEDBACK COLLECTION:
 - When users give feedback about our conversations, teaching quality, or suggestions → use collect_feedback tool
 - Examples: "This is helpful", "You explain too fast", "Could you add more examples", "I love these conversations"
@@ -317,40 +307,6 @@ When any of these situations occur, naturally ask: "How am I doing? I want to ma
 
 Be natural and conversational. Proactively gather missing information but weave it smoothly into conversation flow.`;
     return prompt;
-  }
-
-  private identifyMissingInfo(subscriber: Subscriber): string[] {
-    const missing: string[] = [];
-
-    if (!subscriber.profile.name || subscriber.profile.name === "New User") {
-      missing.push("name");
-    }
-
-    if (!subscriber.profile.speakingLanguages || subscriber.profile.speakingLanguages.length === 0) {
-      missing.push("native/speaking languages");
-    }
-
-    if (!subscriber.profile.learningLanguages || subscriber.profile.learningLanguages.length === 0) {
-      missing.push("learning languages");
-    }
-
-    subscriber.profile.learningLanguages?.forEach((lang, index) => {
-      if (!lang.overallLevel) {
-        missing.push(`${lang.languageName} level`);
-      }
-    });
-
-    subscriber.profile.speakingLanguages?.forEach((lang, index) => {
-      if (!lang.overallLevel) {
-        missing.push(`${lang.languageName} level`);
-      }
-    });
-
-    if (!subscriber.profile.timezone) {
-      missing.push("timezone/location");
-    }
-
-    return missing;
   }
 
   async addLanguageDeficiencyToSubscriber(
@@ -382,7 +338,7 @@ Be natural and conversational. Proactively gather missing information but weave 
       targetLanguage.deficiencies.push(completeDeficiency);
 
       // Update the subscriber
-      await this.cacheSubscriber(subscriber);
+      await this.saveSubscriber(subscriber);
       logger.info({ phoneNumber, languageName, deficiency: completeDeficiency }, "Added language deficiency to subscriber");
     } catch (error) {
       logger.error({ err: error, phoneNumber, languageName, deficiency }, "Error adding language deficiency");
