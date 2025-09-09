@@ -1,4 +1,5 @@
 import { logger } from '../config';
+import { markdownToWhatsApp, splitMessageBySeparator } from '../util/message-formatters';
 
 export interface WhatsAppMessagePayload {
   messaging_product: string;
@@ -42,7 +43,7 @@ export class WhatsAppService {
     }
   }
 
-  async sendMessage(toPhone: string, text: string, messageIdToContext?: string): Promise<boolean> {
+  async sendMessageRaw(toPhone: string, text: string, messageIdToContext?: string): Promise<boolean> {
     if (!this.token || !this.phoneId) {
       logger.error("WhatsApp service not initialized. Cannot send message.");
       return false;
@@ -50,7 +51,7 @@ export class WhatsAppService {
 
     // If CLI endpoint is configured, send message there instead of WhatsApp API
     if (this.cliEndpoint) {
-      return this.sendMessageToCli(toPhone, text);
+      return this.sendMessageToCliRaw(toPhone, text);
     }
 
     // Regular WhatsApp API communication
@@ -98,10 +99,7 @@ export class WhatsAppService {
     }
   }
 
-  /**
-   * Sends a message to the CLI tool instead of the WhatsApp API
-   */
-  private async sendMessageToCli(toPhone: string, text: string): Promise<boolean> {
+  private async sendMessageToCliRaw(toPhone: string, text: string): Promise<boolean> {
     try {
       logger.info({ phone: toPhone }, "Sending message to CLI tool");
 
@@ -174,83 +172,66 @@ export class WhatsAppService {
     }
   }
 
-  async sendTypingIndicator(toPhone: string, durationMs: number = 3000): Promise<boolean> {
-    if (!this.token || !this.phoneId) {
-      logger.error("WhatsApp service not initialized. Cannot send typing indicator.");
-      return false;
+  /**
+   * Main method to send messages with markdown conversion and separator splitting
+   * @param toPhone The phone number to send to
+   * @param text The text (markdown) that may contain separators
+   * @param separator The separator to split by (default: '---')
+   * @param messageIdToContext Optional message ID for context (applied only to first message)
+   * @returns Results of sending all messages
+   */
+  async sendMessage(
+    toPhone: string, 
+    text: string, 
+    separator: string = '---',
+    messageIdToContext?: string
+  ): Promise<{ successful: number; failed: number; results: boolean[] }> {
+    // First convert markdown, then split
+    const whatsappText = markdownToWhatsApp(text);
+    const messages = splitMessageBySeparator(whatsappText, separator);
+    
+    if (messages.length === 0) {
+      logger.warn("No messages to send after processing text");
+      return { successful: 0, failed: 0, results: [] };
     }
 
-    try {
-      // Send 'typing_on' status
-      let response = await fetch(
-        `https://graph.facebook.com/v18.0/${this.phoneId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${this.token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: toPhone,
-            status: "typing"
-          })
+    // For both single and multiple messages, send them as raw
+    const results: boolean[] = [];
+    let successful = 0;
+    let failed = 0;
+
+    for (let i = 0; i < messages.length; i++) {
+      try {
+        // Only apply context to the first message, send as raw (already converted)
+        const result = await this.sendMessageRaw(
+          toPhone, 
+          messages[i], 
+          i === 0 ? messageIdToContext : undefined
+        );
+        results.push(result);
+        
+        if (result) {
+          successful++;
+        } else {
+          failed++;
         }
-      );
 
-      if (!response.ok) {
-        logger.error({ phone: toPhone, status: response.status, statusText: response.statusText }, "Failed to send typing_on indicator");
-        return false;
-      }
-
-      // Wait for specified duration (max 10 seconds)
-      await new Promise(resolve => setTimeout(resolve, Math.min(durationMs, 10000)));
-
-      // Send 'typing_off' status
-      response = await fetch(
-        `https://graph.facebook.com/v18.0/${this.phoneId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${this.token}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: toPhone,
-            status: "idle"
-          })
+        // Add small delay between messages to avoid rate limiting (skip for single message)
+        if (i < messages.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      );
-
-      if (!response.ok) {
-        logger.error({ phone: toPhone, status: response.status, statusText: response.statusText }, "Failed to send typing_off indicator");
-        return false;
+      } catch (error) {
+        logger.error({ err: error, messageIndex: i }, "Error sending message");
+        results.push(false);
+        failed++;
       }
-
-      logger.debug({ phone: toPhone, durationMs }, "Typing indicator sent");
-      return true;
-    } catch (error) {
-      logger.error({ err: error, phone: toPhone }, "Exception sending typing indicator");
-      return false;
     }
+
+    logger.info({ total: messages.length, successful, failed }, "Message sending completed");
+    return { successful, failed, results };
   }
 
-  async sendMessageWithTyping(toPhone: string, text: string, messageIdToContext?: string): Promise<boolean> {
-    // Calculate typing duration based on message length (simulate realistic typing)
-    const wordsCount = text.split(' ').length;
-    const typingDuration = Math.min(wordsCount * 200, 8000); // 200ms per word, max 8 seconds
-
-    // Send typing indicator first
-    await this.sendTypingIndicator(toPhone, typingDuration);
-
-    // Then send the actual message
-    return this.sendMessage(toPhone, text, messageIdToContext);
-  }
-
-  async sendBulkMessages(messages: Array<{
+  async sendBulkMessagesRaw(messages: Array<{
     toPhone: string;
     text: string;
     messageIdToContext?: string;
@@ -261,16 +242,21 @@ export class WhatsAppService {
 
     for (const message of messages) {
       try {
-        const result = await this.sendMessage(message.toPhone, message.text, message.messageIdToContext);
-        results.push(result);
+        // Use sendMessageWithSeparators to handle markdown conversion
+        // Note: This treats each message as potentially having separators
+        const result = await this.sendMessage(
+          message.toPhone, 
+          message.text, 
+          '---', // default separator
+          message.messageIdToContext
+        );
         
-        if (result) {
-          successful++;
-        } else {
-          failed++;
-        }
+        // Flatten the results since each message could become multiple messages
+        results.push(...result.results);
+        successful += result.successful;
+        failed += result.failed;
 
-        // Add small delay between messages to avoid rate limiting
+        // Add small delay between bulk messages to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         logger.error({ err: error, message }, "Error in bulk message sending");

@@ -1,4 +1,8 @@
 
+# Core tasks
+
+- include a known weakness into the conversation each time you begin
+
 # Automation
 
 ## Daily/Weekly digests
@@ -11,4 +15,3 @@ Folliwing tim ferris: reduce to once weekly to not be overwhelmed by stuff, now 
 # Conversation History
 
 every day before clearing yesterdays conversation with the daily init the conversation should be summed up and added to the subscriber record to keep track of the stuff that was talked about and also an update to the objectives to reflect new interests or fields of practice
-
