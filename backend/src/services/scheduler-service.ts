@@ -88,7 +88,7 @@ export class SchedulerService {
           
           const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
           
-          if (messageSent) {
+          if (messageSent.failed === 0) {
             logger.trace({ phoneNumber: subscriber.connections.phone }, "Push message sent successfully");
             const nextTime = this.calculateNextPushTime(subscriber);
             await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 

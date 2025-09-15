@@ -227,7 +227,7 @@ export class WhatsAppService {
       }
     }
 
-    logger.info({ total: messages.length, successful, failed }, "Message sending completed");
+    logger.trace({ total: messages.length, successful, failed }, "Message sending completed");
     return { successful, failed, results };
   }
 
@@ -265,7 +265,7 @@ export class WhatsAppService {
       }
     }
 
-    logger.info({ total: messages.length, successful, failed }, "Bulk message sending completed");
+    logger.trace({ total: messages.length, successful, failed }, "Bulk message sending completed");
     return { successful, failed, results };
   }
 
