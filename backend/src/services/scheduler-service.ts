@@ -51,6 +51,10 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
+        if (this.subscriberService.shouldThrottle(subscriber)) {
+          await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
+          continue;
+        }
         let nextPush: DateTime | undefined;
         let shouldSendMessage = false;
         
@@ -59,7 +63,7 @@ export class SchedulerService {
           shouldSendMessage = true;
           nextPush = nowUtc.plus({ hours: 24 });
         } else {
-          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
+          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' }); // TODO adjust for timezone of user
           if (!nextPush.isValid) {
             // If invalid, send message immediately and schedule for +24h from now
             shouldSendMessage = true;
@@ -74,6 +78,8 @@ export class SchedulerService {
         
         // Send message
         try {
+          await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
+          await this.languageBuddyAgent.clearConversation(subscriber.connections.phone)
           const message = await this.languageBuddyAgent.initiateConversation(
             subscriber,
             this.subscriberService.getDailySystemPrompt(subscriber),
@@ -90,10 +96,16 @@ export class SchedulerService {
             });
           } else {
             logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send push message to subscriber");
+            await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+              nextPushMessageAt: DateTime.utc().plus({ hours: 1 }).toISO()
+            });
             // Don't update nextPushMessageAt if message failed to send - will retry next time
           }
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
+          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+            nextPushMessageAt: DateTime.utc().plus({ hours: 10 }).toISO()
+          });
         }
       }
     } catch (error) {
