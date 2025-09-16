@@ -82,6 +82,18 @@ Some \`inline code\` here.`;
       const result = markdownToWhatsApp(markdown);
       expect(result).toBe('Normal _italic *bold in italic*_ more text');
     });
+
+    test('preserves quiz placeholders with multiple underscores', () => {
+      const quizText = 'Ayer, yo ______ (trabajar) en un proyecto importante. Mi amigo ______ (ayudar) con algunas ideas. Después, nosotros ______ (comer) en un restaurante. La comida ______ (ser) deliciosa. Más tarde, ellos ______ (decidir) ir al cine.';
+      const result = markdownToWhatsApp(quizText);
+      expect(result).toBe('Ayer, yo ______ (trabajar) en un proyecto importante. Mi amigo ______ (ayudar) con algunas ideas. Después, nosotros ______ (comer) en un restaurante. La comida ______ (ser) deliciosa. Más tarde, ellos ______ (decidir) ir al cine.');
+    });
+
+    test('handles quiz placeholders mixed with other formatting', () => {
+      const mixedText = 'Complete the sentence: I ______ (love) **learning** languages. The word ______ (beautiful) is _really_ nice.';
+      const result = markdownToWhatsApp(mixedText);
+      expect(result).toBe('Complete the sentence: I ______ (love) *learning* languages. The word ______ (beautiful) is _really_ nice.');
+    });
   });
 
   describe('splitMessageBySeparator', () => {

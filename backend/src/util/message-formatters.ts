@@ -6,6 +6,9 @@
 export function markdownToWhatsApp(markdown: string): string {
   let text = markdown;
   
+  // Protect multiple underscores (quiz placeholders) from italic conversion
+  text = text.replace(/_{3,}/g, (match) => `§PLACEHOLDER§${match.length}§`);
+  
   // Convert strikethrough first
   text = text.replace(/~~([^~]+?)~~/g, '~$1~');
   
@@ -17,8 +20,9 @@ export function markdownToWhatsApp(markdown: string): string {
   text = text.replace(/^#{1,6}\s+(.+)$/gm, '§BOLD§$1§/BOLD§');
   
   // Convert italic (single markers) - now safe from bold conflicts
+  // Exclude multiple underscores (quiz placeholders) from italic conversion
   text = text.replace(/\*([^*\n]+?)\*/g, '_$1_');
-  text = text.replace(/\b_([^_\n]+?)_\b/g, '_$1_');
+  text = text.replace(/\b_([^_\n]+?)_\b(?!_)/g, '_$1_');
   
   // Restore bold formatting
   text = text.replace(/§BOLD§/g, '*');
@@ -32,7 +36,10 @@ export function markdownToWhatsApp(markdown: string): string {
   text = text.replace(/^\s*>\s+(.+)$/gm, '$1');
   text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   text = text.replace(/\n{3,}/g, '\n\n');
-  
+
+  // Restore quiz placeholders
+  text = text.replace(/§PLACEHOLDER§(\d+)§/g, (match, length) => '_'.repeat(parseInt(length)));
+
   return text.trim();
 }
 
