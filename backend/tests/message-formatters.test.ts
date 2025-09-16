@@ -69,6 +69,19 @@ Some \`inline code\` here.`;
       expect(result).toContain('• Point 1');
       expect(result).toContain('our website');
     });
+
+    test('handles nested formatting correctly', () => {
+      // Test case that reproduces the issue where italic wrapping bold placeholders
+      const markdown = '_**word1** **word2** **word3** **word4**_';
+      const result = markdownToWhatsApp(markdown);
+      expect(result).toBe('_*word1* *word2* *word3* *word4*_');
+    });
+
+    test('handles mixed formatting without placeholder conflicts', () => {
+      const markdown = 'Normal _italic **bold in italic**_ more text';
+      const result = markdownToWhatsApp(markdown);
+      expect(result).toBe('Normal _italic *bold in italic*_ more text');
+    });
   });
 
   describe('splitMessageBySeparator', () => {

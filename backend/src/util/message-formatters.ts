@@ -6,71 +6,32 @@
 export function markdownToWhatsApp(markdown: string): string {
   let text = markdown;
   
-  // Use temporary placeholders to avoid conflicts
-  const BOLD_PLACEHOLDER = '§§BOLD§§';
-  const ITALIC_PLACEHOLDER = '§§ITALIC§§';
-  const STRIKE_PLACEHOLDER = '§§STRIKE§§';
+  // Convert strikethrough first
+  text = text.replace(/~~([^~]+?)~~/g, '~$1~');
   
-  // Store the actual content with placeholders
-  const boldMatches: string[] = [];
-  const italicMatches: string[] = [];
-  const strikeMatches: string[] = [];
+  // Convert bold (double markers first) using unique placeholders
+  text = text.replace(/\*\*([^*]+?)\*\*/g, '§BOLD§$1§/BOLD§');
+  text = text.replace(/__([^_]+?)__/g, '§BOLD§$1§/BOLD§');
   
-  // Convert strikethrough: ~~text~~ to placeholder
-  text = text.replace(/~~([^~]+?)~~/g, (match, content) => {
-    strikeMatches.push(content);
-    return `${STRIKE_PLACEHOLDER}${strikeMatches.length - 1}${STRIKE_PLACEHOLDER}`;
-  });
+  // Convert headers to bold (using placeholders too)
+  text = text.replace(/^#{1,6}\s+(.+)$/gm, '§BOLD§$1§/BOLD§');
   
-  // Convert bold: **text** and __text__ to placeholder
-  text = text.replace(/\*\*([^*]+?)\*\*/g, (match, content) => {
-    boldMatches.push(content);
-    return `${BOLD_PLACEHOLDER}${boldMatches.length - 1}${BOLD_PLACEHOLDER}`;
-  });
-  text = text.replace(/__([^_]+?)__/g, (match, content) => {
-    boldMatches.push(content);
-    return `${BOLD_PLACEHOLDER}${boldMatches.length - 1}${BOLD_PLACEHOLDER}`;
-  });
+  // Convert italic (single markers) - now safe from bold conflicts
+  text = text.replace(/\*([^*\n]+?)\*/g, '_$1_');
+  text = text.replace(/\b_([^_\n]+?)_\b/g, '_$1_');
   
-  // Convert remaining single asterisks and underscores to italic
-  text = text.replace(/\*([^*]+?)\*/g, (match, content) => {
-    italicMatches.push(content);
-    return `${ITALIC_PLACEHOLDER}${italicMatches.length - 1}${ITALIC_PLACEHOLDER}`;
-  });
-  text = text.replace(/_([^_]+?)_/g, (match, content) => {
-    italicMatches.push(content);
-    return `${ITALIC_PLACEHOLDER}${italicMatches.length - 1}${ITALIC_PLACEHOLDER}`;
-  });
-  
-  // Convert headers to bold
-  text = text.replace(/^#{1,6}\s+(.+)$/gm, (match, content) => {
-    boldMatches.push(content);
-    return `${BOLD_PLACEHOLDER}${boldMatches.length - 1}${BOLD_PLACEHOLDER}`;
-  });
+  // Restore bold formatting
+  text = text.replace(/§BOLD§/g, '*');
+  text = text.replace(/§\/BOLD§/g, '*');
   
   // Convert lists
   text = text.replace(/^[\s]*[-*+]\s+(.+)$/gm, '• $1');
   text = text.replace(/^[\s]*(\d+)\.\s+(.+)$/gm, '$1. $2');
   
   // Clean up markdown artifacts
-  text = text.replace(/^\s*>\s+(.+)$/gm, '$1'); // Remove blockquotes
-  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // Convert links to just text
-  
-  // Remove excessive line breaks
+  text = text.replace(/^\s*>\s+(.+)$/gm, '$1');
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   text = text.replace(/\n{3,}/g, '\n\n');
-  
-  // Replace placeholders with WhatsApp formatting
-  text = text.replace(new RegExp(`${BOLD_PLACEHOLDER}(\\d+)${BOLD_PLACEHOLDER}`, 'g'), (match, index) => {
-    return `*${boldMatches[parseInt(index)]}*`;
-  });
-  
-  text = text.replace(new RegExp(`${ITALIC_PLACEHOLDER}(\\d+)${ITALIC_PLACEHOLDER}`, 'g'), (match, index) => {
-    return `_${italicMatches[parseInt(index)]}_`;
-  });
-  
-  text = text.replace(new RegExp(`${STRIKE_PLACEHOLDER}(\\d+)${STRIKE_PLACEHOLDER}`, 'g'), (match, index) => {
-    return `~${strikeMatches[parseInt(index)]}~`;
-  });
   
   return text.trim();
 }
