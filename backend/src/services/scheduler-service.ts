@@ -72,7 +72,7 @@ export class SchedulerService {
         
         if (!shouldSendMessage) continue;
 
-        if (this.subscriberService.shouldThrottle(subscriber)) {
+        if (this.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
           await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
           // Set next push to tomorrow to prevent spam
           await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
