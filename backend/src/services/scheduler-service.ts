@@ -51,14 +51,6 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
-        if (this.subscriberService.shouldThrottle(subscriber)) {
-          await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
-          // Set next push to tomorrow to prevent spam
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: nowUtc.plus({ hours: 24 }).toISO()
-          });
-          continue;
-        }
         let nextPush: DateTime | undefined;
         let shouldSendMessage = false;
         
@@ -79,6 +71,15 @@ export class SchedulerService {
         }
         
         if (!shouldSendMessage) continue;
+
+        if (this.subscriberService.shouldThrottle(subscriber)) {
+          await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
+          // Set next push to tomorrow to prevent spam
+          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+            nextPushMessageAt: nowUtc.plus({ hours: 24 }).toISO()
+          });
+          continue;
+        }
         
         // Calculate next push time BEFORE sending to prevent multiple sends
         const nextTime = this.calculateNextPushTime(subscriber);
