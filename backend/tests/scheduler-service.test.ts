@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { SchedulerService } from '../src/schedulers/scheduler-service';
+import { SchedulerService } from '../src/services/scheduler-service';
 import { Subscriber } from '../src/types';
 import { config } from '../src/config';
 
@@ -23,7 +23,14 @@ describe('SchedulerService', () => {
       const win = config.features.dailyMessages.defaultWindows.morning;
       const start = DateTime.fromFormat(win.start, 'HH:mm', { zone: 'Europe/Berlin' });
       const end = DateTime.fromFormat(win.end, 'HH:mm', { zone: 'Europe/Berlin' });
-      expect(next >= start && next <= end.plus({ minutes: config.features.dailyMessages.defaultWindows.fuzzinessMinutes })).toBe(true);
+      
+      // With the improved randomTimeInWindow function:
+      // - Fuzziness is capped at 15 minutes (not the full 30 from config)
+      // - Minimum window is 30 minutes
+      // - Result is guaranteed to be in the future
+      const maxFuzziness = Math.min(config.features.dailyMessages.defaultWindows.fuzzinessMinutes, 15);
+      expect(next >= start.minus({ minutes: maxFuzziness }) && next <= end.plus({ minutes: maxFuzziness })).toBe(true);
+      expect(next > now).toBe(true); // Must be in the future
     });
 
     it('schedules next fixed time correctly', () => {

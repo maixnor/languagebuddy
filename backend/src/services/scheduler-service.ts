@@ -76,6 +76,32 @@ export class SchedulerService {
         
         if (!shouldSendMessage) continue;
         
+        // Calculate next push time BEFORE sending to prevent multiple sends
+        const nextTime = this.calculateNextPushTime(subscriber);
+        if (!nextTime) {
+          logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to calculate next push time, skipping subscriber");
+          continue;
+        }
+        
+        // Ensure the next time is actually in the future to prevent immediate resending
+        const nextTimeUtc = nextTime.toUTC();
+        if (nextTimeUtc <= nowUtc.plus({ minutes: 1 })) {
+          logger.warn({ 
+            phoneNumber: subscriber.connections.phone,
+            nextTime: nextTimeUtc.toISO(),
+            now: nowUtc.toISO()
+          }, "Calculated next push time is not sufficiently in the future, adding buffer");
+          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+            nextPushMessageAt: nowUtc.plus({ hours: 23 }).toISO() // Try again tomorrow
+          });
+          continue;
+        }
+        
+        // Update next push time immediately to prevent duplicate sends
+        await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
+          nextPushMessageAt: nextTimeUtc.toISO()
+        });
+        
         // Send message
         try {
           await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
@@ -89,20 +115,20 @@ export class SchedulerService {
           const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
           
           if (messageSent.failed === 0) {
-            logger.trace({ phoneNumber: subscriber.connections.phone }, "Push message sent successfully");
-            const nextTime = this.calculateNextPushTime(subscriber);
-            await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-              nextPushMessageAt: nextTime ? nextTime.toUTC().toISO() : undefined 
-            });
+            logger.trace({ 
+              phoneNumber: subscriber.connections.phone,
+              nextPushTime: nextTimeUtc.toISO()
+            }, "Push message sent successfully");
           } else {
             logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send push message to subscriber");
+            // If message failed, retry in 1 hour
             await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
               nextPushMessageAt: DateTime.utc().plus({ hours: 1 }).toISO()
             });
-            // Don't update nextPushMessageAt if message failed to send - will retry next time
           }
         } catch (error) {
           logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
+          // If error occurred, retry in 10 hours
           await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
             nextPushMessageAt: DateTime.utc().plus({ hours: 10 }).toISO()
           });
@@ -145,13 +171,28 @@ export class SchedulerService {
 
   private randomTimeInWindow(now: DateTime, start: DateTime, end: DateTime, fuzziness: number): DateTime {
     // If now is past end, schedule for next day
-    if (now > end) start = start.plus({ days: 1 }), end = end.plus({ days: 1 });
+    if (now > end) {
+      start = start.plus({ days: 1 });
+      end = end.plus({ days: 1 });
+    }
+    
     const windowMinutes = end.diff(start, 'minutes').minutes;
-    const randomOffset = Math.floor(Math.random() * (windowMinutes - fuzziness));
+    // Ensure we have a valid window after accounting for fuzziness
+    const effectiveWindow = Math.max(30, windowMinutes - fuzziness); // Minimum 30 minutes window
+    const randomOffset = Math.floor(Math.random() * effectiveWindow);
     const base = start.plus({ minutes: randomOffset });
+    
     // Add fuzziness (randomly before/after base)
-    const fuzz = Math.floor(Math.random() * fuzziness) - Math.floor(fuzziness / 2);
-    return base.plus({ minutes: fuzz });
+    const maxFuzz = Math.min(fuzziness, 15); // Cap fuzziness at 15 minutes
+    const fuzz = Math.floor(Math.random() * maxFuzz) - Math.floor(maxFuzz / 2);
+    const result = base.plus({ minutes: fuzz });
+    
+    // Ensure result is in the future
+    if (result <= now) {
+      return now.plus({ hours: 24 }); // Schedule for tomorrow at the same time
+    }
+    
+    return result;
   }
 
   private nextFixedTime(now: DateTime, times: string[], tz: string): DateTime {
