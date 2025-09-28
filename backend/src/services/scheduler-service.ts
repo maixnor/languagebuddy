@@ -83,23 +83,23 @@ export class SchedulerService {
           continue;
         }
         
-        // Ensure the next time is actually in the future to prevent immediate resending
         const nextTimeUtc = nextTime.toUTC();
-        if (nextTimeUtc <= nowUtc.plus({ minutes: 1 })) {
+        
+        // If the calculated next time is not sufficiently in the future, 
+        // adjust it but still send the current message (they deserve it!)
+        let finalNextTime = nextTimeUtc;
+        if (nextTimeUtc <= nowUtc.plus({ minutes: 5 })) {
           logger.warn({ 
             phoneNumber: subscriber.connections.phone,
-            nextTime: nextTimeUtc.toISO(),
+            calculatedNext: nextTimeUtc.toISO(),
             now: nowUtc.toISO()
-          }, "Calculated next push time is not sufficiently in the future, adding buffer");
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: nowUtc.plus({ hours: 23 }).toISO() // Try again tomorrow
-          });
-          continue;
+          }, "Calculated next push time too close, adjusting to tomorrow");
+          finalNextTime = nowUtc.plus({ hours: 23 });
         }
         
         // Update next push time immediately to prevent duplicate sends
         await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-          nextPushMessageAt: nextTimeUtc.toISO()
+          nextPushMessageAt: finalNextTime.toISO()
         });
         
         // Send message
@@ -117,7 +117,7 @@ export class SchedulerService {
           if (messageSent.failed === 0) {
             logger.trace({ 
               phoneNumber: subscriber.connections.phone,
-              nextPushTime: nextTimeUtc.toISO()
+              nextPushTime: finalNextTime.toISO()
             }, "Push message sent successfully");
           } else {
             logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send push message to subscriber");
@@ -177,15 +177,12 @@ export class SchedulerService {
     }
     
     const windowMinutes = end.diff(start, 'minutes').minutes;
-    // Ensure we have a valid window after accounting for fuzziness
-    const effectiveWindow = Math.max(30, windowMinutes - fuzziness); // Minimum 30 minutes window
-    const randomOffset = Math.floor(Math.random() * effectiveWindow);
+    const randomOffset = Math.floor(Math.random() * windowMinutes);
     const base = start.plus({ minutes: randomOffset });
     
     // Add fuzziness (randomly before/after base)
-    const maxFuzz = Math.min(fuzziness, 15); // Cap fuzziness at 15 minutes
-    const fuzz = Math.floor(Math.random() * maxFuzz) - Math.floor(maxFuzz / 2);
-    const result = base.plus({ minutes: fuzz });
+    const fuzzed = Math.floor(Math.random() * fuzziness * 2) - fuzziness;
+    const result = base.plus({ minutes: fuzzed });
     
     // Ensure result is in the future
     if (result <= now) {
