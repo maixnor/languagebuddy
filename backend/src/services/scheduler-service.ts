@@ -110,6 +110,16 @@ export class SchedulerService {
         // Send message
         try {
           await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
+          
+          // Create digest before clearing conversation history
+          try {
+            await this.subscriberService.createDigest(subscriber);
+            logger.debug({ phoneNumber: subscriber.connections.phone }, "Digest created before conversation reset");
+          } catch (digestError) {
+            logger.error({ err: digestError, phoneNumber: subscriber.connections.phone }, "Failed to create digest before conversation reset");
+            // Continue with conversation reset even if digest creation fails
+          }
+          
           await this.languageBuddyAgent.clearConversation(subscriber.connections.phone)
           const message = await this.languageBuddyAgent.initiateConversation(
             subscriber,
