@@ -146,7 +146,7 @@ class DigestTestHelper {
     
     // Create LLM and checkpointer
     this.llm = new ChatOpenAI({
-      model: 'gpt-5-nano',
+      model: 'gpt-3.5-turbo',
       temperature: 0.3,
       maxTokens: 1000,
     });

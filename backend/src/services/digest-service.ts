@@ -10,14 +10,11 @@ export class DigestService {
   private llm: ChatOpenAI;
   private checkpointer: RedisCheckpointSaver;
   private subscriberService: SubscriberService;
-  private testMode: boolean = false;
 
   private constructor(llm: ChatOpenAI, checkpointer: RedisCheckpointSaver, subscriberService: SubscriberService) {
     this.llm = llm;
     this.checkpointer = checkpointer;
     this.subscriberService = subscriberService;
-    // Enable test mode if NODE_ENV is test or if we're running jest
-    this.testMode = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
   }
 
   static getInstance(llm?: ChatOpenAI, checkpointer?: RedisCheckpointSaver, subscriberService?: SubscriberService): DigestService {
@@ -74,6 +71,7 @@ export class DigestService {
       const checkpoint = await this.checkpointer.getCheckpoint(phoneNumber);
       
       if (!checkpoint || !checkpoint.checkpoint || !checkpoint.checkpoint.channel_values) {
+        logger.warn({ phoneNumber }, "No checkpoint or channel values found");
         return [];
       }
 
@@ -82,16 +80,46 @@ export class DigestService {
       
       // Ensure messages is an array before mapping
       if (!Array.isArray(messages)) {
+        logger.warn({ phoneNumber, messagesType: typeof messages }, "Messages is not an array");
         return [];
       }
       
+      logger.info({ phoneNumber, messageCount: messages.length }, "Extracting conversation history");
+      
       // Filter and format messages for analysis
-      const formattedMessages = messages.map((msg: any) => ({
-        type: msg._getType ? msg._getType() : msg.type || 'unknown',
-        content: msg.content || msg.text || '',
-        timestamp: msg.timestamp || new Date().toISOString()
-      }));
+      const formattedMessages = messages.map((msg: any, index: number) => {
+        // Handle different message type formats
+        let messageType = 'unknown';
+        
+        // First check if it's a plain object with type property
+        if (msg.type && typeof msg.type === 'string') {
+          messageType = msg.type;
+        }
+        // Then check for LangChain message _getType method
+        else if (msg._getType && typeof msg._getType === 'function') {
+          messageType = msg._getType();
+        }
+        // Handle LangChain message constructor names
+        else if (msg.constructor && msg.constructor.name) {
+          const constructorName = msg.constructor.name.toLowerCase();
+          if (constructorName.includes('human')) {
+            messageType = 'human';
+          } else if (constructorName.includes('ai')) {
+            messageType = 'ai';
+          }
+        }
 
+        const formattedMsg = {
+          type: messageType,
+          content: msg.content || msg.text || '',
+          timestamp: msg.timestamp || new Date().toISOString()
+        };
+        
+        logger.debug({ phoneNumber, messageIndex: index, messageType, hasContent: !!formattedMsg.content, contentLength: formattedMsg.content.length }, "Formatted message");
+        return formattedMsg;
+      });
+
+      logger.info({ phoneNumber, totalMessages: formattedMessages.length, humanMessages: formattedMessages.filter(m => m.type === 'human').length }, "Conversation history extracted");
       return formattedMessages;
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error extracting conversation history");
@@ -104,6 +132,8 @@ export class DigestService {
    */
   private async analyzeConversationWithLLM(conversationHistory: any[], subscriber: Subscriber): Promise<Digest | undefined> {
     const conversationText = this.formatConversationForAnalysis(conversationHistory);
+    
+    logger.info({ phoneNumber: subscriber.connections.phone, conversationLength: conversationText.length }, "Starting LLM analysis");
     
     const systemPrompt = this.createDigestSystemPrompt(subscriber);
     const analysisPrompt = `
@@ -148,6 +178,8 @@ Focus on extracting actionable learning insights and personal context that will 
       ]);
 
       const response = result.content as string;
+      logger.info({ phoneNumber: subscriber.connections.phone, responseLength: response.length }, "LLM analysis completed");
+      
       const analysisData = this.parseAnalysisResponse(response);
       
       return {
@@ -191,7 +223,13 @@ Focus on extracting actionable learning insights and personal context that will 
       };
 
     } catch (error) {
-      logger.error({ err: error }, "Error analyzing conversation with LLM");
+      logger.error({ 
+        err: error, 
+        phoneNumber: subscriber.connections.phone,
+        conversationLength: conversationText.length,
+        humanMessageCount: conversationHistory.filter(msg => msg.type === 'human').length,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+      }, "Error analyzing conversation with LLM");
       return undefined; 
     }
   }
