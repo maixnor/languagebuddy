@@ -10,11 +10,14 @@ export class DigestService {
   private llm: ChatOpenAI;
   private checkpointer: RedisCheckpointSaver;
   private subscriberService: SubscriberService;
+  private testMode: boolean = false;
 
   private constructor(llm: ChatOpenAI, checkpointer: RedisCheckpointSaver, subscriberService: SubscriberService) {
     this.llm = llm;
     this.checkpointer = checkpointer;
     this.subscriberService = subscriberService;
+    // Enable test mode if NODE_ENV is test or if we're running jest
+    this.testMode = process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
   }
 
   static getInstance(llm?: ChatOpenAI, checkpointer?: RedisCheckpointSaver, subscriberService?: SubscriberService): DigestService {
@@ -39,6 +42,13 @@ export class DigestService {
       
       if (!conversationHistory || conversationHistory.length <= 1) {
         logger.warn({ phone: subscriber.connections.phone }, "No conversation history found for digest");
+        return undefined;
+      }
+
+      // Check if there are any human messages (actual conversation)
+      const humanMessages = conversationHistory.filter(msg => msg.type === 'human');
+      if (humanMessages.length === 0) {
+        logger.warn({ phone: subscriber.connections.phone }, "No human messages found - not a real conversation");
         return undefined;
       }
 
@@ -69,6 +79,11 @@ export class DigestService {
 
       // Extract messages from the checkpoint
       const messages = checkpoint.checkpoint.channel_values.messages || [];
+      
+      // Ensure messages is an array before mapping
+      if (!Array.isArray(messages)) {
+        return [];
+      }
       
       // Filter and format messages for analysis
       const formattedMessages = messages.map((msg: any) => ({
@@ -246,76 +261,60 @@ Be thorough but concise. Extract only meaningful learning insights.`;
    */
   public async saveDigestToSubscriber(subscriber: Subscriber, digest: Digest): Promise<void> {
     try {
-      // Add digest to subscriber's metadata
+      // Get the latest subscriber data
+      const currentSubscriber = await this.subscriberService.getSubscriber(subscriber.connections.phone);
+      if (!currentSubscriber) {
+        throw new Error('Subscriber not found when saving digest');
+      }
+
+      // Add digest to subscriber's metadata with proper deep merge
       const updatedSubscriber = {
-        ...subscriber,
+        ...currentSubscriber,
         metadata: {
-          ...subscriber.metadata,
-          digests: [...(subscriber.metadata.digests || []), digest]
+          ...currentSubscriber.metadata,
+          digests: [...(currentSubscriber.metadata.digests || []), digest]
         }
       };
 
-      // Update subscriber in Redis
-      await this.subscriberService.updateSubscriber(subscriber.connections.phone, updatedSubscriber);
-
       // Update learning language data based on digest insights
-      await this.updateLanguageProfileFromDigest(subscriber, digest);
+      if (updatedSubscriber.profile.learningLanguages && updatedSubscriber.profile.learningLanguages.length > 0) {
+        const learningLanguage = updatedSubscriber.profile.learningLanguages[0];
+        
+        // Update deficiencies based on areas of struggle
+        const newDeficiencies = digest.areasOfStruggle.map(area => ({
+          category: 'grammar' as const,
+          specificArea: area,
+          severity: 'moderate' as const,
+          frequency: 50,
+          examples: [area],
+          improvementSuggestions: [`Practice ${area} more frequently`],
+          firstDetected: new Date(),
+          lastOccurrence: new Date()
+        }));
+
+        // Update objectives based on key breakthroughs and struggles
+        const updatedObjectives = [
+          ...(learningLanguage.currentObjectives || []),
+          ...digest.areasOfStruggle.map(area => `Improve ${area}`)
+        ].slice(0, 10); // Keep only latest 10 objectives
+
+        const updatedLearningLanguage = {
+          ...learningLanguage,
+          deficiencies: [...(learningLanguage.deficiencies || []), ...newDeficiencies].slice(-20),
+          currentObjectives: updatedObjectives,
+          lastPracticed: new Date(),
+          totalPracticeTime: (learningLanguage.totalPracticeTime || 0) + 30
+        };
+
+        updatedSubscriber.profile.learningLanguages[0] = updatedLearningLanguage;
+      }
+
+      // Save the complete updated subscriber (this replaces the whole object)
+      await this.subscriberService.updateSubscriber(subscriber.connections.phone, updatedSubscriber);
 
     } catch (error) {
       logger.error({ err: error, phone: subscriber.connections.phone }, "Error saving digest to subscriber");
       throw error;
-    }
-  }
-
-  /**
-   * Updates subscriber's language profile based on digest insights
-   */
-  private async updateLanguageProfileFromDigest(subscriber: Subscriber, digest: Digest): Promise<void> {
-    try {
-      if (!subscriber.profile.learningLanguages || subscriber.profile.learningLanguages.length === 0) {
-        return;
-      }
-
-      const learningLanguage = subscriber.profile.learningLanguages[0];
-      
-      // Update deficiencies based on areas of struggle
-      const newDeficiencies = digest.areasOfStruggle.map(area => ({
-        category: 'grammar' as const,
-        specificArea: area,
-        severity: 'moderate' as const,
-        frequency: 50,
-        examples: [area],
-        improvementSuggestions: [`Practice ${area} more frequently`],
-        firstDetected: new Date(),
-        lastOccurrence: new Date()
-      }));
-
-      // Update objectives based on key breakthroughs and struggles
-      const updatedObjectives = [
-        ...(learningLanguage.currentObjectives || []),
-        ...digest.areasOfStruggle.map(area => `Improve ${area}`)
-      ].slice(0, 10); // Keep only latest 10 objectives
-
-      const updatedLearningLanguage = {
-        ...learningLanguage,
-        deficiencies: [...(learningLanguage.deficiencies || []), ...newDeficiencies].slice(-20), // Keep latest 20
-        currentObjectives: updatedObjectives,
-        lastPracticed: new Date(),
-        totalPracticeTime: (learningLanguage.totalPracticeTime || 0) + 30 // Assume 30 min session
-      };
-
-      const updatedSubscriber = {
-        ...subscriber,
-        profile: {
-          ...subscriber.profile,
-          learningLanguages: [updatedLearningLanguage, ...subscriber.profile.learningLanguages.slice(1)]
-        }
-      };
-
-      await this.subscriberService.updateSubscriber(subscriber.connections.phone, updatedSubscriber);
-
-    } catch (error) {
-      logger.error({ err: error, phone: subscriber.connections.phone }, "Error updating language profile from digest");
     }
   }
 
