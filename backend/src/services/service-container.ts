@@ -13,7 +13,6 @@ import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
 import { logger, config } from '../config';
 import { initializeSubscriberTools } from "../tools/subscriber-tools";
 import { initializeFeedbackTools } from "../tools/feedback-tools";
-import { initializeDigestTools } from "../tools/digest-tools";
 
 export class ServiceContainer {
   public redisClient!: Redis;
@@ -68,7 +67,6 @@ export class ServiceContainer {
     // Initialize all tools
     initializeSubscriberTools(this.redisClient);
     initializeFeedbackTools(this.redisClient);
-    initializeDigestTools(this.subscriberService, this.digestService);
 
     // Initialize agent (now all tools are properly initialized)
     this.languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(this.redisClient), this.llm);
