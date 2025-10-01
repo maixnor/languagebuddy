@@ -2,6 +2,7 @@ import { Subscriber } from '../types';
 import { logger } from '../config';
 import { WhatsAppService } from '../services/whatsapp-service';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
+import { SubscriberService } from '../services/subscriber-service';
 
 export async function handleUserCommand(
     subscriber: Subscriber, 
@@ -18,6 +19,30 @@ export async function handleUserCommand(
         await languageBuddyAgent.clearConversation(subscriber.connections.phone);
         await whatsappService.sendMessage(subscriber.connections.phone, "Conversation history cleared.");
         return '!clear';
+    }
+
+    if (message.startsWith('!digest')) {
+        try {
+            logger.info({ phone: subscriber.connections.phone }, "User requested manual digest creation");
+            
+            // Create digest using backend logic approach (not agent tools)
+            const subscriberService = SubscriberService.getInstance();
+            await subscriberService.createDigest(subscriber);
+            
+            await whatsappService.sendMessage(
+                subscriber.connections.phone, 
+                "📊 Conversation digest created! Your learning progress has been analyzed and saved to help personalize future conversations."
+            );
+            
+            return '!digest';
+        } catch (error) {
+            logger.error({ err: error, phone: subscriber.connections.phone }, "Error creating manual digest");
+            await whatsappService.sendMessage(
+                subscriber.connections.phone, 
+                "Sorry, there was an error creating your digest. Please try again later."
+            );
+            return '!digest';
+        }
     }
 
     if (message.startsWith('!me')) {
@@ -59,7 +84,7 @@ export async function handleUserCommand(
 
     if (message.startsWith('!help') || message.startsWith('help') || message.startsWith('!commands')) {
       logger.info(`User ${subscriber.connections.phone} requested help`);
-      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "ping": Test connectivity');
+      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "!digest": Create a learning digest from current conversation\n- "ping": Test connectivity');
       return '!help';
     }
 

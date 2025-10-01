@@ -14,7 +14,6 @@ import { RedisCheckpointSaver } from '../src/persistence/redis-checkpointer';
 import { config } from '../src/config';
 import { initializeSubscriberTools } from '../src/tools/subscriber-tools';
 import { initializeFeedbackTools } from '../src/tools/feedback-tools';
-import { initializeDigestTools } from '../src/tools/digest-tools';
 
 // Real Redis instance for testing
 let redisClient: Redis;
@@ -159,7 +158,6 @@ class DigestTestHelper {
     // Initialize tools
     initializeSubscriberTools(redisClient);
     initializeFeedbackTools(redisClient);
-    initializeDigestTools(this.subscriberService, this.digestService);
     
     // Create agent
     this.agent = new LanguageBuddyAgent(this.checkpointer, this.llm);
