@@ -8,7 +8,21 @@
 
 - [ ] Figure out time zone
 - [ ] Then with the time zone I can know when nighttime is and reset the conversation at 3 in the morning
-- [ ] then let GPT calculate a digest of the conversation, if it is with vocabulary save the specific vocabulary as well, so GPT can have a somewhat decent context over what happened the past days
+- [x] then let GPT calculate a digest of the conversation, if it is with vocabulary save the specific vocabulary as well, so GPT can have a somewhat decent context over what happened the past days
+
+## Digest System Implementation
+
+- [x] Create DigestService for conversation analysis
+- [x] Implement LLM-based conversation analysis
+- [x] Add digest tools for manual/automatic digest creation
+- [x] Integrate with service container and agent tools
+- [x] Add user memos for personal context retention
+- [x] Update subscriber profiles based on digest insights
+- [x] Create comprehensive test suite
+- [x] Document the digest system functionality
+- [ ] Add automatic digest creation at conversation end
+- [ ] Implement conversation metrics analysis (currently skipped)
+- [ ] Add scheduled digest cleanup and archiving
 
 # User probing
 
@@ -16,8 +30,8 @@
 
 # verify user subscription
 
-- [ ] every night the covnersation history is cleared
-- [ ] only on initiating a new conversation the subscription status is checked, i.e. max once per day
+- [x] every night the covnersation history is cleared
+- [x] only on initiating a new conversation the subscription status is checked, i.e. max once per day
 
 # GPT initiated conversation
 

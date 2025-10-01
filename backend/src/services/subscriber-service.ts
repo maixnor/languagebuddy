@@ -197,13 +197,20 @@ export class SubscriberService {
   }
 
   public async createDigest(subscriber: Subscriber): Promise<void> {
-    // TODO
-    // fetch conversation from redis
-    // convert conversation into a machine-readable format
-    // send one-shot conversation to GPT to extract necessary info and pack into a Digest object
-    // append digest to subscriber
-    // save subscriber
-    // delete conversation in redis
+    try {
+      const DigestService = await import('./digest-service');
+      const digestService = DigestService.DigestService.getInstance();
+      
+      // Create the digest
+      const digest = await digestService.createConversationDigest(subscriber);
+      if (!digest) return;
+      await digestService.saveDigestToSubscriber(subscriber, digest);
+      
+      logger.info({ phone: subscriber.connections.phone }, "Digest created successfully");
+    } catch (error) {
+      logger.error({ err: error, phone: subscriber.connections.phone }, "Error creating digest");
+      throw error;
+    }
   }
 
   public getDailySystemPrompt(subscriber: Subscriber): string {

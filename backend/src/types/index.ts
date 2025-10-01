@@ -122,6 +122,8 @@ export interface Digest {
     emojiUsage: number; // frequency of emoji use
     abbreviationUsage: string[]; // common abbreviations used
   };
+  
+  userMemos?: string[]; // Personal memos about the user for better context in future conversations
 }
 
 export interface FeedbackEntry {

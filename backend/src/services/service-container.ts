@@ -4,13 +4,16 @@ import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 import { SubscriberService } from './subscriber-service';
 import { OnboardingService } from './onboarding-service';
 import { FeedbackService } from './feedback-service';
+import { DigestService } from './digest-service';
 import { StripeService } from './stripe-service';
 import { WhatsAppService } from './whatsapp-service';
 import { SchedulerService } from './scheduler-service';
 import { WhatsappDeduplicationService } from './whatsapp-deduplication-service';
 import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
 import { logger, config } from '../config';
-import { initializeTools } from "../tools";
+import { initializeSubscriberTools } from "../tools/subscriber-tools";
+import { initializeFeedbackTools } from "../tools/feedback-tools";
+import { initializeDigestTools } from "../tools/digest-tools";
 
 export class ServiceContainer {
   public redisClient!: Redis;
@@ -19,6 +22,7 @@ export class ServiceContainer {
   public subscriberService!: SubscriberService;
   public onboardingService!: OnboardingService;
   public feedbackService!: FeedbackService;
+  public digestService!: DigestService;
   public stripeService!: StripeService;
   public whatsappService!: WhatsAppService;
   public schedulerService!: SchedulerService;
@@ -48,16 +52,25 @@ export class ServiceContainer {
       maxTokens: 1000,
     });
 
-    // Initialize tools with Redis client
-    initializeTools(this.redisClient);
-
     // Initialize services
     this.subscriberService = SubscriberService.getInstance(this.redisClient);
     this.onboardingService = OnboardingService.getInstance(this.redisClient);
     this.feedbackService = FeedbackService.getInstance(this.redisClient);
     this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.redisClient);
 
-    // Initialize agent
+    // Initialize digest service
+    this.digestService = DigestService.getInstance(
+      this.llm,
+      new RedisCheckpointSaver(this.redisClient),
+      this.subscriberService
+    );
+
+    // Initialize all tools
+    initializeSubscriberTools(this.redisClient);
+    initializeFeedbackTools(this.redisClient);
+    initializeDigestTools(this.subscriberService, this.digestService);
+
+    // Initialize agent (now all tools are properly initialized)
     this.languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(this.redisClient), this.llm);
 
     // Initialize scheduler service and start schedulers
