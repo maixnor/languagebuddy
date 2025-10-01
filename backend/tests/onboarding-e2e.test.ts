@@ -31,7 +31,7 @@ class OnboardingTestHelper {
     
     // Create a real agent with actual LLM
     const llm = new ChatOpenAI({
-      model: 'gpt-4o-mini',
+      model: 'gpt-5-nano',
       temperature: 0.3,
       maxTokens: 1000,
     });
