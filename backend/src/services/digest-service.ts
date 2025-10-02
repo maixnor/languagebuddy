@@ -42,13 +42,6 @@ export class DigestService {
         return undefined;
       }
 
-      // Check if there are any human messages (actual conversation)
-      const humanMessages = conversationHistory.filter(msg => msg.type === 'human');
-      if (humanMessages.length === 0) {
-        logger.warn({ phone: subscriber.connections.phone }, "No human messages found - not a real conversation");
-        return undefined;
-      }
-
       // Create the digest using LLM analysis
       const digest = await this.analyzeConversationWithLLM(conversationHistory, subscriber);
       if (!digest) {
