@@ -132,23 +132,27 @@ export class DigestService {
     const analysisPrompt = `
 Please analyze this conversation and extract the following information in JSON format:
 
+The conversation is between a language learning assistant and a student. Focus on identifying key learning insights, vocabulary, grammar points, user interests, and any personal context that would help tailor future lessons.
+The conversation is exclusively on textual basis (no voice or images).
+Any fields with no relevant data should be returned as empty arrays or empty strings.
+
 CONVERSATION TO ANALYZE:
 ${conversationText}
 
-Return a JSON object with this exact structure (ignore conversationMetrics for now):
+Return a JSON object with this exact structure:
 {
   "topic": "Main topic/theme of the conversation in one sentence",
   "summary": "Comprehensive summary of what was discussed",
   "keyBreakthroughs": ["List of learning breakthroughs or achievements"],
   "areasOfStruggle": ["Areas where the user struggled or made mistakes"],
   "vocabulary": {
-    "newWords": ["New words the user learned"],
-    "reviewedWords": ["Words that were reviewed or practiced"],
+    "newWords": ["New words the user learned, highlight only words the user asked about or interacted with specifically"],
+    "reviewedWords": ["Words that were practiced or repeated"],
     "struggledWith": ["Words the user had difficulty with"],
-    "mastered": ["Words the user demonstrated mastery of"]
+    "mastered": ["Words the user used that demonstrate mastery of a subject"]
   },
   "phrases": {
-    "newPhrases": ["New phrases or expressions learned"],
+    "newPhrases": ["New phrases or expressions learned (only ones specifically interacted by the user)"],
     "idioms": ["Idioms discussed or taught"],
     "colloquialisms": ["Informal expressions used"],
     "formalExpressions": ["Formal language patterns practiced"]
