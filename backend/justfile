@@ -7,5 +7,8 @@ test:
 stream-logs instance:
   ssh wb.maixnor.com 'journalctl -u languagebuddy-api-{{instance}}.service -n 50 -f'
 
-deploy:
-  ssh -t wb.maixnor.com "cd /home/maixnor/repo/languagebuddy-prod/backend && git pull origin main && git log --oneline -n 50 | fzf | awk '{ print \$1 }' | xargs -I {} git checkout {} && sudo systemctl restart languagebuddy-api-prod"
+deploy-prod:
+  cd .. && nix run .#deploy-prod
+
+deploy-test:
+  cd .. && nix run .#deploy-test
