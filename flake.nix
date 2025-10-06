@@ -76,7 +76,7 @@
             else
                 cp -r result/* "$TEMP_DIR/"
             fi
-            cp -r .env.prod "$TEMP_DIR/.env"
+            cp -r backend/.env.prod "$TEMP_DIR/.env"
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
