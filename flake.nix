@@ -77,37 +77,22 @@
                 cp -r result/* "$TEMP_DIR/"
             fi
 
-            # Copy static files
-            echo "📋 Copying static files..."
-            cp -r static "$TEMP_DIR/"
-
-            # Copy package.json for reference
-            cp package.json "$TEMP_DIR/"
-
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
-            if ! rsync -avz --delete "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
+            if ! rsync -az --delete "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
                 exit 1
             fi
 
             # Restart service
             echo "🔄 Restarting $ENVIRONMENT service..."
-            if ! ssh "$SERVER" "sudo systemctl restart languagebuddy-api-\$ENVIRONMENT.service"; then
+            # shellcheck disable=SC2029
+            if ! ssh "$SERVER" "sudo systemctl restart languagebuddy-api-$ENVIRONMENT.service"; then
                 echo "⚠️  Warning: Service restart failed or service not found"
             fi
 
-            # Cleanup temporary directories
-            rm -rf "$TEMP_DIR"
-            if [ "$ENVIRONMENT" = "prod" ] && [ -n "$TEMP_WORKTREE" ]; then
-                cd /
-                git worktree remove "$TEMP_WORKTREE" --force
-            fi
-
-            echo "✅ $ENVIRONMENT deployment completed successfully!"
             echo "📍 Deployed to: $SERVER:$DEPLOY_PATH"
-
-            echo "🎉 $ENVIRONMENT deployment finished!"
+            echo "✅ $ENVIRONMENT deployment completed successfully!"
           '';
         };
 

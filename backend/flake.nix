@@ -24,7 +24,7 @@
     {
       packages = forAllSystems ({ pkgs }: {
         default = pkgs.buildNpmPackage {
-          name = "languagebuddy";
+          name = "languagebuddy-backend";
 
           buildInputs = with pkgs; [
             nodejs_24
@@ -46,13 +46,16 @@
             mkdir -p $out
             
             # Copy all built artifacts
-            cp -r dist $out/
+            cp -r dist/src/* $out/
             
             # Copy node_modules (runtime dependencies)
             cp -r node_modules $out/
             
             # Copy package.json for runtime reference
             cp package.json $out/
+
+            # Copy .env.prod
+            cp .env.prod $out/.env
             
             # Copy static files
             cp -r static $out/
