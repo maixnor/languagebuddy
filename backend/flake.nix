@@ -53,9 +53,6 @@
             
             # Copy package.json for runtime reference
             cp package.json $out/
-
-            # Copy .env.prod
-            cp .env.prod $out/.env
             
             # Copy static files
             cp -r static $out/
