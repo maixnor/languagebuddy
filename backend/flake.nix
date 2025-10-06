@@ -38,9 +38,24 @@
 
           npmConfigHook = pkgs.importNpmLock.npmConfigHook;
 
+          buildPhase = ''
+            npm run build
+          '';
+
           installPhase = ''
-            mkdir $out
-            cp dist/src/* -r $out
+            mkdir -p $out
+            
+            # Copy all built artifacts
+            cp -r dist $out/
+            
+            # Copy node_modules (runtime dependencies)
+            cp -r node_modules $out/
+            
+            # Copy package.json for runtime reference
+            cp package.json $out/
+            
+            # Copy static files
+            cp -r static $out/
           '';
         };
       });
