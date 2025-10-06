@@ -54,10 +54,25 @@
                 fi
                 echo "📌 Selected commit: $COMMIT"
                 
+                # Save .env.prod file before creating worktree
+                ENV_PROD_BACKUP=""
+                if [ -f "backend/.env.prod" ]; then
+                    ENV_PROD_BACKUP=$(mktemp)
+                    cp "backend/.env.prod" "$ENV_PROD_BACKUP"
+                    echo "💾 Backed up .env.prod file"
+                fi
+                
                 # Create a temporary worktree for the selected commit
                 TEMP_WORKTREE=$(mktemp -d)
                 git worktree add "$TEMP_WORKTREE" "$COMMIT"
                 cd "$TEMP_WORKTREE"
+                
+                # Restore .env.prod file to worktree
+                if [ -n "$ENV_PROD_BACKUP" ] && [ -f "$ENV_PROD_BACKUP" ]; then
+                    cp "$ENV_PROD_BACKUP" "backend/.env.prod"
+                    echo "📋 Restored .env.prod to worktree"
+                    rm "$ENV_PROD_BACKUP"
+                fi
             fi
 
             # Build the backend
@@ -76,7 +91,20 @@
             else
                 cp -r result/* "$TEMP_DIR/"
             fi
-            cp -r backend/.env.prod "$TEMP_DIR/.env"
+            
+            # Copy environment file if it exists
+            if [ -f ".env.prod" ]; then
+                echo "📋 Copying production environment file..."
+                cp ".env.prod" "$TEMP_DIR/.env"
+            elif [ -f "backend/.env.prod" ]; then
+                echo "📋 Copying production environment file from backend directory..."
+                cp "backend/.env.prod" "$TEMP_DIR/.env"
+            else
+                echo "⚠️  Warning: No .env.prod file found, skipping environment file copy"
+                echo "🔍 Current directory: $(pwd)"
+                echo "🔍 Looking for: .env.prod and backend/.env.prod"
+                ls -la .env* backend/.env* 2>/dev/null || echo "No .env files found"
+            fi
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
@@ -90,6 +118,7 @@
             # shellcheck disable=SC2029
             if ! ssh "$SERVER" "sudo systemctl restart languagebuddy-api-$ENVIRONMENT.service"; then
                 echo "⚠️  Warning: Service restart failed or service not found"
+                exit 1
             fi
 
             echo "📍 Deployed to: $SERVER:$DEPLOY_PATH"
