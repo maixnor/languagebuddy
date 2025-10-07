@@ -156,6 +156,11 @@ export class WebhookService {
     // Handle missing profile information
     const missingField = getNextMissingField(subscriber);
     if (missingField != null) {
+      logger.info({ 
+        phone: phone.slice(-4), 
+        missingField,
+        subscriberProfile: subscriber.profile 
+      }, "🔧 Missing profile field detected, entering info gathering mode");
       await this.handleMissingProfileInfo(subscriber, missingField);
       return;
     }
@@ -187,11 +192,23 @@ export class WebhookService {
     const phone = subscriber.connections.phone;
     const language = subscriber.profile.speakingLanguages[0]?.languageName || "english";
     
+    logger.info({ 
+      phone: phone.slice(-4), 
+      missingField, 
+      detectedLanguage: language,
+      profileSpeakingLanguages: subscriber.profile.speakingLanguages 
+    }, "🔧 Handling missing profile information - using one-shot message");
+    
+    const prompt = getPromptForField(missingField);
+    logger.info({ prompt, language }, "🔧 Using one-shot prompt");
+    
     const response = await this.services.languageBuddyAgent.oneShotMessage(
-      getPromptForField(missingField),
+      prompt,
       language,
       phone
     );
+    
+    logger.info({ response: response.slice(0, 100) + "..." }, "🔧 One-shot response generated");
     await this.services.whatsappService.sendMessage(phone, response);
   }
 
