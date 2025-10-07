@@ -5,17 +5,29 @@ const createLogger = () => {
   const baseConfig = {
     level: process.env.LOG_LEVEL || 'info',
   };
-  return pino({
-    ...baseConfig,
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname'
+  
+  // Only use pretty printing in development
+  const isDevelopment = process.env.ENVIRONMENT.toLowerCase() !== 'production';
+  
+  if (isDevelopment) {
+    return pino({
+      ...baseConfig,
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname'
+        }
       }
-    }
-  });
+    });
+  } else {
+    // Production: use structured JSON logging without colors
+    return pino({
+      ...baseConfig,
+      timestamp: pino.stdTimeFunctions.isoTime,
+    });
+  }
 };
 
 export const logger = createLogger();
