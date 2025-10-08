@@ -1,10 +1,9 @@
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { Resource } from '@opentelemetry/resources';
-import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import { NodeSDK, resources } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { trace, context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 
 // Get version info for service identification
 const getServiceInfo = () => {
@@ -54,9 +53,9 @@ export const initializeTracing = () => {
   };
 
   const sdk = new NodeSDK({
-    resource: new Resource({
-      [SEMRESATTRS_SERVICE_NAME]: serviceInfo.name,
-      [SEMRESATTRS_SERVICE_VERSION]: serviceInfo.version,
+    resource: resourceFromAttributes({
+      'service.name': serviceInfo.name,
+      'service.version': serviceInfo.version,
     }),
     traceExporter: getTraceExporter(),
     instrumentations: [
