@@ -1,13 +1,16 @@
 import pino from 'pino';
+import { getTraceContext } from '../observability/tracing';
 
 // Configure Pino logger
 const createLogger = () => {
   const baseConfig = {
     level: process.env.LOG_LEVEL || 'info',
+    // Automatically inject trace context into every log
+    mixin: () => getTraceContext(),
   };
   
   // Only use pretty printing in development
-  const isDevelopment = process.env.ENVIRONMENT.toLowerCase() !== 'production';
+  const isDevelopment = process.env.ENVIRONMENT !== 'production';
   
   if (isDevelopment) {
     return pino({

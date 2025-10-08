@@ -4,6 +4,10 @@ import path from 'path';
 // Load environment variables first, before importing config
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
+// Initialize tracing BEFORE any other imports (critical for auto-instrumentation)
+import { initializeTracing } from './observability/tracing';
+initializeTracing();
+
 import express from "express";
 import serveStatic from "serve-static";
 import "whatsapp-cloud-api-express";
