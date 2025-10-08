@@ -108,7 +108,7 @@
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
-            if ! rsync -az --delete "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
+            if ! rsync -az --delete --no-perms --no-owner --no-group "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
                 exit 1
             fi
