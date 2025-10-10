@@ -10,26 +10,26 @@ import { z } from 'zod';
 const DigestAnalysisSchema = z.object({
   topic: z.string().describe("Main topic/theme of the conversation in one sentence"),
   summary: z.string().describe("Comprehensive summary of what was discussed"),
-  keyBreakthroughs: z.array(z.string()).describe("List of learning breakthroughs or achievements"),
-  areasOfStruggle: z.array(z.string()).describe("Areas where the user struggled or made mistakes"),
+  keyBreakthroughs: z.array(z.string()).default([]).describe("List of learning breakthroughs or achievements"),
+  areasOfStruggle: z.array(z.string()).default([]).describe("Areas where the user struggled or made mistakes"),
   vocabulary: z.object({
-    newWords: z.array(z.string()).describe("New words the user learned, highlight only words the user asked about or interacted with specifically"),
-    reviewedWords: z.array(z.string()).describe("Words that were practiced or repeated"),
-    struggledWith: z.array(z.string()).describe("Words the user had difficulty with"),
-    mastered: z.array(z.string()).describe("Words the user used that demonstrate mastery of a subject")
+    newWords: z.array(z.string()).default([]).describe("New words the user learned, highlight only words the user asked about or interacted with specifically"),
+    reviewedWords: z.array(z.string()).default([]).describe("Words that were practiced or repeated"),
+    struggledWith: z.array(z.string()).default([]).describe("Words the user had difficulty with"),
+    mastered: z.array(z.string()).default([]).describe("Words the user used that demonstrate mastery of a subject")
   }),
   phrases: z.object({
-    newPhrases: z.array(z.string()).describe("New phrases or expressions learned (only ones specifically interacted by the user)"),
-    idioms: z.array(z.string()).describe("Idioms discussed or taught"),
-    colloquialisms: z.array(z.string()).describe("Informal expressions used"),
-    formalExpressions: z.array(z.string()).describe("Formal language patterns practiced")
+    newPhrases: z.array(z.string()).default([]).describe("New phrases or expressions learned (only ones specifically interacted by the user)"),
+    idioms: z.array(z.string()).default([]).describe("Idioms discussed or taught"),
+    colloquialisms: z.array(z.string()).default([]).describe("Informal expressions used"),
+    formalExpressions: z.array(z.string()).default([]).describe("Formal language patterns practiced")
   }),
   grammar: z.object({
-    conceptsCovered: z.array(z.string()).describe("Grammar concepts that were discussed"),
-    mistakesMade: z.array(z.string()).describe("Specific grammar mistakes the user made"),
-    patternsPracticed: z.array(z.string()).describe("Grammar patterns the user practiced")
+    conceptsCovered: z.array(z.string()).default([]).describe("Grammar concepts that were discussed"),
+    mistakesMade: z.array(z.string()).default([]).describe("Specific grammar mistakes the user made"),
+    patternsPracticed: z.array(z.string()).default([]).describe("Grammar patterns the user practiced")
   }),
-  userMemos: z.array(z.string()).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)")
+  userMemos: z.array(z.string()).default([]).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)")
 });
 
 export class DigestService {
@@ -269,28 +269,53 @@ export class DigestService {
     
     const systemPrompt = this.createDigestSystemPrompt(subscriber);
     const analysisPrompt = `
-Please analyze this conversation and extract learning insights.
+Analyze this conversation between a language learning assistant and a student learning ${subscriber.profile.learningLanguages?.[0]?.languageName || 'a foreign language'}.
 
-The conversation is between a language learning assistant and a student. Focus on identifying key learning insights, vocabulary, grammar points, user interests, and any personal context that would help tailor future lessons.
-The conversation is exclusively on textual basis (no voice or images).
-Any fields with no relevant data should be returned as empty arrays or empty strings.
+Extract key learning insights including:
+- Main topic and summary of what was discussed
+- Vocabulary the student learned, practiced, struggled with, or mastered
+- Phrases and expressions encountered
+- Grammar concepts covered and mistakes made
+- Personal information about the student (interests, background, preferences, learning goals)
 
-CONVERSATION TO ANALYZE:
+The conversation is text-based only. Return empty arrays for any categories with no relevant data.
+
+CONVERSATION:
 ${conversationText}
 
-Focus on extracting actionable learning insights and personal context that will help improve future conversations.
+Extract actionable learning insights that will help personalize future conversations.
 `;
 
     try {
       // Create a structured output LLM using withStructuredOutput
+      // Note: This uses OpenAI's function calling under the hood
       const structuredLlm = this.llm.withStructuredOutput(DigestAnalysisSchema);
       
       const llmStartTime = Date.now();
+      
+      logger.debug({
+        operation: 'digest.llm.invoke.start',
+        phone: subscriber.connections.phone,
+        modelName: this.llm.modelName,
+        promptLength: analysisPrompt.length,
+        systemPromptLength: systemPrompt.length
+      }, "Invoking LLM with structured output");
+      
       const analysisData = await structuredLlm.invoke([
         new SystemMessage(systemPrompt),
         new HumanMessage(analysisPrompt)
       ]);
       const llmDuration = Date.now() - llmStartTime;
+
+      // Validate that we got data back
+      if (!analysisData) {
+        logger.error({
+          operation: 'digest.llm.analyze.no_data',
+          phone: subscriber.connections.phone,
+          durationMs: Date.now() - startTime
+        }, "LLM returned no data");
+        return undefined;
+      }
 
       logger.info({ 
         operation: 'digest.llm.analyze.complete',
@@ -357,6 +382,7 @@ Focus on extracting actionable learning insights and personal context that will 
         err: error,
         phone: subscriber.connections.phone,
         conversationLength: conversationText.length,
+        conversationPreview: conversationText.substring(0, 500),
         messageCount: conversationHistory.length,
         humanMessageCount: conversationHistory.filter(msg => msg.type === 'human').length,
         aiMessageCount: conversationHistory.filter(msg => msg.type === 'ai').length,
@@ -366,7 +392,9 @@ Focus on extracting actionable learning insights and personal context that will 
         durationMs: Date.now() - startTime,
         modelName: this.llm.modelName || 'unknown'
       }, "Error analyzing conversation with LLM structured output");
-      return undefined; 
+      
+      // Re-throw the error so tests can see it
+      throw error;
     }
   }
 
