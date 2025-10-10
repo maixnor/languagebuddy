@@ -4,6 +4,33 @@ import { Digest, Subscriber } from '../types';
 import { logger } from '../config';
 import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
 import { SubscriberService } from './subscriber-service';
+import { z } from 'zod';
+
+// Zod schema for structured output from LLM
+const DigestAnalysisSchema = z.object({
+  topic: z.string().describe("Main topic/theme of the conversation in one sentence"),
+  summary: z.string().describe("Comprehensive summary of what was discussed"),
+  keyBreakthroughs: z.array(z.string()).describe("List of learning breakthroughs or achievements"),
+  areasOfStruggle: z.array(z.string()).describe("Areas where the user struggled or made mistakes"),
+  vocabulary: z.object({
+    newWords: z.array(z.string()).describe("New words the user learned, highlight only words the user asked about or interacted with specifically"),
+    reviewedWords: z.array(z.string()).describe("Words that were practiced or repeated"),
+    struggledWith: z.array(z.string()).describe("Words the user had difficulty with"),
+    mastered: z.array(z.string()).describe("Words the user used that demonstrate mastery of a subject")
+  }),
+  phrases: z.object({
+    newPhrases: z.array(z.string()).describe("New phrases or expressions learned (only ones specifically interacted by the user)"),
+    idioms: z.array(z.string()).describe("Idioms discussed or taught"),
+    colloquialisms: z.array(z.string()).describe("Informal expressions used"),
+    formalExpressions: z.array(z.string()).describe("Formal language patterns practiced")
+  }),
+  grammar: z.object({
+    conceptsCovered: z.array(z.string()).describe("Grammar concepts that were discussed"),
+    mistakesMade: z.array(z.string()).describe("Specific grammar mistakes the user made"),
+    patternsPracticed: z.array(z.string()).describe("Grammar patterns the user practiced")
+  }),
+  userMemos: z.array(z.string()).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)")
+});
 
 export class DigestService {
   private static instance: DigestService;
@@ -222,7 +249,7 @@ export class DigestService {
   }
 
   /**
-   * Uses LLM to analyze conversation and extract insights
+   * Uses LLM with structured output to analyze conversation and extract insights
    */
   private async analyzeConversationWithLLM(conversationHistory: any[], subscriber: Subscriber): Promise<Digest | undefined> {
     const startTime = Date.now();
@@ -238,11 +265,11 @@ export class DigestService {
       learningLanguage: subscriber.profile.learningLanguages?.[0]?.languageName,
       userLevel: subscriber.profile.learningLanguages?.[0]?.overallLevel,
       modelName: this.llm.modelName || 'unknown'
-    }, "Starting LLM analysis");
+    }, "Starting LLM analysis with structured output");
     
     const systemPrompt = this.createDigestSystemPrompt(subscriber);
     const analysisPrompt = `
-Please analyze this conversation and extract the following information in JSON format:
+Please analyze this conversation and extract learning insights.
 
 The conversation is between a language learning assistant and a student. Focus on identifying key learning insights, vocabulary, grammar points, user interests, and any personal context that would help tailor future lessons.
 The conversation is exclusively on textual basis (no voice or images).
@@ -251,84 +278,42 @@ Any fields with no relevant data should be returned as empty arrays or empty str
 CONVERSATION TO ANALYZE:
 ${conversationText}
 
-Return a JSON object with this exact structure:
-{
-  "topic": "Main topic/theme of the conversation in one sentence",
-  "summary": "Comprehensive summary of what was discussed",
-  "keyBreakthroughs": ["List of learning breakthroughs or achievements"],
-  "areasOfStruggle": ["Areas where the user struggled or made mistakes"],
-  "vocabulary": {
-    "newWords": ["New words the user learned, highlight only words the user asked about or interacted with specifically"],
-    "reviewedWords": ["Words that were practiced or repeated"],
-    "struggledWith": ["Words the user had difficulty with"],
-    "mastered": ["Words the user used that demonstrate mastery of a subject"]
-  },
-  "phrases": {
-    "newPhrases": ["New phrases or expressions learned (only ones specifically interacted by the user)"],
-    "idioms": ["Idioms discussed or taught"],
-    "colloquialisms": ["Informal expressions used"],
-    "formalExpressions": ["Formal language patterns practiced"]
-  },
-  "grammar": {
-    "conceptsCovered": ["Grammar concepts that were discussed"],
-    "mistakesMade": ["Specific grammar mistakes the user made"],
-    "patternsPracticed": ["Grammar patterns the user practiced"]
-  },
-  "userMemos": ["Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)"]
-}
-
 Focus on extracting actionable learning insights and personal context that will help improve future conversations.
 `;
 
     try {
+      // Create a structured output LLM using withStructuredOutput
+      const structuredLlm = this.llm.withStructuredOutput(DigestAnalysisSchema);
+      
       const llmStartTime = Date.now();
-      const result = await this.llm.invoke([
+      const analysisData = await structuredLlm.invoke([
         new SystemMessage(systemPrompt),
         new HumanMessage(analysisPrompt)
       ]);
       const llmDuration = Date.now() - llmStartTime;
 
-      const response = result.content as string;
       logger.info({ 
         operation: 'digest.llm.analyze.complete',
         phone: subscriber.connections.phone,
-        responseLength: response.length,
         llmDurationMs: llmDuration,
-        tokensUsed: (result as any).usage_metadata?.total_tokens,
-        inputTokens: (result as any).usage_metadata?.input_tokens,
-        outputTokens: (result as any).usage_metadata?.output_tokens,
         modelName: this.llm.modelName || 'unknown',
-        hasJsonResponse: response.includes('{') && response.includes('}')
-      }, "LLM analysis completed");
-      
-      const parseStartTime = Date.now();
-      const analysisData = this.parseAnalysisResponse(response);
-      const parseDuration = Date.now() - parseStartTime;
+        hasTopic: !!analysisData.topic,
+        hasSummary: !!analysisData.summary,
+        topicValue: analysisData.topic || 'MISSING',
+        summaryLength: analysisData.summary?.length || 0,
+        userMemosCount: analysisData.userMemos?.length || 0,
+        newWordsCount: analysisData.vocabulary?.newWords?.length || 0
+      }, "LLM structured output analysis completed");
       
       const digest = {
         timestamp: new Date().toISOString(),
-        topic: analysisData.topic || "General conversation",
-        summary: analysisData.summary || "No summary available",
-        keyBreakthroughs: analysisData.keyBreakthroughs || [],
-        areasOfStruggle: analysisData.areasOfStruggle || [],
-        vocabulary: {
-          newWords: analysisData.vocabulary?.newWords || [],
-          reviewedWords: analysisData.vocabulary?.reviewedWords || [],
-          struggledWith: analysisData.vocabulary?.struggledWith || [],
-          mastered: analysisData.vocabulary?.mastered || []
-        },
-        phrases: {
-          newPhrases: analysisData.phrases?.newPhrases || [],
-          idioms: analysisData.phrases?.idioms || [],
-          colloquialisms: analysisData.phrases?.colloquialisms || [],
-          formalExpressions: analysisData.phrases?.formalExpressions || []
-        },
-        grammar: {
-          conceptsCovered: analysisData.grammar?.conceptsCovered || [],
-          mistakesMade: analysisData.grammar?.mistakesMade || [],
-          patternsPracticed: analysisData.grammar?.patternsPracticed || []
-        },
-        // Temporarily setting conversationMetrics to default values
+        topic: analysisData.topic,
+        summary: analysisData.summary,
+        keyBreakthroughs: analysisData.keyBreakthroughs,
+        areasOfStruggle: analysisData.areasOfStruggle,
+        vocabulary: analysisData.vocabulary,
+        phrases: analysisData.phrases,
+        grammar: analysisData.grammar,
         conversationMetrics: {
           messagesExchanged: conversationHistory.length,
           averageResponseTime: 0,
@@ -342,13 +327,12 @@ Focus on extracting actionable learning insights and personal context that will 
           emojiUsage: 0,
           abbreviationUsage: []
         },
-        userMemos: analysisData.userMemos || []
+        userMemos: analysisData.userMemos
       };
 
       logger.info({
         operation: 'digest.llm.digest.created',
         phone: subscriber.connections.phone,
-        parseDurationMs: parseDuration,
         totalDurationMs: Date.now() - startTime,
         digestTopic: digest.topic,
         summaryLength: digest.summary.length,
@@ -363,7 +347,7 @@ Focus on extracting actionable learning insights and personal context that will 
         breakthroughsCount: digest.keyBreakthroughs.length,
         strugglesCount: digest.areasOfStruggle.length,
         userMemosCount: digest.userMemos.length
-      }, "Digest structure created from LLM analysis");
+      }, "Digest structure created from LLM structured output");
 
       return digest;
 
@@ -381,7 +365,7 @@ Focus on extracting actionable learning insights and personal context that will 
         errorStack: error instanceof Error ? error.stack : undefined,
         durationMs: Date.now() - startTime,
         modelName: this.llm.modelName || 'unknown'
-      }, "Error analyzing conversation with LLM");
+      }, "Error analyzing conversation with LLM structured output");
       return undefined; 
     }
   }
@@ -423,55 +407,6 @@ Be thorough but concise. Extract only meaningful learning insights.`;
         return `${role}: ${msg.content}`;
       })
       .join('\n\n');
-  }
-
-  /**
-   * Parses LLM response and handles JSON extraction
-   */
-  private parseAnalysisResponse(response: string): any {
-    try {
-      // Try to extract JSON from the response
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        logger.debug({
-          operation: 'digest.llm.parse.success',
-          responseLength: response.length,
-          jsonLength: jsonMatch[0].length,
-          hasTopic: !!parsed.topic,
-          hasSummary: !!parsed.summary,
-          hasVocabulary: !!parsed.vocabulary,
-          hasPhrases: !!parsed.phrases,
-          hasGrammar: !!parsed.grammar,
-          hasUserMemos: !!parsed.userMemos,
-          topLevelKeys: Object.keys(parsed)
-        }, "Successfully parsed LLM response");
-        
-        return parsed;
-      }
-      
-      // If no JSON found, return empty object
-      logger.warn({
-        operation: 'digest.llm.parse.no_json',
-        responseLength: response.length,
-        responsePreview: response.substring(0, 200),
-        hasOpenBrace: response.includes('{'),
-        hasCloseBrace: response.includes('}')
-      }, "No valid JSON found in LLM response");
-      return {};
-      
-    } catch (error) {
-      logger.error({ 
-        operation: 'digest.llm.parse.error',
-        err: error,
-        responseLength: response.length,
-        responsePreview: response.substring(0, 200),
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : String(error)
-      }, "Error parsing LLM analysis response");
-      return {};
-    }
   }
 
   /**
