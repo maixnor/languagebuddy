@@ -12,3 +12,6 @@ deploy-prod:
 
 deploy-test:
   cd .. && nix run .#deploy-test
+
+checkpoint phone:
+  sh redis-connect.sh get checkpoint:{{phone}} | jq '.checkpoint.channel_values.messages[].kwargs.content' 
