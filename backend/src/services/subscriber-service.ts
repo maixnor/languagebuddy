@@ -196,17 +196,21 @@ export class SubscriberService {
     }
   }
 
-  public async createDigest(subscriber: Subscriber): Promise<void> {
+  public async createDigest(subscriber: Subscriber): Promise<boolean> {
     try {
       const DigestService = await import('./digest-service');
       const digestService = DigestService.DigestService.getInstance();
       
       // Create the digest
       const digest = await digestService.createConversationDigest(subscriber);
-      if (!digest) return;
+      if (!digest) {
+        logger.info({ phone: subscriber.connections.phone }, "No conversation history available for digest creation");
+        return false;
+      }
       await digestService.saveDigestToSubscriber(subscriber, digest);
       
       logger.info({ phone: subscriber.connections.phone }, "Digest created successfully");
+      return true;
     } catch (error) {
       logger.error({ err: error, phone: subscriber.connections.phone }, "Error creating digest");
       throw error;

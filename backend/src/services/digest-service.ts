@@ -180,6 +180,14 @@ export class DigestService {
         if (msg.type && typeof msg.type === 'string') {
           messageType = msg.type;
         }
+        // Check for lc_type which is used in serialized LangChain messages
+        else if (msg.lc_type && typeof msg.lc_type === 'string') {
+          messageType = msg.lc_type.toLowerCase().replace('message', '');
+        }
+        // Check for lc_kwargs which contains the message data
+        else if (msg.lc_kwargs && msg.lc_kwargs.type) {
+          messageType = msg.lc_kwargs.type;
+        }
         // Then check for LangChain message _getType method
         else if (msg._getType && typeof msg._getType === 'function') {
           messageType = msg._getType();
@@ -194,10 +202,33 @@ export class DigestService {
           }
         }
 
+        // Extract content from various possible locations
+        let content = '';
+        if (msg.content && typeof msg.content === 'string') {
+          content = msg.content;
+        } else if (msg.text && typeof msg.text === 'string') {
+          content = msg.text;
+        } else if (msg.lc_kwargs && msg.lc_kwargs.content) {
+          // LangChain serialized format
+          if (typeof msg.lc_kwargs.content === 'string') {
+            content = msg.lc_kwargs.content;
+          } else if (Array.isArray(msg.lc_kwargs.content)) {
+            // Content might be an array of content blocks
+            content = msg.lc_kwargs.content.map((block: any) => 
+              typeof block === 'string' ? block : block.text || JSON.stringify(block)
+            ).join(' ');
+          }
+        } else if (Array.isArray(msg.content)) {
+          // Handle array content (rich content)
+          content = msg.content.map((block: any) => 
+            typeof block === 'string' ? block : block.text || JSON.stringify(block)
+          ).join(' ');
+        }
+
         const formattedMsg = {
           type: messageType,
-          content: msg.content || msg.text || '',
-          timestamp: msg.timestamp || new Date().toISOString()
+          content: content || '',
+          timestamp: msg.timestamp || msg.lc_kwargs?.timestamp || new Date().toISOString()
         };
         
         // Track statistics
@@ -212,7 +243,9 @@ export class DigestService {
           hasContent: !!formattedMsg.content,
           contentLength: formattedMsg.content.length,
           hasTimestamp: !!msg.timestamp,
-          constructorName: msg.constructor?.name
+          constructorName: msg.constructor?.name,
+          hasLcKwargs: !!msg.lc_kwargs,
+          lcType: msg.lc_type
         }, "Formatted message");
         return formattedMsg;
       });

@@ -27,12 +27,19 @@ export async function handleUserCommand(
             
             // Create digest using backend logic approach (not agent tools)
             const subscriberService = SubscriberService.getInstance();
-            await subscriberService.createDigest(subscriber);
+            const digestCreated = await subscriberService.createDigest(subscriber);
             
-            await whatsappService.sendMessage(
-                subscriber.connections.phone, 
-                "📊 Conversation digest created! Your learning progress has been analyzed and saved to help personalize future conversations."
-            );
+            if (digestCreated) {
+                await whatsappService.sendMessage(
+                    subscriber.connections.phone, 
+                    "📊 Conversation digest created! Your learning progress has been analyzed and saved to help personalize future conversations."
+                );
+            } else {
+                await whatsappService.sendMessage(
+                    subscriber.connections.phone, 
+                    "There was a problem creating your digest. Please have a conversation first before creating a digest."
+                );
+            }
             
             return '!digest';
         } catch (error) {
