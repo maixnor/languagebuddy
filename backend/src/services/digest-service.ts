@@ -348,7 +348,7 @@ Extract actionable learning insights that will help personalize future conversat
       const llmDuration = Date.now() - llmStartTime;
 
       // Validate that we got data back
-      if (!analysisData) {
+      if (!analysisData || !analysisData.topic) {
         logger.error({
           operation: 'digest.llm.analyze.no_data',
           phone: subscriber.connections.phone,
