@@ -30,6 +30,7 @@ export async function handleUserCommand(
             const digestCreated = await subscriberService.createDigest(subscriber);
             
             if (digestCreated) {
+                await languageBuddyAgent.clearConversation(subscriber.connections.phone);
                 await whatsappService.sendMessage(
                     subscriber.connections.phone, 
                     "📊 Conversation digest created! Your learning progress has been analyzed and saved to help personalize future conversations."
@@ -40,7 +41,7 @@ export async function handleUserCommand(
                     "There was a problem creating your digest. Please have a conversation first before creating a digest."
                 );
             }
-            
+
             return '!digest';
         } catch (error) {
             logger.error({ err: error, phone: subscriber.connections.phone }, "Error creating manual digest");

@@ -169,129 +169,45 @@ export class DigestService {
       }, "Extracting conversation history");
       
       // Filter and format messages for analysis
-      const messageTypeStats = { human: 0, ai: 0, unknown: 0 };
+      const messageTypeStats = { human: 0, ai: 0, system: 0, unknown: 0 };
       const messageLengths: number[] = [];
       
       const formattedMessages = messages.map((msg: any, index: number) => {
-        // Handle different message type formats
+        // Extract message type from LangChain serialized format: msg.id is an array like ["langchain_core", "messages", "HumanMessage"]
         let messageType = 'unknown';
-        
-        // Check for LangChain serialized format with id array
-        if (msg.id && Array.isArray(msg.id) && msg.id.length > 0) {
-          const lastId = msg.id[msg.id.length - 1];
-          if (typeof lastId === 'string') {
-            const lcType = lastId.toLowerCase();
-            if (lcType.includes('human')) {
-              messageType = 'human';
-            } else if (lcType.includes('ai')) {
-              messageType = 'ai';
-            } else {
-              messageType = lcType.replace('message', '');
-            }
-          }
-        }
-        // Check for type in msg.type (LangChain serialization format)
-        else if (msg.type && typeof msg.type === 'string') {
-          messageType = msg.type.toLowerCase().replace('message', '');
-        }
-        // Check for lc_type which is used in serialized LangChain messages
-        else if (msg.lc_type && typeof msg.lc_type === 'string') {
-          messageType = msg.lc_type.toLowerCase().replace('message', '');
-        }
-        // Check for lc_kwargs which contains the message data
-        else if (msg.lc_kwargs && msg.lc_kwargs.type) {
-          messageType = msg.lc_kwargs.type;
-        }
-        // Check for kwargs.type
-        else if (msg.kwargs && msg.kwargs.type) {
-          messageType = msg.kwargs.type;
-        }
-        // Then check for LangChain message _getType method
-        else if (msg._getType && typeof msg._getType === 'function') {
-          messageType = msg._getType();
-        }
-        // Handle LangChain message constructor names
-        else if (msg.constructor && msg.constructor.name) {
-          const constructorName = msg.constructor.name.toLowerCase();
-          if (constructorName.includes('human')) {
+        if (msg.id && Array.isArray(msg.id) && msg.id.length >= 3) {
+          const messageClass = msg.id[2].toLowerCase(); // e.g., "humanmessage", "aimessage", "systemmessage"
+          if (messageClass.includes('human')) {
             messageType = 'human';
-          } else if (constructorName.includes('ai')) {
+          } else if (messageClass.includes('ai')) {
             messageType = 'ai';
+          } else if (messageClass.includes('system')) {
+            messageType = 'system';
           }
         }
 
-        // Extract content from various possible locations
+        // Extract content - it's always in msg.kwargs.content based on the checkpoint structure
         let content = '';
-        
-        // Check for content in msg.kwargs (LangChain serialization format)
-        if (msg.kwargs && msg.kwargs.content) {
+        if (msg.kwargs?.content) {
           if (typeof msg.kwargs.content === 'string') {
             content = msg.kwargs.content;
           } else if (Array.isArray(msg.kwargs.content)) {
+            // Handle array content (rich content blocks)
             content = msg.kwargs.content.map((block: any) => 
               typeof block === 'string' ? block : block.text || JSON.stringify(block)
             ).join(' ');
           }
         }
-        // Direct content property
-        else if (msg.content && typeof msg.content === 'string') {
-          content = msg.content;
-        } 
-        // Text property
-        else if (msg.text && typeof msg.text === 'string') {
-          content = msg.text;
-        } 
-        // Legacy lc_kwargs format
-        else if (msg.lc_kwargs && msg.lc_kwargs.content) {
-          if (typeof msg.lc_kwargs.content === 'string') {
-            content = msg.lc_kwargs.content;
-          } else if (Array.isArray(msg.lc_kwargs.content)) {
-            content = msg.lc_kwargs.content.map((block: any) => 
-              typeof block === 'string' ? block : block.text || JSON.stringify(block)
-            ).join(' ');
-          }
-        } 
-        // Array content (rich content)
-        else if (Array.isArray(msg.content)) {
-          content = msg.content.map((block: any) => 
-            typeof block === 'string' ? block : block.text || JSON.stringify(block)
-          ).join(' ');
-        }
 
         const formattedMsg = {
           type: messageType,
           content: content || '',
-          timestamp: msg.timestamp || msg.lc_kwargs?.timestamp || new Date().toISOString()
+          timestamp: msg.kwargs?.id || new Date().toISOString()
         };
         
         // Track statistics
         messageTypeStats[messageType as keyof typeof messageTypeStats] = (messageTypeStats[messageType as keyof typeof messageTypeStats] || 0) + 1;
         messageLengths.push(formattedMsg.content.length);
-        
-        // Log first few messages with more detail to debug empty content
-        if (index < 3) {
-          logger.info({ 
-            operation: 'digest.history.message.format.detailed',
-            phone: phoneNumber,
-            messageIndex: index,
-            messageType,
-            hasContent: !!formattedMsg.content,
-            contentLength: formattedMsg.content.length,
-            contentPreview: formattedMsg.content.substring(0, 100),
-            hasTimestamp: !!msg.timestamp,
-            constructorName: msg.constructor?.name,
-            hasLcKwargs: !!msg.lc_kwargs,
-            lcType: msg.lc_type,
-            rawMsgKeys: Object.keys(msg),
-            msgContentType: typeof msg.content,
-            msgTextType: typeof msg.text,
-            hasLcKwargsContent: !!msg.lc_kwargs?.content,
-            hasKwargs: !!msg.kwargs,
-            kwargsKeys: msg.kwargs ? Object.keys(msg.kwargs) : [],
-            kwargsContentType: msg.kwargs ? typeof msg.kwargs.content : 'N/A',
-            kwargsContent: msg.kwargs?.content ? String(msg.kwargs.content).substring(0, 100) : 'N/A'
-          }, "Detailed message format (first 3 messages)");
-        }
         
         logger.debug({ 
           operation: 'digest.history.message.format',
@@ -300,11 +216,9 @@ export class DigestService {
           messageType,
           hasContent: !!formattedMsg.content,
           contentLength: formattedMsg.content.length,
-          hasTimestamp: !!msg.timestamp,
-          constructorName: msg.constructor?.name,
-          hasLcKwargs: !!msg.lc_kwargs,
-          lcType: msg.lc_type
+          contentPreview: formattedMsg.content.substring(0, 100)
         }, "Formatted message");
+        
         return formattedMsg;
       });
 
@@ -323,6 +237,7 @@ export class DigestService {
         emptyMessages: formattedMessages.length - validMessages.length,
         humanMessages: messageTypeStats.human,
         aiMessages: messageTypeStats.ai,
+        systemMessages: messageTypeStats.system,
         unknownMessages: messageTypeStats.unknown,
         avgMessageLength,
         minMessageLength: messageLengths.length > 0 ? Math.min(...messageLengths) : 0,
