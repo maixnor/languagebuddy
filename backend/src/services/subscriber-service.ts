@@ -151,12 +151,12 @@ export class SubscriberService {
       // Re-check missing fields after update (reflection-based)
       const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
       if (missingFields.length > 0) {
-        logger.trace({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
+        logger.info({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
       }
 
-      logger.info({updates: updates}, `Updated user ${phoneNumber} with this info:`)
+      logger.trace({phoneNumber, updates}, `Updated user with this info:`)
     } catch (error) {
-      logger.error({ err: error, phoneNumber, updates }, "Error updating subscriber");
+      logger.error({ error, phoneNumber, updates }, "Error updating subscriber");
       throw error;
     }
   }
