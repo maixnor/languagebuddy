@@ -176,9 +176,23 @@ export class DigestService {
         // Handle different message type formats
         let messageType = 'unknown';
         
-        // First check if it's a plain object with type property
-        if (msg.type && typeof msg.type === 'string') {
-          messageType = msg.type;
+        // Check for LangChain serialized format with id array
+        if (msg.id && Array.isArray(msg.id) && msg.id.length > 0) {
+          const lastId = msg.id[msg.id.length - 1];
+          if (typeof lastId === 'string') {
+            const lcType = lastId.toLowerCase();
+            if (lcType.includes('human')) {
+              messageType = 'human';
+            } else if (lcType.includes('ai')) {
+              messageType = 'ai';
+            } else {
+              messageType = lcType.replace('message', '');
+            }
+          }
+        }
+        // Check for type in msg.type (LangChain serialization format)
+        else if (msg.type && typeof msg.type === 'string') {
+          messageType = msg.type.toLowerCase().replace('message', '');
         }
         // Check for lc_type which is used in serialized LangChain messages
         else if (msg.lc_type && typeof msg.lc_type === 'string') {
@@ -187,6 +201,10 @@ export class DigestService {
         // Check for lc_kwargs which contains the message data
         else if (msg.lc_kwargs && msg.lc_kwargs.type) {
           messageType = msg.lc_kwargs.type;
+        }
+        // Check for kwargs.type
+        else if (msg.kwargs && msg.kwargs.type) {
+          messageType = msg.kwargs.type;
         }
         // Then check for LangChain message _getType method
         else if (msg._getType && typeof msg._getType === 'function') {
@@ -204,22 +222,37 @@ export class DigestService {
 
         // Extract content from various possible locations
         let content = '';
-        if (msg.content && typeof msg.content === 'string') {
+        
+        // Check for content in msg.kwargs (LangChain serialization format)
+        if (msg.kwargs && msg.kwargs.content) {
+          if (typeof msg.kwargs.content === 'string') {
+            content = msg.kwargs.content;
+          } else if (Array.isArray(msg.kwargs.content)) {
+            content = msg.kwargs.content.map((block: any) => 
+              typeof block === 'string' ? block : block.text || JSON.stringify(block)
+            ).join(' ');
+          }
+        }
+        // Direct content property
+        else if (msg.content && typeof msg.content === 'string') {
           content = msg.content;
-        } else if (msg.text && typeof msg.text === 'string') {
+        } 
+        // Text property
+        else if (msg.text && typeof msg.text === 'string') {
           content = msg.text;
-        } else if (msg.lc_kwargs && msg.lc_kwargs.content) {
-          // LangChain serialized format
+        } 
+        // Legacy lc_kwargs format
+        else if (msg.lc_kwargs && msg.lc_kwargs.content) {
           if (typeof msg.lc_kwargs.content === 'string') {
             content = msg.lc_kwargs.content;
           } else if (Array.isArray(msg.lc_kwargs.content)) {
-            // Content might be an array of content blocks
             content = msg.lc_kwargs.content.map((block: any) => 
               typeof block === 'string' ? block : block.text || JSON.stringify(block)
             ).join(' ');
           }
-        } else if (Array.isArray(msg.content)) {
-          // Handle array content (rich content)
+        } 
+        // Array content (rich content)
+        else if (Array.isArray(msg.content)) {
           content = msg.content.map((block: any) => 
             typeof block === 'string' ? block : block.text || JSON.stringify(block)
           ).join(' ');
@@ -234,6 +267,31 @@ export class DigestService {
         // Track statistics
         messageTypeStats[messageType as keyof typeof messageTypeStats] = (messageTypeStats[messageType as keyof typeof messageTypeStats] || 0) + 1;
         messageLengths.push(formattedMsg.content.length);
+        
+        // Log first few messages with more detail to debug empty content
+        if (index < 3) {
+          logger.info({ 
+            operation: 'digest.history.message.format.detailed',
+            phone: phoneNumber,
+            messageIndex: index,
+            messageType,
+            hasContent: !!formattedMsg.content,
+            contentLength: formattedMsg.content.length,
+            contentPreview: formattedMsg.content.substring(0, 100),
+            hasTimestamp: !!msg.timestamp,
+            constructorName: msg.constructor?.name,
+            hasLcKwargs: !!msg.lc_kwargs,
+            lcType: msg.lc_type,
+            rawMsgKeys: Object.keys(msg),
+            msgContentType: typeof msg.content,
+            msgTextType: typeof msg.text,
+            hasLcKwargsContent: !!msg.lc_kwargs?.content,
+            hasKwargs: !!msg.kwargs,
+            kwargsKeys: msg.kwargs ? Object.keys(msg.kwargs) : [],
+            kwargsContentType: msg.kwargs ? typeof msg.kwargs.content : 'N/A',
+            kwargsContent: msg.kwargs?.content ? String(msg.kwargs.content).substring(0, 100) : 'N/A'
+          }, "Detailed message format (first 3 messages)");
+        }
         
         logger.debug({ 
           operation: 'digest.history.message.format',
@@ -254,19 +312,34 @@ export class DigestService {
         ? Math.round(messageLengths.reduce((a, b) => a + b, 0) / messageLengths.length)
         : 0;
 
+      // Filter out messages with no content
+      const validMessages = formattedMessages.filter(msg => msg.content && msg.content.trim().length > 0);
+      
       logger.info({ 
         operation: 'digest.history.extract.complete',
         phone: phoneNumber,
         totalMessages: formattedMessages.length,
+        validMessages: validMessages.length,
+        emptyMessages: formattedMessages.length - validMessages.length,
         humanMessages: messageTypeStats.human,
         aiMessages: messageTypeStats.ai,
         unknownMessages: messageTypeStats.unknown,
         avgMessageLength,
-        minMessageLength: Math.min(...messageLengths),
-        maxMessageLength: Math.max(...messageLengths),
+        minMessageLength: messageLengths.length > 0 ? Math.min(...messageLengths) : 0,
+        maxMessageLength: messageLengths.length > 0 ? Math.max(...messageLengths) : 0,
         durationMs: Date.now() - startTime
       }, "Conversation history extracted");
-      return formattedMessages;
+      
+      if (validMessages.length === 0) {
+        logger.warn({
+          operation: 'digest.history.all_empty',
+          phone: phoneNumber,
+          totalMessages: formattedMessages.length,
+          durationMs: Date.now() - startTime
+        }, "All messages are empty after filtering");
+      }
+      
+      return validMessages;
     } catch (error) {
       logger.error({ 
         operation: 'digest.history.extract.error',
@@ -319,6 +392,17 @@ ${conversationText}
 Extract actionable learning insights that will help personalize future conversations.
 `;
 
+    // DEBUG: Log what's being sent to the LLM
+    logger.info({
+      operation: 'digest.llm.prompt.details',
+      phone: subscriber.connections.phone,
+      conversationTextLength: conversationText.length,
+      conversationPreview: conversationText.substring(0, 1000),
+      conversationMessageCount: conversationHistory.length,
+      systemPromptPreview: systemPrompt.substring(0, 300),
+      analysisPromptPreview: analysisPrompt.substring(0, 500)
+    }, "Digest analysis prompt details");
+
     try {
       // Create a structured output LLM using withStructuredOutput
       // Note: This uses OpenAI's function calling under the hood
@@ -339,21 +423,34 @@ Extract actionable learning insights that will help personalize future conversat
         new HumanMessage(analysisPrompt)
       ]);
 
-      logger.debug({
+      const llmDuration = Date.now() - llmStartTime;
+
+      // DEBUG: Log raw response to understand what we're getting
+      logger.info({
         operation: 'digest.llm.invoke.complete',
         phone: subscriber.connections.phone,
-        analysisDataReceived: !!analysisData
-      });
-
-      const llmDuration = Date.now() - llmStartTime;
+        analysisDataReceived: !!analysisData,
+        analysisDataType: typeof analysisData,
+        analysisDataIsNull: analysisData === null,
+        analysisDataIsUndefined: analysisData === undefined,
+        analysisDataKeys: analysisData ? Object.keys(analysisData) : [],
+        analysisDataStringified: JSON.stringify(analysisData),
+        hasTopicField: analysisData?.topic !== undefined,
+        topicValue: analysisData?.topic,
+        hasSummaryField: analysisData?.summary !== undefined,
+        summaryValue: analysisData?.summary?.substring(0, 100)
+      }, "LLM invocation completed - raw response details");
 
       // Validate that we got data back
       if (!analysisData || !analysisData.topic) {
         logger.error({
           operation: 'digest.llm.analyze.no_data',
           phone: subscriber.connections.phone,
-          durationMs: Date.now() - startTime
-        }, "LLM returned no data");
+          durationMs: Date.now() - startTime,
+          receivedData: JSON.stringify(analysisData),
+          hasAnalysisData: !!analysisData,
+          hasTopic: !!analysisData?.topic
+        }, "LLM returned no data or missing topic field");
         return undefined;
       }
 
