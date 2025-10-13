@@ -338,6 +338,13 @@ Extract actionable learning insights that will help personalize future conversat
         new SystemMessage(systemPrompt),
         new HumanMessage(analysisPrompt)
       ]);
+
+      logger.debug({
+        operation: 'digest.llm.invoke.complete',
+        phone: subscriber.connections.phone,
+        analysisDataReceived: !!analysisData
+      });
+
       const llmDuration = Date.now() - llmStartTime;
 
       // Validate that we got data back
