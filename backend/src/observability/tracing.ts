@@ -1,9 +1,11 @@
-import { NodeSDK, resources } from '@opentelemetry/sdk-node';
+import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
-import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
+import { OTLPTraceExporter as OTLPTraceExporterHTTP } from '@opentelemetry/exporter-trace-otlp-http';
+import { ConsoleSpanExporter, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import { trace, context, SpanStatusCode, SpanKind } from '@opentelemetry/api';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { detectResources, resourceFromAttributes } from '@opentelemetry/resources';
+import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION, SEMRESATTRS_DEPLOYMENT_ENVIRONMENT } from '@opentelemetry/semantic-conventions';
 
 // Get version info for service identification
 const getServiceInfo = () => {
@@ -29,24 +31,44 @@ export const initializeTracing = () => {
   const getTraceExporter = () => {
     const tempoEndpoint = process.env.TEMPO_ENDPOINT;
     const otlpEndpoint = process.env.OTLP_ENDPOINT;
+    const useProto = process.env.OTLP_USE_PROTO === 'true';
     
     if (tempoEndpoint) {
       // Tempo (Grafana's tracing backend) via OTLP
-      return new OTLPTraceExporter({
-        url: `${tempoEndpoint}/v1/traces`,
-        headers: {},
-      });
+      // Use HTTP by default as it's more reliable
+      if (useProto) {
+        return new OTLPTraceExporter({
+          url: `${tempoEndpoint}/v1/traces`,
+          headers: {},
+        });
+      } else {
+        return new OTLPTraceExporterHTTP({
+          url: `${tempoEndpoint}/v1/traces`,
+          headers: {},
+        });
+      }
     } else if (otlpEndpoint) {
       // Generic OTLP endpoint
-      return new OTLPTraceExporter({
-        url: otlpEndpoint,
-      });
+      if (useProto) {
+        return new OTLPTraceExporter({
+          url: otlpEndpoint,
+        });
+      } else {
+        return new OTLPTraceExporterHTTP({
+          url: otlpEndpoint,
+        });
+      }
     } else if (process.env.NODE_ENV === 'development') {
-      // Console output for development
-      return new ConsoleSpanExporter();
+      // In development, still send to Tempo if available, otherwise console
+      // This ensures you can see trace structure in Grafana even in dev
+      const defaultDevEndpoint = process.env.DEV_TEMPO_ENDPOINT || 'http://localhost:4318/v1/traces';
+      console.log(`Development mode: sending traces to ${defaultDevEndpoint}`);
+      return new OTLPTraceExporterHTTP({
+        url: defaultDevEndpoint,
+      });
     } else {
-      // Default to OTLP for production (assuming Tempo at localhost)
-      return new OTLPTraceExporter({
+      // Default to OTLP HTTP for production (assuming Tempo at localhost)
+      return new OTLPTraceExporterHTTP({
         url: 'http://localhost:4318/v1/traces',
       });
     }
@@ -54,8 +76,9 @@ export const initializeTracing = () => {
 
   const sdk = new NodeSDK({
     resource: resourceFromAttributes({
-      'service.name': serviceInfo.name,
-      'service.version': serviceInfo.version,
+      [SEMRESATTRS_SERVICE_NAME]: serviceInfo.name,
+      [SEMRESATTRS_SERVICE_VERSION]: serviceInfo.version,
+      [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]: process.env.NODE_ENV || 'production',
     }),
     traceExporter: getTraceExporter(),
     instrumentations: [
@@ -64,16 +87,32 @@ export const initializeTracing = () => {
         '@opentelemetry/instrumentation-fs': {
           enabled: false,
         },
-        // Configure Redis instrumentation
+        // Configure Redis instrumentation for proper span hierarchy
         '@opentelemetry/instrumentation-ioredis': {
           enabled: true,
+          // Enable response hook to add more context
+          dbStatementSerializer: (cmdName, cmdArgs) => {
+            // Sanitize arguments to avoid exposing sensitive data
+            return `${cmdName}`;
+          },
         },
         // Configure HTTP instrumentation for external API calls
         '@opentelemetry/instrumentation-http': {
           enabled: true,
+          // Ensure we capture OpenAI and other HTTP client calls
           ignoreIncomingRequestHook: (req) => {
             // Ignore health checks and static files
             return req.url?.includes('/health') || req.url?.includes('/static');
+          },
+          // Add request/response hooks for better visibility
+          requestHook: (span, request) => {
+            const headers = (request as any).headers;
+            if (headers) {
+              span.setAttribute('http.request.header.user_agent', headers['user-agent'] || 'unknown');
+            }
+          },
+          responseHook: (span, response) => {
+            span.setAttribute('http.response.status_code', response.statusCode);
           },
         },
         // Express instrumentation
@@ -166,18 +205,93 @@ export const traceWhatsApp = <T>(
   );
 };
 
-// Helper for OpenAI spans
+// Helper for OpenAI spans - use CLIENT span kind for external API calls
 export const traceOpenAI = <T>(
   operation: string,
   model: string,
   fn: (span: any) => Promise<T>
 ): Promise<T> => {
-  return createBusinessSpan(
-    `openai.${operation}`,
-    fn,
-    {
+  const tracer = trace.getTracer(serviceInfo.name);
+  
+  return tracer.startActiveSpan(`openai.${operation}`, {
+    kind: SpanKind.CLIENT, // CLIENT for external service calls
+    attributes: {
       'ai.model': model,
       'ai.operation': operation,
+      'ai.system': 'openai',
+      'peer.service': 'openai',
+    },
+  }, async (span) => {
+    try {
+      const result = await fn(span);
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      span.recordException(error as Error);
+      throw error;
+    } finally {
+      span.end();
     }
-  );
+  });
+};
+
+// Helper for Redis operations - use CLIENT span kind for database calls
+export const traceRedis = <T>(
+  operation: string,
+  fn: (span: any) => Promise<T>,
+  additionalAttributes?: Record<string, string | number | boolean>
+): Promise<T> => {
+  const tracer = trace.getTracer(serviceInfo.name);
+  
+  return tracer.startActiveSpan(`redis.${operation}`, {
+    kind: SpanKind.CLIENT, // CLIENT for database operations
+    attributes: {
+      'db.system': 'redis',
+      'db.operation': operation,
+      'peer.service': 'redis',
+      ...additionalAttributes,
+    },
+  }, async (span) => {
+    try {
+      const result = await fn(span);
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      span.recordException(error as Error);
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
+};
+
+// Enhanced helper to add events to current span
+export const addSpanEvent = (
+  name: string,
+  attributes?: Record<string, string | number | boolean>
+) => {
+  const activeSpan = trace.getActiveSpan();
+  if (activeSpan) {
+    activeSpan.addEvent(name, attributes);
+  }
+};
+
+// Helper to add attributes to current span
+export const setSpanAttributes = (
+  attributes: Record<string, string | number | boolean>
+) => {
+  const activeSpan = trace.getActiveSpan();
+  if (activeSpan) {
+    Object.entries(attributes).forEach(([key, value]) => {
+      activeSpan.setAttribute(key, value);
+    });
+  }
 };
