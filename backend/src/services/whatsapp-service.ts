@@ -49,7 +49,6 @@ export class WhatsAppService {
       return false;
     }
 
-    // If CLI endpoint is configured, send message there instead of WhatsApp API
     if (this.cliEndpoint) {
       return this.sendMessageToCliRaw(toPhone, text);
     }
@@ -133,6 +132,11 @@ export class WhatsAppService {
     if (!this.token || !this.phoneId) {
       logger.error("WhatsApp service not initialized. Cannot mark message as read.");
       return false;
+    }
+
+
+    if (this.cliEndpoint) {
+      return true; // No-op in CLI mode
     }
 
     try {
