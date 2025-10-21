@@ -36,12 +36,7 @@ export class Application {
   }
 
   start(port: number): void {
-    this.app.listen(port, () => {
-      logger.info(`🚀 Language Buddy Backend with LangGraph running on port ${port}`);
-      logger.info("🔄 Schedulers started for daily messages and nightly digests");
-      logger.info("📊 Analytics and admin endpoints available");
-      logger.info(`📱 WhatsApp service: ${this.serviceContainer.whatsappService.isInitialized() ? 'initialized' : 'not initialized'}`);
-    });
+    this.app.listen(port, () => {});
   }
 
   getHealth() {

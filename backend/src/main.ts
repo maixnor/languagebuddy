@@ -38,14 +38,8 @@ async function main() {
     
     // Start server
     const port = Number(config.server.port) || 3000;
-    app.listen(port, () => {
-      logger.info(`🚀 Language Buddy Backend with LangGraph running on port ${port}`);
-      logger.info("🔄 Schedulers started for daily messages and nightly digests");
-      logger.info("📊 Analytics and admin endpoints available");
-      logger.info(`📱 WhatsApp service: ${services.whatsappService.isInitialized() ? 'initialized' : 'not initialized'}`);
-    });
+    app.listen(port, () => {});
     
-    // Export services for backward compatibility
     return {
       languageBuddyAgent: services.languageBuddyAgent,
       whatsappService: services.whatsappService,

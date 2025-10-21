@@ -28,7 +28,6 @@ export class ServiceContainer {
   public whatsappDeduplicationService!: WhatsappDeduplicationService;
 
   async initialize(): Promise<void> {
-    // Initialize Redis client
     this.redisClient = new Redis({
       host: config.redis.host,
       port: config.redis.port,
@@ -36,50 +35,40 @@ export class ServiceContainer {
       // tls: {},
     });
 
-    this.redisClient.on('connect', () => {
-      logger.info('Successfully connected to Redis!');
-    });
+    this.redisClient.on('connect', () => {});
 
     this.redisClient.on('error', (err: any) => {
       logger.error({ err }, 'Redis connection error:');
     });
 
-    // Initialize LLM
     this.llm = new ChatOpenAI({
       model: 'gpt-4o-mini',
       temperature: 0.3,
       maxTokens: 1000,
     });
 
-    // Initialize services
     this.subscriberService = SubscriberService.getInstance(this.redisClient);
     this.onboardingService = OnboardingService.getInstance(this.redisClient);
     this.feedbackService = FeedbackService.getInstance(this.redisClient);
     this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.redisClient);
 
-    // Initialize digest service
     this.digestService = DigestService.getInstance(
       this.llm,
       new RedisCheckpointSaver(this.redisClient),
       this.subscriberService
     );
 
-    // Initialize all tools
     initializeSubscriberTools(this.redisClient);
     initializeFeedbackTools(this.redisClient);
 
-    // Initialize agent (now all tools are properly initialized)
     this.languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(this.redisClient), this.llm);
 
-    // Initialize scheduler service and start schedulers
     this.schedulerService = SchedulerService.getInstance(this.subscriberService, this.languageBuddyAgent);
     this.schedulerService.startSchedulers();
 
-    // Initialize and configure Stripe service
     this.stripeService = StripeService.getInstance();
     this.stripeService.initialize(config.stripe.secretKey!);
 
-    // Initialize and configure WhatsApp service
     this.whatsappService = WhatsAppService.getInstance();
     this.whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
   }

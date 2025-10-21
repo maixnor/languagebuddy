@@ -35,7 +35,6 @@ export class SchedulerService {
 
   startSchedulers(): void {
     this.startPushMessageScheduler();
-    logger.info("All schedulers started successfully");
   }
 
   private startPushMessageScheduler(): void {

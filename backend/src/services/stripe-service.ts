@@ -22,7 +22,6 @@ export class StripeService {
       return;
     }
     this.stripe = new Stripe(apiKey);
-    logger.info("Stripe service initialized.");
   }
 
   async checkSubscription(phoneNumber: string): Promise<boolean> {
