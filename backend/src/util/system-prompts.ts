@@ -101,7 +101,7 @@ export function generateRegularSystemPrompt(subscriber: Subscriber, language: La
   const learningObjectives = language.currentObjectives?.join(', ') || 'not specified';
   const timezone = subscriber.profile.timezone || 'unknown';
 
-  return `You are ${name}'s personal language learning buddy. You are warm, encouraging, and adaptive to their learning needs.
+  let prompt = `You are ${name}'s personal language learning buddy. You are warm, encouraging, and adaptive to their learning needs.
 
 USER PROFILE:
 - Name: ${name}
@@ -109,9 +109,58 @@ USER PROFILE:
 - Learning language(s): ${learningLanguages}
 - Learning Objectives: ${learningObjectives}
 - Timezone: ${timezone}
-- Personality preference: ${subscriber.metadata.personality}
+- Personality preference: ${subscriber.metadata.personality}`;
 
-CONVERSATION GUIDELINES:
+  // Add recent conversation digests for context continuity
+  if (subscriber.metadata?.digests && subscriber.metadata.digests.length > 0) {
+    const recentDigests = subscriber.metadata.digests.slice(-3); // Last 3 digests
+    prompt += `\n\nRECENT CONVERSATION HISTORY:`;
+    prompt += `\nHere are detailed summaries of your recent conversations with ${name}. Use this context to:\n`;
+    prompt += `- Build on previously covered topics and vocabulary\n`;
+    prompt += `- Reinforce grammar concepts you've practiced\n`;
+    prompt += `- Address areas where they struggled\n`;
+    prompt += `- Reference their breakthroughs and progress\n`;
+    prompt += `- Avoid unnecessarily repeating topics unless they need more practice\n\n`;
+    
+    recentDigests.forEach((digest, index) => {
+      prompt += `\n[Conversation ${index + 1}: ${digest.topic}] (${digest.timestamp})\n`;
+      prompt += `${digest.summary}\n`;
+      
+      if (digest.vocabulary?.newWords && digest.vocabulary.newWords.length > 0) {
+        prompt += `📝 New vocabulary: ${digest.vocabulary.newWords.join(', ')}\n`;
+      }
+      if (digest.vocabulary?.struggledWith && digest.vocabulary.struggledWith.length > 0) {
+        prompt += `⚠️ Struggled with: ${digest.vocabulary.struggledWith.join(', ')}\n`;
+      }
+      if (digest.vocabulary?.mastered && digest.vocabulary.mastered.length > 0) {
+        prompt += `✅ Mastered: ${digest.vocabulary.mastered.join(', ')}\n`;
+      }
+      
+      if (digest.grammar?.conceptsCovered && digest.grammar.conceptsCovered.length > 0) {
+        prompt += `📚 Grammar covered: ${digest.grammar.conceptsCovered.join(', ')}\n`;
+      }
+      if (digest.grammar?.mistakesMade && digest.grammar.mistakesMade.length > 0) {
+        prompt += `❌ Grammar mistakes: ${digest.grammar.mistakesMade.join(', ')}\n`;
+      }
+      
+      if (digest.phrases?.newPhrases && digest.phrases.newPhrases.length > 0) {
+        prompt += `💬 New phrases: ${digest.phrases.newPhrases.join(', ')}\n`;
+      }
+      
+      if (digest.keyBreakthroughs && digest.keyBreakthroughs.length > 0) {
+        prompt += `🎉 Breakthroughs: ${digest.keyBreakthroughs.join(', ')}\n`;
+      }
+      if (digest.areasOfStruggle && digest.areasOfStruggle.length > 0) {
+        prompt += `🔄 Areas to improve: ${digest.areasOfStruggle.join(', ')}\n`;
+      }
+      
+      if (digest.userMemos && digest.userMemos.length > 0) {
+        prompt += `📌 Important notes: ${digest.userMemos.join(' • ')}\n`;
+      }
+    });
+  }
+
+  prompt += `\n\nCONVERSATION GUIDELINES:
 - Speak primarily in their target learning language
 - Adapt difficulty to their current level, also adapt the difficulty to the current conversation naturally
 - When the user uses "(word)" notation try to weave the explanation into the conversation naturally, otherwise try to explain words in their target language, but switch to their native language if they struggle
@@ -120,4 +169,6 @@ CONVERSATION GUIDELINES:
 - Help them improve gradually through natural interaction
 
 Use the available tools to update their profile or collect feedback when appropriate.`;
+
+  return prompt;
 }

@@ -238,7 +238,26 @@ CURRENT USER INFO:
 
 CONVERSATIONS OF THE LAST DAYS:
 ${subscriber.metadata.digests && subscriber.metadata.digests.length > 0
-  ? subscriber.metadata.digests.slice(-3).map(d => `- ${d.summary}`).join('\n')
+  ? subscriber.metadata.digests.slice(-3).map(d => {
+      const parts = [`Topic: ${d.topic}`, `Summary: ${d.summary}`];
+      
+      // Include areas of struggle if any
+      if (d.areasOfStruggle && d.areasOfStruggle.length > 0) {
+        parts.push(`Struggles: ${d.areasOfStruggle.join(', ')}`);
+      }
+      
+      // Include key breakthroughs if any
+      if (d.keyBreakthroughs && d.keyBreakthroughs.length > 0) {
+        parts.push(`Breakthroughs: ${d.keyBreakthroughs.join(', ')}`);
+      }
+      
+      // Include user memos if any (very important for personalization)
+      if (d.userMemos && d.userMemos.length > 0) {
+        parts.push(`Personal notes: ${d.userMemos.join('; ')}`);
+      }
+      
+      return parts.join(' | ');
+    }).join('\n\n')
   : "- No previous conversations"}
 
 INSTRUCTIONS:

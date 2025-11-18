@@ -356,16 +356,68 @@ Extract actionable learning insights that will help personalize future conversat
         summaryValue: analysisData?.summary?.substring(0, 100)
       }, "LLM invocation completed - raw response details");
 
-      // Validate that we got data back
-      if (!analysisData || !analysisData.topic) {
+      // Validate that we got data back with meaningful content
+      if (!analysisData || !analysisData.topic || !analysisData.summary) {
         logger.error({
           operation: 'digest.llm.analyze.no_data',
           phone: subscriber.connections.phone,
           durationMs: Date.now() - startTime,
           receivedData: JSON.stringify(analysisData),
           hasAnalysisData: !!analysisData,
-          hasTopic: !!analysisData?.topic
-        }, "LLM returned no data or missing topic field");
+          hasTopic: !!analysisData?.topic,
+          hasSummary: !!analysisData?.summary
+        }, "LLM returned no data or missing required fields");
+        return undefined;
+      }
+
+      // Validate topic and summary are not empty strings
+      const topicTrimmed = analysisData.topic.trim();
+      const summaryTrimmed = analysisData.summary.trim();
+      
+      if (!topicTrimmed || !summaryTrimmed) {
+        logger.error({
+          operation: 'digest.llm.analyze.empty_fields',
+          phone: subscriber.connections.phone,
+          durationMs: Date.now() - startTime,
+          topicLength: topicTrimmed.length,
+          summaryLength: summaryTrimmed.length,
+          receivedData: JSON.stringify(analysisData)
+        }, "LLM returned empty topic or summary strings");
+        return undefined;
+      }
+
+      // Validate that digest has at least some meaningful learning content
+      const hasVocabulary = (analysisData.vocabulary?.newWords?.length || 0) > 0 ||
+                           (analysisData.vocabulary?.reviewedWords?.length || 0) > 0 ||
+                           (analysisData.vocabulary?.struggledWith?.length || 0) > 0 ||
+                           (analysisData.vocabulary?.mastered?.length || 0) > 0;
+      
+      const hasGrammar = (analysisData.grammar?.conceptsCovered?.length || 0) > 0 ||
+                        (analysisData.grammar?.mistakesMade?.length || 0) > 0 ||
+                        (analysisData.grammar?.patternsPracticed?.length || 0) > 0;
+      
+      const hasPhrases = (analysisData.phrases?.newPhrases?.length || 0) > 0 ||
+                        (analysisData.phrases?.idioms?.length || 0) > 0;
+      
+      const hasInsights = (analysisData.keyBreakthroughs?.length || 0) > 0 ||
+                         (analysisData.areasOfStruggle?.length || 0) > 0 ||
+                         (analysisData.userMemos?.length || 0) > 0;
+      
+      const hasMeaningfulContent = hasVocabulary || hasGrammar || hasPhrases || hasInsights || summaryTrimmed.length > 50;
+      
+      if (!hasMeaningfulContent) {
+        logger.warn({
+          operation: 'digest.llm.analyze.no_meaningful_content',
+          phone: subscriber.connections.phone,
+          durationMs: Date.now() - startTime,
+          hasVocabulary,
+          hasGrammar,
+          hasPhrases,
+          hasInsights,
+          summaryLength: summaryTrimmed.length,
+          topic: topicTrimmed,
+          summary: summaryTrimmed.substring(0, 200)
+        }, "Digest has no meaningful learning content - conversation may be too short or low quality");
         return undefined;
       }
 
@@ -496,6 +548,21 @@ Be thorough but concise. Extract only meaningful learning insights.`;
     const startTime = Date.now();
     
     try {
+      // Validate digest before saving to prevent empty digests in Redis
+      if (!digest || !digest.topic || !digest.summary || 
+          digest.topic.trim().length === 0 || digest.summary.trim().length === 0) {
+        logger.error({
+          operation: 'digest.save.invalid_digest',
+          phone: subscriber.connections.phone,
+          hasDigest: !!digest,
+          hasTopic: !!digest?.topic,
+          hasSummary: !!digest?.summary,
+          topicLength: digest?.topic?.trim().length || 0,
+          summaryLength: digest?.summary?.trim().length || 0
+        }, 'Attempted to save empty or invalid digest - rejected');
+        throw new Error('Cannot save empty or invalid digest');
+      }
+      
       // Get the latest subscriber data
       const currentSubscriber = await this.subscriberService.getSubscriber(subscriber.connections.phone);
       if (!currentSubscriber) {
