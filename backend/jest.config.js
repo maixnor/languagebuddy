@@ -1,9 +1,16 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/tests/**/*.test.ts'],
+  testMatch: [
+    '**/tests/unit/**/*.test.ts',
+    '**/tests/int/**/*.test.ts'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/tests/e2e/'
+  ],
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
-  testTimeout: 60000, // 60 seconds timeout for e2e tests
-  forceExit: true, // Force Jest to exit after tests complete
-  detectOpenHandles: true, // Help detect what's keeping the process open
+  testTimeout: 30000, // 30 seconds for unit and integration tests
+  forceExit: true,
+  detectOpenHandles: true,
 };

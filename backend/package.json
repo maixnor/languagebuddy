@@ -15,9 +15,11 @@
     "cli": "node ../cli/chat-cli.js",
     "lint": "eslint . --ext .ts",
     "test": "npx jest",
+    "test:unit": "npx jest tests/unit",
+    "test:int": "npx jest tests/int",
     "test:watch": "npx jest --watch",
-    "test:coverage": "node --test --experimental-test-coverage --require tsx/cjs tests/**/*.test.ts",
-    "test:e2e": "RUN_E2E_TESTS=true node --test --require tsx/cjs tests/**/*.e2e.test.ts --timeout 120000"
+    "test:coverage": "npx jest --coverage",
+    "test:e2e": "RUN_E2E_TESTS=true npx jest --config jest.e2e.config.js"
   },
   "keywords": [],
   "author": "",

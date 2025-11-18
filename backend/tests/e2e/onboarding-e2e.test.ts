@@ -4,16 +4,16 @@ import path from 'path';
 // Load environment variables first
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
-import { SubscriberService } from '../src/services/subscriber-service';
-import { OnboardingService } from '../src/services/onboarding-service';
-import { LanguageBuddyAgent } from '../src/agents/language-buddy-agent';
-import { WhatsAppService } from '../src/services/whatsapp-service';
-import { Subscriber, OnboardingState } from '../src/types';
-import { generateOnboardingSystemPrompt } from '../src/util/system-prompts';
+import { SubscriberService } from '../../src/services/subscriber-service';
+import { OnboardingService } from '../../src/services/onboarding-service';
+import { LanguageBuddyAgent } from '../../src/agents/language-buddy-agent';
+import { WhatsAppService } from '../../src/services/whatsapp-service';
+import { Subscriber, OnboardingState } from '../../src/types';
+import { generateOnboardingSystemPrompt } from '../../src/util/system-prompts';
 import Redis from 'ioredis';
 import { ChatOpenAI } from '@langchain/openai';
-import { RedisCheckpointSaver } from '../src/persistence/redis-checkpointer';
-import { config } from '../src/config';
+import { RedisCheckpointSaver } from '../../src/persistence/redis-checkpointer';
+import { config } from '../../src/config';
 
 // Real Redis instance for testing
 let redisClient: Redis;

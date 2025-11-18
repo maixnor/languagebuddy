@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
-import { SchedulerService } from '../src/services/scheduler-service';
-import { Subscriber } from '../src/types';
-import { config } from '../src/config';
+import { SchedulerService } from '../../src/services/scheduler-service';
+import { Subscriber } from '../../src/types';
+import { config } from '../../src/config';
 
 describe('SchedulerService', () => {
   let scheduler: SchedulerService;
