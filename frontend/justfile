@@ -1,0 +1,29 @@
+# Frontend justfile for LanguageBuddy
+
+# Run development server
+dev:
+  npm run dev
+
+# Build for production
+build:
+  npm run build
+
+# Preview production build locally
+preview:
+  npm run preview
+
+# Build with Nix
+build-nix:
+  nix build .
+
+# Deploy to production
+deploy-prod:
+  cd .. && just deploy-frontend-prod
+
+# Deploy to test
+deploy-test:
+  cd .. && just deploy-frontend-test
+
+# Clean build artifacts
+clean:
+  rm -rf dist node_modules result

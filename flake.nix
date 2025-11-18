@@ -108,10 +108,17 @@
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
-            if ! rsync -az --delete --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
+            # First, remove old read-only frontend directories if they exist
+            # shellcheck disable=SC2029
+            ssh "$SERVER" "sudo rm -rf $DEPLOY_PATH/static/_astro $DEPLOY_PATH/static/impressum $DEPLOY_PATH/static/privacy 2>/dev/null || true"
+            # Deploy with rsync (no --delete to avoid permission issues)
+            if ! rsync -az --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
                 exit 1
             fi
+            # Fix ownership and permissions
+            # shellcheck disable=SC2029
+            ssh "$SERVER" "sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
 
             # Restart service
             echo "🔄 Restarting $ENVIRONMENT service..."
