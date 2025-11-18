@@ -56,5 +56,30 @@ ignore the typing when a user command is being handled
 
 - [x] does not work yet, but most of the code is written already, only need to debug
 
+# Code TODOs
+
+## Stripe Service
+- [ ] Remove bypass check in production (stripe-service.ts:30) - Currently returns true without checking premium status
+
+## Language Buddy Agent
+- [ ] Don't save oneShotMessages to the normal conversational thread (language-buddy-agent.ts:83)
+
+## Scheduler Service
+- [ ] Adjust nextPushMessageAt for user timezone instead of UTC (scheduler-service.ts:61)
+- [ ] Implement actual nightly digest triggering (scheduler-service.ts:219)
+- [ ] Implement actual history cleanup triggering (scheduler-service.ts:224)
+
+## Types/Subscriber Model
+- [ ] Use streakData field in subscriber model (types/index.ts:65)
+- [ ] Actually use notification preferences fields (types/index.ts:72)
+
+## Info Gathering
+- [ ] Change to use reflection of the field and provide a good prompt to find out user info (info-gathering.ts:16)
+
+## User Commands
+- [ ] Implement one-shot requests (user-commands.ts:57)
+- [ ] Let GPT handle quiz command (user-commands.ts:58)
+- [ ] Let GPT handle practice command (user-commands.ts:72)
+
 
 
