@@ -53,6 +53,7 @@ deploy-frontend-prod: build-frontend
   ssh "{{FRONTEND_SERVER}}" "sudo chown -R languagebuddy:languagebuddy {{FRONTEND_PROD_PATH}} && sudo chmod -R u+rwX,g+rwX {{FRONTEND_PROD_PATH}}"
   
   # Cleanup
+  chmod -R u+w "$TEMP_DIR" 2>/dev/null || true
   rm -rf "$TEMP_DIR"
   
   echo "✅ Frontend production deployment completed successfully!"
@@ -86,6 +87,7 @@ deploy-frontend-test: build-frontend
   ssh "{{FRONTEND_SERVER}}" "sudo chown -R languagebuddy:languagebuddy {{FRONTEND_TEST_PATH}} && sudo chmod -R u+rwX,g+rwX {{FRONTEND_TEST_PATH}}"
   
   # Cleanup
+  chmod -R u+w "$TEMP_DIR" 2>/dev/null || true
   rm -rf "$TEMP_DIR"
   
   echo "✅ Frontend test deployment completed successfully!"
