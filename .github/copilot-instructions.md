@@ -3,6 +3,10 @@
 ## Project Overview
 WhatsApp-based language learning service using LangGraph agents, Redis for state persistence, and OpenAI GPT-4. Users learn languages through conversational practice with an AI tutor that maintains persistent conversation history and subscriber profiles.
 
+## Issue Tracking and Todos
+If there are todos add them to the todos.md file in the project root. There you can also find all the current other todos.
+Should you notice that another todo is related to the current task and killing two birds with one stone is smart work on that other todo as well. When you finish a todo, please indicate that in the end so I can delete it after manual testing. 
+
 ## Architecture
 
 ### Core Components

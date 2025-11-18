@@ -2,6 +2,9 @@
 # Core tasks
 
 - include a known weakness into the conversation each time you begin
+- add diagnostics and visibility metrics to landing page
+    - absolute hits, whatsapp chat button click (include in weekly/daily digest)
+- if a user has problems and requests help my number should be sent to the user so they can directly chat with me
 
 # Automation
 
