@@ -16,6 +16,8 @@ export interface LanguageDeficiency {
   improvementSuggestions: string[];
   firstDetected: Date;
   lastOccurrence: Date;
+  lastPracticedAt?: Date; // When this deficiency was last targeted in practice
+  practiceCount?: number; // Number of times this deficiency has been practiced
 }
 
 export interface Language {

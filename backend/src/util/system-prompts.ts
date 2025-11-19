@@ -1,4 +1,5 @@
 import { Language, Subscriber } from '../types';
+import { selectDeficienciesToPractice } from './subscriber-utils';
 
 export function generateOnboardingSystemPrompt(): string {
   return `
@@ -158,6 +159,35 @@ USER PROFILE:
         prompt += `📌 Important notes: ${digest.userMemos.join(' • ')}\n`;
       }
     });
+  }
+
+  // Add current deficiencies for targeted practice
+  const priorityDeficiencies = selectDeficienciesToPractice(language, 3);
+  if (priorityDeficiencies.length > 0) {
+    prompt += `\n\nCURRENT LEARNING FOCUS - AREAS NEEDING IMPROVEMENT:`;
+    prompt += `\nThese are areas where ${name} has been struggling. Naturally incorporate these topics into your conversation to provide targeted practice:\n`;
+    
+    priorityDeficiencies.forEach((deficiency, index) => {
+      const practicedInfo = deficiency.lastPracticedAt 
+        ? ` (last practiced: ${deficiency.lastPracticedAt.toLocaleDateString()})`
+        : ' (never practiced)';
+      prompt += `\n${index + 1}. **${deficiency.specificArea}** (${deficiency.category}, ${deficiency.severity} severity)${practicedInfo}\n`;
+      
+      if (deficiency.examples && deficiency.examples.length > 0) {
+        prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join('; ')}\n`;
+      }
+      
+      if (deficiency.improvementSuggestions && deficiency.improvementSuggestions.length > 0) {
+        prompt += `   Improvement approach: ${deficiency.improvementSuggestions[0]}\n`;
+      }
+    });
+    
+    prompt += `\nIMPORTANT: Weave these weak areas into the conversation naturally and organically. For example:`;
+    prompt += `\n- If "${priorityDeficiencies[0]?.specificArea}" is a weakness, start a conversation that requires using this area`;
+    prompt += `\n- Don't explicitly mention you're targeting these areas - just create opportunities for practice`;
+    prompt += `\n- Gently correct mistakes and provide natural examples of correct usage`;
+    prompt += `\n- Use the add_language_deficiency tool to record any NEW deficiencies you identify during conversation`;
+    prompt += `\n- After successful practice of a deficiency, the system will track improvement automatically\n`;
   }
 
   prompt += `\n\nCONVERSATION GUIDELINES:

@@ -166,7 +166,94 @@ export const createSubscriberTool: DynamicStructuredTool = new DynamicStructured
   }
 });
 
+export const addLanguageDeficiencyTool: DynamicStructuredTool = new DynamicStructuredTool({
+  name: "add_language_deficiency",
+  description: "Add or update a language deficiency when you identify an area where the user struggles. This helps track weak areas for targeted practice.",
+  schema: z.object({
+    languageName: z.string().describe("The language this deficiency applies to"),
+    category: z.enum(['grammar', 'vocabulary', 'comprehension', 'cultural-context', 'spelling', 'syntax']).describe("Category of the deficiency"),
+    specificArea: z.string().describe("Specific area of struggle (e.g., 'past tense conjugation', 'business vocabulary')"),
+    severity: z.enum(['minor', 'moderate', 'major']).describe("Severity of the deficiency"),
+    examples: z.array(z.string()).optional().describe("Examples from user messages demonstrating this deficiency"),
+    improvementSuggestions: z.array(z.string()).optional().describe("Suggestions for how to improve this area")
+  }),
+  func: async (input) => {
+    const phoneNumber = getContextVariable('phone') as string;
+    if (!phoneNumber) {
+      logger.error("Phone number not found in context");
+      return "Phone number is required to add language deficiency";
+    }
+
+    try {
+      const existingSubscriber = await subscriberService.getSubscriber(phoneNumber);
+      if (!existingSubscriber) {
+        return "Subscriber not found";
+      }
+
+      // Find the target language in learning languages
+      const targetLanguageIndex = existingSubscriber.profile.learningLanguages?.findIndex(
+        lang => lang.languageName.toLowerCase() === input.languageName.toLowerCase()
+      );
+
+      if (targetLanguageIndex === undefined || targetLanguageIndex === -1) {
+        return `Language ${input.languageName} not found in learning languages`;
+      }
+
+      const targetLanguage = existingSubscriber.profile.learningLanguages[targetLanguageIndex];
+
+      // Check if this deficiency already exists
+      const existingDeficiencyIndex = targetLanguage.deficiencies?.findIndex(
+        def => def.specificArea.toLowerCase() === input.specificArea.toLowerCase()
+      );
+
+      const now = new Date();
+
+      if (existingDeficiencyIndex !== undefined && existingDeficiencyIndex !== -1) {
+        // Update existing deficiency
+        const existingDeficiency = targetLanguage.deficiencies[existingDeficiencyIndex];
+        targetLanguage.deficiencies[existingDeficiencyIndex] = {
+          ...existingDeficiency,
+          severity: input.severity,
+          lastOccurrence: now,
+          frequency: Math.min(100, existingDeficiency.frequency + 10), // Increment frequency
+          examples: [...existingDeficiency.examples, ...(input.examples || [])].slice(-5), // Keep last 5 examples
+          improvementSuggestions: input.improvementSuggestions || existingDeficiency.improvementSuggestions
+        };
+        logger.info({ phoneNumber, deficiency: input.specificArea }, "Updated existing deficiency");
+      } else {
+        // Add new deficiency
+        const newDeficiency = {
+          category: input.category,
+          specificArea: input.specificArea,
+          severity: input.severity,
+          frequency: 50, // Default frequency
+          examples: input.examples || [],
+          improvementSuggestions: input.improvementSuggestions || [],
+          firstDetected: now,
+          lastOccurrence: now,
+          practiceCount: 0
+        };
+        
+        if (!targetLanguage.deficiencies) {
+          targetLanguage.deficiencies = [];
+        }
+        targetLanguage.deficiencies.push(newDeficiency);
+        logger.info({ phoneNumber, deficiency: input.specificArea }, "Added new deficiency");
+      }
+
+      // Update the subscriber
+      await subscriberService.updateSubscriber(phoneNumber, existingSubscriber);
+      
+      return `Successfully recorded deficiency: ${input.specificArea}. This will be targeted in future practice sessions.`;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber, input }, "Error adding language deficiency");
+      return "Error recording language deficiency";
+    }
+  }
+});
+
 export const subscriberTools = [
   updateSubscriberTool,
-  createSubscriberTool
+  createSubscriberTool,
+  addLanguageDeficiencyTool
 ];
