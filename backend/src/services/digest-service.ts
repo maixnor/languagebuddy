@@ -586,22 +586,87 @@ Be thorough but concise. Extract only meaningful learning insights.`;
 
       // Update learning language data based on digest insights
       let deficienciesAdded = 0;
+      let deficienciesUpdated = 0;
       let objectivesAdded = 0;
       
       if (updatedSubscriber.profile.learningLanguages && updatedSubscriber.profile.learningLanguages.length > 0) {
         const learningLanguage = updatedSubscriber.profile.learningLanguages[0];
         
+        // Track which deficiencies were practiced in this conversation
+        // If grammar concepts were covered or mistakes were made, mark relevant deficiencies as practiced
+        const practicedTopics = new Set<string>([
+          ...(digest.grammar.conceptsCovered || []),
+          ...(digest.grammar.mistakesMade || []),
+          ...(digest.areasOfStruggle || [])
+        ]);
+        
+        // Update existing deficiencies if they were practiced
+        if (learningLanguage.deficiencies && learningLanguage.deficiencies.length > 0) {
+          learningLanguage.deficiencies = learningLanguage.deficiencies.map(deficiency => {
+            // Check if this deficiency was practiced (fuzzy match against practiced topics)
+            const wasPracticed = Array.from(practicedTopics).some(topic => {
+              const topicLower = topic.toLowerCase();
+              const deficiencyLower = deficiency.specificArea.toLowerCase();
+              
+              // Direct substring match
+              if (topicLower.includes(deficiencyLower) || deficiencyLower.includes(topicLower)) {
+                return true;
+              }
+              
+              // Word-level match - check if they share significant words (4+ chars or multiple 3+ char words)
+              const topicWords = topicLower.split(/\s+/).filter(w => w.length >= 3);
+              const deficiencyWords = deficiencyLower.split(/\s+/).filter(w => w.length >= 3);
+              
+              // Count matching words
+              let matchCount = 0;
+              let hasLongMatch = false;
+              
+              for (const tw of topicWords) {
+                for (const dw of deficiencyWords) {
+                  if (tw === dw || tw.includes(dw) || dw.includes(tw)) {
+                    matchCount++;
+                    if (tw.length >= 5 || dw.length >= 5) {
+                      hasLongMatch = true;
+                    }
+                  }
+                }
+              }
+              
+              // Match if we have a long word match OR multiple short word matches
+              return hasLongMatch || matchCount >= 2;
+            });
+            
+            if (wasPracticed) {
+              deficienciesUpdated++;
+              return {
+                ...deficiency,
+                lastPracticedAt: new Date(),
+                practiceCount: (deficiency.practiceCount || 0) + 1
+              };
+            }
+            return deficiency;
+          });
+        }
+        
         // Update deficiencies based on areas of struggle
-        const newDeficiencies = digest.areasOfStruggle.map(area => ({
-          category: 'grammar' as const,
-          specificArea: area,
-          severity: 'moderate' as const,
-          frequency: 50,
-          examples: [area],
-          improvementSuggestions: [`Practice ${area} more frequently`],
-          firstDetected: new Date(),
-          lastOccurrence: new Date()
-        }));
+        const newDeficiencies = digest.areasOfStruggle
+          .filter(area => {
+            // Only add if not already tracked
+            return !learningLanguage.deficiencies?.some(def => 
+              def.specificArea.toLowerCase() === area.toLowerCase()
+            );
+          })
+          .map(area => ({
+            category: 'grammar' as const,
+            specificArea: area,
+            severity: 'moderate' as const,
+            frequency: 50,
+            examples: [area],
+            improvementSuggestions: [`Practice ${area} more frequently`],
+            firstDetected: new Date(),
+            lastOccurrence: new Date(),
+            practiceCount: 0
+          }));
         deficienciesAdded = newDeficiencies.length;
 
         // Update objectives based on key breakthroughs and struggles
@@ -632,6 +697,7 @@ Be thorough but concise. Extract only meaningful learning insights.`;
         previousDigestCount,
         newDigestCount: updatedSubscriber.metadata.digests.length,
         deficienciesAdded,
+        deficienciesUpdated,
         objectivesAdded,
         digestTopic: digest.topic,
         durationMs: Date.now() - startTime

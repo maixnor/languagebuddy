@@ -20,9 +20,20 @@
 - [x] Update subscriber profiles based on digest insights
 - [x] Create comprehensive test suite
 - [x] Document the digest system functionality
+- [x] Track deficiency practice in digests (automatically updates lastPracticedAt and practiceCount)
 - [ ] Add automatic digest creation at conversation end
 - [ ] Implement conversation metrics analysis (currently skipped)
 - [ ] Add scheduled digest cleanup and archiving
+
+## Adaptive Weakness Integration (COMPLETED)
+
+- [x] Extended LanguageDeficiency type with lastPracticedAt and practiceCount fields
+- [x] Created selectDeficienciesToPractice() utility for prioritizing weak areas
+- [x] Added add_language_deficiency tool for recording new deficiencies
+- [x] Enhanced system prompts to include top 3 deficiencies with natural integration instructions
+- [x] Implemented fuzzy matching in digest service to detect when deficiencies are practiced
+- [x] Automatic updates to deficiency metadata during conversation analysis
+- [x] Comprehensive test coverage (22 new tests, all passing)
 
 # User probing
 
