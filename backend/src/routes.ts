@@ -95,7 +95,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
     res.sendFile(process.cwd() + "/static/index.html", (err) => {
       if (err) {
         logger.warn({ err }, "Could not serve frontend index.html, falling back to text response");
-        res.send("Language Buddy Backend - Powered by LangGraph");
+        res.send("You should not be seeing this. Please come back in like 2 days when I fixed the website :)");
       }
     });
   });
