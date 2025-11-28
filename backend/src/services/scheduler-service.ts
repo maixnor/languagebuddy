@@ -2,6 +2,7 @@ import * as cron from 'node-cron';
 import { logger, config } from '../config';
 import { SubscriberService } from './subscriber-service';
 import { WhatsAppService } from './whatsapp-service';
+import { DigestService } from './digest-service';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 import { DateTime } from 'luxon';
 
@@ -9,6 +10,7 @@ export class SchedulerService {
   private static instance: SchedulerService;
   private subscriberService: SubscriberService;
   private whatsappService: WhatsAppService;
+  private digestService: DigestService;
   private languageBuddyAgent: LanguageBuddyAgent;
 
   private constructor(
@@ -17,6 +19,7 @@ export class SchedulerService {
   ) {
     this.subscriberService = subscriberService;
     this.whatsappService = WhatsAppService.getInstance();
+    this.digestService = DigestService.getInstance();
     this.languageBuddyAgent = languageBuddyAgent;
   }
 
@@ -42,6 +45,65 @@ export class SchedulerService {
     cron.schedule('* * * * *', async () => {
       await this.sendPushMessages();
     });
+  }
+
+  /**
+   * Execute nightly tasks for a single subscriber:
+   * 1. Increment conversation count
+   * 2. Create digest from current conversation
+   * 3. Clear conversation history
+   * 4. Initiate new conversation with daily system prompt
+   * 5. Send the new conversation message
+   * 
+   * @param subscriber - The subscriber to process
+   * @returns The message that was sent to the subscriber, or null if failed
+   */
+  async executeNightlyTasksForSubscriber(subscriber: any): Promise<string | null> {
+    try {
+      await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
+      
+      // Create digest before clearing conversation history
+      try {
+        await this.subscriberService.createDigest(subscriber);
+        logger.debug({ phoneNumber: subscriber.connections.phone }, "Digest created before conversation reset");
+      } catch (digestError) {
+        logger.error({ err: digestError, phoneNumber: subscriber.connections.phone }, "Failed to create digest before conversation reset");
+        // Continue with conversation reset even if digest creation fails
+      }
+      
+      // Clean up old digests (older than 10 days)
+      try {
+        const removedCount = await this.digestService.removeOldDigests(subscriber.connections.phone, 10);
+        if (removedCount > 0) {
+          logger.debug({ phoneNumber: subscriber.connections.phone, removedCount }, "Removed old digests during nightly tasks");
+        }
+      } catch (cleanupError) {
+        logger.error({ err: cleanupError, phoneNumber: subscriber.connections.phone }, "Failed to clean up old digests");
+        // Continue with other nightly tasks even if cleanup fails
+      }
+      
+      await this.languageBuddyAgent.clearConversation(subscriber.connections.phone);
+      const message = await this.languageBuddyAgent.initiateConversation(
+        subscriber,
+        this.subscriberService.getDailySystemPrompt(subscriber),
+        ""
+      );
+      
+      const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
+      
+      if (messageSent.failed === 0) {
+        logger.trace({ 
+          phoneNumber: subscriber.connections.phone
+        }, "Nightly tasks completed and message sent successfully");
+        return message;
+      } else {
+        logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send message after nightly tasks");
+        return null;
+      }
+    } catch (error) {
+      logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error executing nightly tasks for subscriber");
+      return null;
+    }
   }
 
   private async sendPushMessages(): Promise<void> {
@@ -106,45 +168,13 @@ export class SchedulerService {
           nextPushMessageAt: finalNextTime.toISO()
         });
         
-        // Send message
-        try {
-          await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
-          
-          // Create digest before clearing conversation history
-          try {
-            await this.subscriberService.createDigest(subscriber);
-            logger.debug({ phoneNumber: subscriber.connections.phone }, "Digest created before conversation reset");
-          } catch (digestError) {
-            logger.error({ err: digestError, phoneNumber: subscriber.connections.phone }, "Failed to create digest before conversation reset");
-            // Continue with conversation reset even if digest creation fails
-          }
-          
-          await this.languageBuddyAgent.clearConversation(subscriber.connections.phone)
-          const message = await this.languageBuddyAgent.initiateConversation(
-            subscriber,
-            this.subscriberService.getDailySystemPrompt(subscriber),
-            ""
-          );
-          
-          const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
-          
-          if (messageSent.failed === 0) {
-            logger.trace({ 
-              phoneNumber: subscriber.connections.phone,
-              nextPushTime: finalNextTime.toISO()
-            }, "Push message sent successfully");
-          } else {
-            logger.error({ phoneNumber: subscriber.connections.phone }, "Failed to send push message to subscriber");
-            // If message failed, retry in 1 hour
-            await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-              nextPushMessageAt: DateTime.utc().plus({ hours: 1 }).toISO()
-            });
-          }
-        } catch (error) {
-          logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Error sending push message to subscriber");
-          // If error occurred, retry in 10 hours
+        // Execute nightly tasks and send message
+        const messageSent = await this.executeNightlyTasksForSubscriber(subscriber);
+        
+        if (!messageSent) {
+          // If message failed, retry in 1 hour
           await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: DateTime.utc().plus({ hours: 10 }).toISO()
+            nextPushMessageAt: DateTime.utc().plus({ hours: 1 }).toISO()
           });
         }
       }

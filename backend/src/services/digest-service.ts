@@ -817,4 +817,81 @@ Be thorough but concise. Extract only meaningful learning insights.`;
       return [];
     }
   }
+
+  /**
+   * Removes digests older than the specified number of days
+   * @param phoneNumber - User's phone number
+   * @param daysToKeep - Number of days to keep digests (default: 10)
+   * @returns Number of digests removed
+   */
+  async removeOldDigests(phoneNumber: string, daysToKeep: number = 10): Promise<number> {
+    const startTime = Date.now();
+    
+    try {
+      const subscriber = await this.subscriberService.getSubscriber(phoneNumber);
+      if (!subscriber) {
+        logger.warn({
+          operation: 'digest.cleanup.no_subscriber',
+          phone: phoneNumber,
+          durationMs: Date.now() - startTime
+        }, "No subscriber found for digest cleanup");
+        return 0;
+      }
+
+      const digests = subscriber.metadata?.digests || [];
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
+
+      const initialCount = digests.length;
+      const recentDigests = digests.filter(digest => {
+        const digestDate = new Date(digest.timestamp);
+        return digestDate >= cutoffDate;
+      });
+
+      const removedCount = initialCount - recentDigests.length;
+
+      if (removedCount > 0) {
+        await this.subscriberService.updateSubscriber(phoneNumber, {
+          metadata: {
+            ...subscriber.metadata,
+            digests: recentDigests
+          }
+        });
+
+        logger.info({
+          operation: 'digest.cleanup.success',
+          phone: phoneNumber,
+          initialCount,
+          removedCount,
+          remainingCount: recentDigests.length,
+          daysToKeep,
+          cutoffDate: cutoffDate.toISOString(),
+          durationMs: Date.now() - startTime
+        }, `Removed ${removedCount} old digest(s)`);
+      } else {
+        logger.debug({
+          operation: 'digest.cleanup.no_removal',
+          phone: phoneNumber,
+          digestCount: initialCount,
+          daysToKeep,
+          cutoffDate: cutoffDate.toISOString(),
+          durationMs: Date.now() - startTime
+        }, "No old digests to remove");
+      }
+
+      return removedCount;
+
+    } catch (error) {
+      logger.error({
+        operation: 'digest.cleanup.error',
+        err: error,
+        phone: phoneNumber,
+        daysToKeep,
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - startTime
+      }, "Error removing old digests");
+      return 0;
+    }
+  }
 }

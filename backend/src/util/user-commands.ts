@@ -3,6 +3,7 @@ import { logger } from '../config';
 import { WhatsAppService } from '../services/whatsapp-service';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 import { SubscriberService } from '../services/subscriber-service';
+import { SchedulerService } from '../services/scheduler-service';
 
 export async function handleUserCommand(
     subscriber: Subscriber, 
@@ -53,6 +54,37 @@ export async function handleUserCommand(
         }
     }
 
+    if (message.startsWith('!night')) {
+        try {
+            logger.info({ phone: subscriber.connections.phone }, "User requested manual nightly tasks execution");
+            
+            const schedulerService = SchedulerService.getInstance();
+            const messageSent = await schedulerService.executeNightlyTasksForSubscriber(subscriber);
+            
+            if (messageSent) {
+                await whatsappService.sendMessage(
+                    subscriber.connections.phone, 
+                    "🌙 Nightly tasks executed! Your conversation has been digested, history cleared, and a new conversation has started."
+                );
+                logger.info({ phone: subscriber.connections.phone }, "Nightly tasks executed successfully via user command");
+            } else {
+                await whatsappService.sendMessage(
+                    subscriber.connections.phone, 
+                    "There was a problem executing nightly tasks. Please try again later."
+                );
+            }
+
+            return '!night';
+        } catch (error) {
+            logger.error({ err: error, phone: subscriber.connections.phone }, "Error executing manual nightly tasks");
+            await whatsappService.sendMessage(
+                subscriber.connections.phone, 
+                "Sorry, there was an error executing nightly tasks. Please try again later."
+            );
+            return '!night';
+        }
+    }
+
     if (message.startsWith('!me')) {
         // TODO implement one-shot requests
         // TODO let gpt handle this
@@ -92,7 +124,7 @@ export async function handleUserCommand(
 
     if (message.startsWith('!help') || message.startsWith('help') || message.startsWith('!commands')) {
       logger.info(`User ${subscriber.connections.phone} requested help`);
-      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "!digest": Create a learning digest from current conversation\n- "ping": Test connectivity');
+      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "!digest": Create a learning digest from current conversation\n- "!night": Manually trigger nightly tasks (digest + reset + new conversation)\n- "ping": Test connectivity');
       return '!help';
     }
 
