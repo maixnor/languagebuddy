@@ -70,7 +70,7 @@ ignore the typing when a user command is being handled
 # Code TODOs
 
 ## Stripe Service
-- [ ] Remove bypass check in production (stripe-service.ts:30) - Currently returns true without checking premium status
+- [x] Remove bypass check in production (stripe-service.ts:30) - Currently returns true without checking premium status
 
 ## Language Buddy Agent
 - [ ] Don't save oneShotMessages to the normal conversational thread (language-buddy-agent.ts:83)
