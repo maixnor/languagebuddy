@@ -1,5 +1,5 @@
-import { Language, Subscriber } from '../types';
-import { selectDeficienciesToPractice } from './subscriber-utils';
+import { Language, Subscriber } from "../types";
+import { selectDeficienciesToPractice } from "./subscriber-utils";
 
 export function generateOnboardingSystemPrompt(): string {
   return `
@@ -18,7 +18,7 @@ STEP 1: GDPR CONSENT (MUST BE FIRST)
 ➤ Explain that you help people learn new languages through personalized conversations
 ➤ Explain that to provide personalized language learning, you need to collect some personal information:
   • Your name
-  • What languages you speak natively 
+  • What languages you speak natively
   • Your timezone
   • The language you want to learn
 ➤ Explain that the complete privacy statement can be found at https://prod.languagebuddy.maixnor.com/static/privacy.html
@@ -41,7 +41,7 @@ STEP 4: EXPLAIN FEATURES & PREPARE FOR ASSESSMENT
 ➤ Continue speaking in their native language
 ➤ Explain what you can do: have conversations about any topic, practice daily conversations, help with specific language skills
 ➤ Explain the assessment process: you'll have a conversation in their target language to understand their current level
-➤ Mention they can use the notation "(word)" to signal when they don't know a word 
+➤ Mention they can use the notation "(word)" to signal when they don't know a word
   - either you will just weave the word into your response or very briefly mention it and continue
 ➤ Explain this helps you identify areas to work on later and will take around 10 messages, so 5-10 minutes
 ➤ Start the assessment right away, no need to wait or ask for permission
@@ -95,22 +95,53 @@ Remember: Your goal is to create a complete, accurate subscriber profile through
 `;
 }
 
-export function generateRegularSystemPrompt(subscriber: Subscriber, language: Language): string {
+export function generateRegularSystemPrompt(
+  subscriber: Subscriber,
+  language: Language,
+): string {
   const name = subscriber.profile.name;
-  const nativeLanguages = subscriber.profile.speakingLanguages?.map((lang: Language) => lang.languageName).join(', ') || 'unknown';
-  const learningLanguages = language.languageName + " at level " + language.overallLevel || 'not specified';
-  const learningObjectives = language.currentObjectives?.join(', ') || 'not specified';
-  const timezone = subscriber.profile.timezone || 'unknown';
+  const nativeLanguages =
+    subscriber.profile.speakingLanguages
+      ?.map((lang: Language) => lang.languageName)
+      .join(", ") || "unknown";
+  const learningLanguages =
+    language.languageName + " at level " + language.overallLevel ||
+    "not specified";
+  const learningObjectives =
+    language.currentObjectives?.join(", ") || "not specified";
+  const timezone = subscriber.profile.timezone || "unknown";
+  const mistakeTolerance = subscriber.metadata.mistakeTolerance || "normal";
 
   let prompt = `You are ${name}'s personal language learning buddy. You are warm, encouraging, and adaptive to their learning needs.
 
-USER PROFILE:
-- Name: ${name}
-- Native language(s): ${nativeLanguages}
-- Learning language(s): ${learningLanguages}
-- Learning Objectives: ${learningObjectives}
-- Timezone: ${timezone}
-- Personality preference: ${subscriber.metadata.personality}`;
+  USER PROFILE:
+  - Name: ${name}
+  - Native language(s): ${nativeLanguages}
+  - Learning language(s): ${learningLanguages}
+  - Learning Objectives: ${learningObjectives}
+  - Timezone: ${timezone}
+  - Personality preference: ${subscriber.metadata.personality}
+  - Mistake tolerance: ${mistakeTolerance}`;
+
+  if (
+    subscriber.metadata?.digests?.length === 1 &&
+    !subscriber.metadata.mistakeTolerance
+  ) {
+    prompt += `
+
+  SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE
+  It's great to see you back for your second day! To make our sessions even better, I'd like to personalize how I give you feedback.
+
+  Please ask the user the following question in their NATIVE language:
+  "When we're practicing, how much do you want me to correct your mistakes? You can choose between:
+  - 'forgiving' (only correct major mistakes),
+  - 'normal' (correct common errors),
+  - 'exact' (correct most mistakes), or
+  - 'hyperexact' (correct every single mistake, including minor details)."
+
+  Once they respond, use the 'update_subscriber_profile' tool to set their 'mistakeTolerance' preference. This is a one-time setup question.
+  `;
+  }
 
   // Add recent conversation digests for context continuity
   if (subscriber.metadata?.digests && subscriber.metadata.digests.length > 0) {
@@ -122,41 +153,56 @@ USER PROFILE:
     prompt += `- Address areas where they struggled\n`;
     prompt += `- Reference their breakthroughs and progress\n`;
     prompt += `- Avoid unnecessarily repeating topics unless they need more practice\n\n`;
-    
+
     recentDigests.forEach((digest, index) => {
       prompt += `\n[Conversation ${index + 1}: ${digest.topic}] (${digest.timestamp})\n`;
       prompt += `${digest.summary}\n`;
-      
-      if (digest.vocabulary?.newWords && digest.vocabulary.newWords.length > 0) {
-        prompt += `📝 New vocabulary: ${digest.vocabulary.newWords.join(', ')}\n`;
+
+      if (
+        digest.vocabulary?.newWords &&
+        digest.vocabulary.newWords.length > 0
+      ) {
+        prompt += `📝 New vocabulary: ${digest.vocabulary.newWords.join(", ")}\n`;
       }
-      if (digest.vocabulary?.struggledWith && digest.vocabulary.struggledWith.length > 0) {
-        prompt += `⚠️ Struggled with: ${digest.vocabulary.struggledWith.join(', ')}\n`;
+      if (
+        digest.vocabulary?.struggledWith &&
+        digest.vocabulary.struggledWith.length > 0
+      ) {
+        prompt += `⚠️ Struggled with: ${digest.vocabulary.struggledWith.join(", ")}\n`;
       }
-      if (digest.vocabulary?.mastered && digest.vocabulary.mastered.length > 0) {
-        prompt += `✅ Mastered: ${digest.vocabulary.mastered.join(', ')}\n`;
+      if (
+        digest.vocabulary?.mastered &&
+        digest.vocabulary.mastered.length > 0
+      ) {
+        prompt += `✅ Mastered: ${digest.vocabulary.mastered.join(", ")}\n`;
       }
-      
-      if (digest.grammar?.conceptsCovered && digest.grammar.conceptsCovered.length > 0) {
-        prompt += `📚 Grammar covered: ${digest.grammar.conceptsCovered.join(', ')}\n`;
+
+      if (
+        digest.grammar?.conceptsCovered &&
+        digest.grammar.conceptsCovered.length > 0
+      ) {
+        prompt += `📚 Grammar covered: ${digest.grammar.conceptsCovered.join(", ")}\n`;
       }
-      if (digest.grammar?.mistakesMade && digest.grammar.mistakesMade.length > 0) {
-        prompt += `❌ Grammar mistakes: ${digest.grammar.mistakesMade.join(', ')}\n`;
+      if (
+        digest.grammar?.mistakesMade &&
+        digest.grammar.mistakesMade.length > 0
+      ) {
+        prompt += `❌ Grammar mistakes: ${digest.grammar.mistakesMade.join(", ")}\n`;
       }
-      
+
       if (digest.phrases?.newPhrases && digest.phrases.newPhrases.length > 0) {
-        prompt += `💬 New phrases: ${digest.phrases.newPhrases.join(', ')}\n`;
+        prompt += `💬 New phrases: ${digest.phrases.newPhrases.join(", ")}\n`;
       }
-      
+
       if (digest.keyBreakthroughs && digest.keyBreakthroughs.length > 0) {
-        prompt += `🎉 Breakthroughs: ${digest.keyBreakthroughs.join(', ')}\n`;
+        prompt += `🎉 Breakthroughs: ${digest.keyBreakthroughs.join(", ")}\n`;
       }
       if (digest.areasOfStruggle && digest.areasOfStruggle.length > 0) {
-        prompt += `🔄 Areas to improve: ${digest.areasOfStruggle.join(', ')}\n`;
+        prompt += `🔄 Areas to improve: ${digest.areasOfStruggle.join(", ")}\n`;
       }
-      
+
       if (digest.userMemos && digest.userMemos.length > 0) {
-        prompt += `📌 Important notes: ${digest.userMemos.join(' • ')}\n`;
+        prompt += `📌 Important notes: ${digest.userMemos.join(" • ")}\n`;
       }
     });
   }
@@ -166,22 +212,25 @@ USER PROFILE:
   if (priorityDeficiencies.length > 0) {
     prompt += `\n\nCURRENT LEARNING FOCUS - AREAS NEEDING IMPROVEMENT:`;
     prompt += `\nThese are areas where ${name} has been struggling. Naturally incorporate these topics into your conversation to provide targeted practice:\n`;
-    
+
     priorityDeficiencies.forEach((deficiency, index) => {
-      const practicedInfo = deficiency.lastPracticedAt 
+      const practicedInfo = deficiency.lastPracticedAt
         ? ` (last practiced: ${deficiency.lastPracticedAt.toLocaleDateString()})`
-        : ' (never practiced)';
+        : " (never practiced)";
       prompt += `\n${index + 1}. **${deficiency.specificArea}** (${deficiency.category}, ${deficiency.severity} severity)${practicedInfo}\n`;
-      
+
       if (deficiency.examples && deficiency.examples.length > 0) {
-        prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join('; ')}\n`;
+        prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join("; ")}\n`;
       }
-      
-      if (deficiency.improvementSuggestions && deficiency.improvementSuggestions.length > 0) {
+
+      if (
+        deficiency.improvementSuggestions &&
+        deficiency.improvementSuggestions.length > 0
+      ) {
         prompt += `   Improvement approach: ${deficiency.improvementSuggestions[0]}\n`;
       }
     });
-    
+
     prompt += `\nIMPORTANT: Weave these weak areas into the conversation naturally and organically. For example:`;
     prompt += `\n- If "${priorityDeficiencies[0]?.specificArea}" is a weakness, start a conversation that requires using this area`;
     prompt += `\n- Don't explicitly mention you're targeting these areas - just create opportunities for practice`;
@@ -197,6 +246,11 @@ USER PROFILE:
 - Be patient and encouraging
 - Focus on practical, engaging conversations that should prepare the user for real-world language use
 - Help them improve gradually through natural interaction
+- Adhere to the user's mistake tolerance preference (${mistakeTolerance}):
+    - "forgiving": Only correct critical mistakes that impede understanding. Focus on fluency and encouragement.
+    - "normal": Correct common mistakes and errors that affect clarity. Balance fluency with accuracy.
+    - "exact": Correct most mistakes, including minor grammatical errors and awkward phrasing. Focus on precision and correctness.
+    - "hyperexact": Correct every single mistake, including minor details, to achieve near-native precision.
 
 Use the available tools to update their profile or collect feedback when appropriate.`;
 

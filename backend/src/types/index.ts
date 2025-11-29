@@ -1,16 +1,33 @@
-
 export interface LanguageSkillAssessment {
-  skill: 'grammar' | 'vocabulary' | 'comprehension' | 'spelling' | 'punctuation' | 'text-coherence';
-  level: 'beginner' | 'elementary' | 'intermediate' | 'upper-intermediate' | 'advanced' | 'proficient';
+  skill:
+    | "grammar"
+    | "vocabulary"
+    | "comprehension"
+    | "spelling"
+    | "punctuation"
+    | "text-coherence";
+  level:
+    | "beginner"
+    | "elementary"
+    | "intermediate"
+    | "upper-intermediate"
+    | "advanced"
+    | "proficient";
   confidence: number; // 0-100, AI confidence in this assessment
   lastAssessed: Date;
   evidence: string[]; // Examples or phrases that led to this assessment
 }
 
 export interface LanguageDeficiency {
-  category: 'grammar' | 'vocabulary' | 'comprehension' | 'cultural-context' | 'spelling' | 'syntax';
+  category:
+    | "grammar"
+    | "vocabulary"
+    | "comprehension"
+    | "cultural-context"
+    | "spelling"
+    | "syntax";
   specificArea: string; // e.g., "past tense", "business vocabulary", "sentence structure"
-  severity: 'minor' | 'moderate' | 'major';
+  severity: "minor" | "moderate" | "major";
   frequency: number; // How often this error occurs (0-100)
   examples: string[]; // User messages demonstrating this deficiency
   improvementSuggestions: string[];
@@ -23,17 +40,17 @@ export interface LanguageDeficiency {
 export interface Language {
   languageName: string;
   dialect?: string;
-  overallLevel: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'; // CEFR levels
-  
+  overallLevel: "A1" | "A2" | "B1" | "B2" | "C1" | "C2"; // CEFR levels
+
   // Detailed skill breakdown
   skillAssessments: LanguageSkillAssessment[];
-  
+
   // Areas needing improvement
   deficiencies: LanguageDeficiency[];
-  
+
   currentObjectives?: string[]; // Learning objectives and progress
   motivationFactors?: string[]; // What drives them to learn
-  
+
   // Metadata
   firstEncountered: Date;
   lastPracticed: Date;
@@ -47,35 +64,36 @@ export interface Subscriber {
     // discord: string;
     // telegram: string;
     // instagram: string;
-  }
+  };
   profile: {
     name: string;
     speakingLanguages: Language[];
     learningLanguages: Language[];
     timezone?: string;
     messagingPreferences?: {
-      type: 'morning' | 'midday' | 'evening' | 'fixed';
+      type: "morning" | "midday" | "evening" | "fixed";
       times?: string[]; // for fixed
     };
     // favoriteColor?: string;
-  }
+  };
   signedUpAt?: string; // ISO timestamp
   metadata: {
     digests: Digest[];
     personality: string;
-    
-    streakData: { // TODO use
+
+    streakData: {
+      // TODO use
       currentStreak: number; // Days
-      longestStreak: number;
-      lastActiveDate: Date;
+      longestStreak: number; // Days
+      lastIncrement: Date; // used to invalidate streaks
     };
-    
+
     // AI model insights about user
     // TODO actually use them
     predictedChurnRisk: number; // 0-100, likelihood of stopping
     engagementScore: number; // 0-100, how engaged they are
-    difficultyPreference: 'easy' | 'moderate' | 'challenging' | 'adaptive';
-  }
+    mistakeTolerance: "forgiving" | "normal" | "exact" | "hyperexact"; // how picky the buddy will be with mistakes:w
+  };
   isPremium?: boolean;
   lastActiveAt?: Date;
   nextPushMessageAt?: string; // ISO string in UTC
@@ -87,34 +105,34 @@ export interface Digest {
   summary: string;
   keyBreakthroughs: string[];
   areasOfStruggle: string[];
-  
+
   vocabulary: {
     newWords: string[];
     reviewedWords: string[];
     struggledWith: string[];
     mastered: string[];
   };
-  
+
   phrases: {
     newPhrases: string[];
     idioms: string[];
     colloquialisms: string[];
     formalExpressions: string[];
   };
-  
+
   grammar: {
     conceptsCovered: string[];
     mistakesMade: string[];
     patternsPracticed: string[];
   };
-  
+
   // Conversation quality metrics
   conversationMetrics: {
     messagesExchanged: number;
     averageResponseTime: number; // seconds
     topicsDiscussed: string[];
     userInitiatedTopics: number;
-    
+
     // Text-specific metrics
     averageMessageLength: number; // characters
     sentenceComplexity: number; // average words per sentence
@@ -124,7 +142,7 @@ export interface Digest {
     emojiUsage: number; // frequency of emoji use
     abbreviationUsage: string[]; // common abbreviations used
   };
-  
+
   userMemos?: string[]; // Personal memos about the user for better context in future conversations
 }
 
@@ -133,9 +151,9 @@ export interface FeedbackEntry {
   originalMessage: string;
   userFeedback: string;
   userPhone: string;
-  sentiment: 'positive' | 'negative' | 'neutral';
+  sentiment: "positive" | "negative" | "neutral";
   actionItems: string[];
-  category: 'content' | 'technical' | 'suggestion' | 'other';
+  category: "content" | "technical" | "suggestion" | "other";
 }
 
 export interface WebhookMessage {
