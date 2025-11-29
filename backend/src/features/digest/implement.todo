@@ -1,5 +1,0 @@
-- [ ] Migrate logic from backend/src/services/digest-service.ts to digest.service.ts
-- [ ] Extract Digest and related types from backend/src/types/index.ts to digest.types.ts
-- [ ] Extract Zod schemas from backend/src/services/digest-service.ts to digest.schema.ts
-- [ ] Migrate unit tests from backend/src/tests/unit/digest-service.test.ts to digest.service.test.ts
-- [ ] Migrate e2e tests from backend/src/tests/e2e/digest-e2e.test.ts to digest.e2e.test.ts

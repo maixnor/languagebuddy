@@ -1,7 +1,0 @@
-- [x] Migrate logic from backend/src/services/subscriber-service.ts to subscriber.service.ts
-- [x] Extract Subscriber and related types from backend/src/types/index.ts to subscriber.types.ts
-- [x] Migrate subscriber tools from backend/src/tools/subscriber-tools.ts to subscriber.tools.ts
-- [x] Migrate subscriber contracts from backend/src/tools/contracts.ts to subscriber.contracts.ts
-- [x] Migrate subscriber utils from backend/src/util/subscriber-utils.ts to subscriber.utils.ts
-- [x] Migrate generic subscriber prompts from backend/src/util/system-prompts.ts to subscriber.prompts.ts
-- [x] Migrate unit tests from backend/src/tests/unit/subscriber-utils.test.ts to subscriber.utils.test.ts
