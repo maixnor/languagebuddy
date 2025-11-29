@@ -1,5 +1,9 @@
 # LanguageBuddy Project Context for Gemini
 
+## 0. Git
+- **NEVER TOUCH GIT UNLESS PROMPTED TO OTHERWISE**
+- using `git log` or other read-only commands is fine, never add or commit or push anything
+
 ## 1. Project Overview
 **LanguageBuddy** is a WhatsApp-based language learning service. It uses:
 - **LangGraph** for stateful conversational agents.
@@ -23,8 +27,9 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
     -   `subscriber.prompts.ts`: System prompts.
 -   **`digest/`** (Migrated): Daily conversation summaries.
 -   **`onboarding/`** (Migrated): User onboarding flow.
--   **`feedback/`** (Pending): User feedback collection.
--   **`subscription/`** (Pending): Stripe integration.
+-   **`feedback/`** (Migrated): User feedback collection.
+-   **`scheduling/`** (Migrated): Scheduling services.
+-   **`subscription/`** (Migrated): Stripe integration.
 
 ### Services & Container
 -   **`ServiceContainer`**: Central singleton container initializing all feature services (`backend/src/services/service-container.ts`).
@@ -91,11 +96,6 @@ We are implementing a system to summarize conversations, update user profiles, a
     -   After digest is created and saved, **CLEAR** the LangGraph checkpoint.
     -   Keep system prompts/essential context, but wipe the chat buffer.
 
-### Key Files for Digest Task (Target for Migration)
--   `backend/src/features/digest/` (New home)
--   `backend/src/services/digest-service.ts` (Old home - to be migrated)
--   `backend/src/services/scheduler-service.ts` (Old home - to be migrated to `features/scheduling/`)
-
 ## 5. Known Issues & Watchlist
 -   **Throttling**: Logic for trial vs. premium is fragile. Check `SubscriberService.shouldThrottle()`.
 -   **Timezones**: Day boundaries for throttling and digests can be tricky.
@@ -107,9 +107,3 @@ We are implementing a system to summarize conversations, update user profiles, a
 -   **Output**: Use `markdownToWhatsApp` formatter.
 -   **Tools**: Always define schemas with Zod in `*.contracts.ts`.
 -   **Logs**: Use structured logging (Pino).
-
-## 7. Next Steps / Recommendations (Gemini's List)
--   [ ] **Migrate Digest Feature**: Move `DigestService` and related logic to `backend/src/features/digest/`.
--   [ ] **Migrate Onboarding**: Move `OnboardingService` to `backend/src/features/onboarding/`.
--   [ ] **Implement Scheduler**: Create the 3 AM check loop in `features/scheduling/`.
--   [ ] **Conversation Reset**: Ensure `clearConversation` works without breaking the user's *next* message handling.
