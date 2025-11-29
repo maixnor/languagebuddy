@@ -29,7 +29,7 @@
         # Create deployment script
         mkDeployScript = { environment, deployPath, server }: pkgs.writeShellApplication {
           name = "deploy-${environment}";
-          runtimeInputs = with pkgs; [ openssh rsync git fzf ];
+          runtimeInputs = with pkgs; [ openssh rsync git fzf gnutar ];
           text = ''
             set -e
 
@@ -45,6 +45,9 @@
                 exit 1
             fi
 
+            BUILD_DIR="backend"
+            ENV_PROD_BACKUP=""
+
             # Allow user to select a commit for deployment
             if [ "$ENVIRONMENT" = "prod" ]; then
                 COMMIT=$(git log --oneline -n 50 | fzf --prompt "Select commit: " | awk '{ print $1 }')
@@ -54,30 +57,24 @@
                 fi
                 echo "📌 Selected commit: $COMMIT"
                 
-                # Save .env.prod file before creating worktree
-                ENV_PROD_BACKUP=""
+                # Save .env.prod file path
                 if [ -f "backend/.env.prod" ]; then
                     ENV_PROD_BACKUP=$(mktemp)
                     cp "backend/.env.prod" "$ENV_PROD_BACKUP"
                     echo "💾 Backed up .env.prod file"
                 fi
                 
-                # Create a temporary worktree for the selected commit
-                TEMP_WORKTREE=$(mktemp -d)
-                git worktree add "$TEMP_WORKTREE" "$COMMIT"
-                cd "$TEMP_WORKTREE"
+                # Create a temporary directory for the clean source
+                TEMP_BUILD_ROOT=$(mktemp -d)
+                echo "📦 Extracting commit $COMMIT to $TEMP_BUILD_ROOT..."
+                git archive --format=tar "$COMMIT" | tar -x -C "$TEMP_BUILD_ROOT"
                 
-                # Restore .env.prod file to worktree
-                if [ -n "$ENV_PROD_BACKUP" ] && [ -f "$ENV_PROD_BACKUP" ]; then
-                    cp "$ENV_PROD_BACKUP" "backend/.env.prod"
-                    echo "📋 Restored .env.prod to worktree"
-                    rm "$ENV_PROD_BACKUP"
-                fi
+                BUILD_DIR="$TEMP_BUILD_ROOT/backend"
             fi
 
             # Build the backend
-            echo "📦 Building backend with Nix..."
-            cd backend
+            echo "📦 Building backend with Nix in $BUILD_DIR..."
+            cd "$BUILD_DIR"
             nix build .
 
             # Create deployment directory
@@ -92,25 +89,23 @@
                 cp -r result/* "$TEMP_DIR/"
             fi
             
-            # Copy environment file if it exists
-            if [ -f ".env.prod" ]; then
-                echo "📋 Copying production environment file..."
-                cp ".env.prod" "$TEMP_DIR/.env"
+            # Copy environment file
+            if [ "$ENVIRONMENT" = "prod" ] && [ -n "$ENV_PROD_BACKUP" ]; then
+                echo "📋 Copying production environment file from backup..."
+                cp "$ENV_PROD_BACKUP" "$TEMP_DIR/.env"
+                rm "$ENV_PROD_BACKUP"
+            elif [ -f ".env.prod" ]; then
+                 echo "📋 Copying production environment file..."
+                 cp ".env.prod" "$TEMP_DIR/.env"
             elif [ -f "backend/.env.prod" ]; then
-                echo "📋 Copying production environment file from backend directory..."
-                cp "backend/.env.prod" "$TEMP_DIR/.env"
-            else
-                echo "⚠️  Warning: No .env.prod file found, skipping environment file copy"
-                echo "🔍 Current directory: $(pwd)"
-                echo "🔍 Looking for: .env.prod and backend/.env.prod"
-                ls -la .env* backend/.env* 2>/dev/null || echo "No .env files found"
+                 echo "📋 Copying production environment file from backend directory..."
+                 cp "backend/.env.prod" "$TEMP_DIR/.env"
+            elif [ "$ENVIRONMENT" = "prod" ]; then
+                echo "⚠️  Warning: No .env.prod file found for production deployment!"
             fi
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
-            # First, remove old read-only frontend directories if they exist
-            # shellcheck disable=SC2029
-            ssh "$SERVER" "sudo rm -rf $DEPLOY_PATH/static/_astro $DEPLOY_PATH/static/impressum $DEPLOY_PATH/static/privacy 2>/dev/null || true"
             # Deploy with rsync (no --delete to avoid permission issues)
             if ! rsync -az --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
