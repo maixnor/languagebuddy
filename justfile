@@ -148,3 +148,4 @@ logs-backend-prod:
 # Stream backend test logs
 logs-backend-test:
   cd backend && just stream-logs test
+
