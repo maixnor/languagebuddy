@@ -101,14 +101,14 @@ npm run test:coverage
 - **Fix**: Implemented `StripeWebhookService` and a new `/stripe-webhook` endpoint to handle Stripe events and update subscriber's `isPremium` status.
 - **File**: `stripe-integration.integration.test.ts`
 
-#### 2.4 No Caching of Subscription Status
+#### 2.4 No Caching of Subscription Status [FIXED]
 - **Test**: `should handle concurrent checkSubscription calls for same user`
 - **Bug**: Every check makes 2 Stripe API calls (customer search + subscription list)
 - **Impact**: Rate limiting, slow performance, unnecessary costs
 - **Fix**: Cache subscription status for 5-10 minutes
 - **File**: `stripe-integration.integration.test.ts`
 
-#### 2.5 Only Checks 'active' Status
+#### 2.5 Only Checks 'active' Status [FIXED]
 - **Test**: `should handle subscription with past_due status`
 - **Bug**: Only checks for 'active' subscriptions, not 'trialing' or 'past_due'
 - **Impact**: User with payment issue immediately loses access (harsh!)

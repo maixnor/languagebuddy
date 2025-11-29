@@ -358,6 +358,52 @@ Be natural and conversational. Proactively gather missing information but weave 
     return prompt;
   }
 
+  public async setLanguage(phoneNumber: string, languageCode: string): Promise<void> {
+    try {
+      const subscriber = await this.getSubscriber(phoneNumber);
+      if (!subscriber) {
+        throw new Error(`Subscriber with phone ${phoneNumber} not found`);
+      }
+
+      // 1. Manage the learningLanguages array
+      let languageFound = false;
+      if (!subscriber.profile.learningLanguages) {
+        subscriber.profile.learningLanguages = [];
+      }
+
+      const normalizedLanguageCode = languageCode.toLowerCase();
+
+      subscriber.profile.learningLanguages = subscriber.profile.learningLanguages.map(lang => {
+        if (lang.languageName.toLowerCase() === normalizedLanguageCode) {
+          languageFound = true;
+          return { ...lang, currentLanguage: true };
+        }
+        return { ...lang, currentLanguage: false };
+      });
+
+      if (!languageFound) {
+        // Add new language if not found
+        subscriber.profile.learningLanguages.push({
+          languageName: languageCode.charAt(0).toUpperCase() + languageCode.slice(1).toLowerCase(), // Capitalize first letter
+          overallLevel: "A1", // Default level for new language
+          skillAssessments: [],
+          deficiencies: [],
+          firstEncountered: new Date(),
+          lastPracticed: new Date(),
+          totalPracticeTime: 0,
+          confidenceScore: 0,
+          currentLanguage: true,
+        });
+      }
+
+      await this.saveSubscriber(subscriber);
+      logger.info({ phoneNumber, languageCode }, `Subscriber ${phoneNumber} learning language set to ${languageCode}`);
+    } catch (error) {
+      logger.error({ err: error, phoneNumber, languageCode }, "Error setting subscriber language");
+      throw error;
+    }
+  }
+
   async addLanguageDeficiencyToSubscriber(
     phoneNumber: string, 
     languageName: string, 

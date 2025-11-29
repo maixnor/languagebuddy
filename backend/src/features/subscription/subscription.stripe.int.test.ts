@@ -50,16 +50,23 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
     await redis.del(`subscriber:${testPhone}`);
     await redis.del(`subscriber:${testPhoneWithPlus}`);
 
+    // Explicitly set config values for Stripe, ensuring they are available to StripeService
+    (config.stripe as any).secretKey = 'sk_test_123';
+    (config.stripe as any).webhookSecret = 'wh_test_abc';
+
     // Reset singletons
     (StripeService as any).instance = null;
     (SubscriberService as any).instance = null;
 
     stripeService = StripeService.getInstance();
+    // Initialize StripeService with the dummy API key from config
+    stripeService.initialize(config.stripe.secretKey);
+    
     subscriberService = SubscriberService.getInstance(redis);
     stripeWebhookService = new StripeWebhookService(
       subscriberService,
       stripeService,
-      testWebhookSecret
+      config.stripe.webhookSecret! // Use config.stripe.webhookSecret
     );
 
     // Create mock Stripe instance

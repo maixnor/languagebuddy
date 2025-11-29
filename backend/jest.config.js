@@ -14,4 +14,5 @@ module.exports = {
   testTimeout: 30000, // 30 seconds for unit and integration tests
   forceExit: true,
   detectOpenHandles: true,
+  setupFiles: ["dotenv/config"],
 };

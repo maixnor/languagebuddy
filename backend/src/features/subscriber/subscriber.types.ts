@@ -59,6 +59,7 @@ export interface Language {
   lastPracticed: Date;
   totalPracticeTime: number; // Minutes
   confidenceScore: number; // 0-100, user's confidence in this language
+  currentLanguage?: boolean;
 }
 
 export interface Subscriber {

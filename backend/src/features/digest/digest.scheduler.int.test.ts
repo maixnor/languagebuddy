@@ -45,17 +45,18 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
       clearConversation: jest.fn().mockResolvedValue(undefined),
       initiateConversation: jest.fn().mockResolvedValue('Welcome back!'),
     } as any;
-    
-    scheduler = SchedulerService.getInstance(subscriberService, agent);
-    
-    // Mock digest service to avoid LLM calls
+
+    // Mock digest service to avoid LLM calls - THIS MUST BE DONE BEFORE SchedulerService IS INITIALIZED
     digestService = {
       getConversationHistory: jest.fn(),
       createConversationDigest: jest.fn(),
       saveDigestToSubscriber: jest.fn(),
       removeOldDigests: jest.fn().mockResolvedValue(0),
     } as any;
-    (DigestService as any).instance = digestService;
+    // Mock getInstance to return our mocked digestService
+    jest.spyOn(DigestService, 'getInstance').mockReturnValue(digestService);
+
+    scheduler = SchedulerService.getInstance(subscriberService, agent);
   });
 
   afterEach(async () => {

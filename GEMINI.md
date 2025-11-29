@@ -51,6 +51,7 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 **Every new feature or bug fix MUST include tests.**
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
+-   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 10s npm run start` as these commands run in watch mode and do not exit automatically).
 
 ### Testing Strategy
 Within each feature folder (`backend/src/features/<feature_name>/`), we aim for up to three dedicated test files: `feature-name.unit.test.ts`, `feature-name.int.test.ts`, and `feature-name.e2e.test.ts`. This colocation ensures all testing concerns for a feature are kept together.

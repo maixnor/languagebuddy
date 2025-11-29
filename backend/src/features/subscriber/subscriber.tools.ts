@@ -9,6 +9,7 @@ import Redis from "ioredis";
 import {
   SubscriberUpdateContract,
   type SubscriberUpdateContract as SubscriberUpdateContractType,
+  SetLanguageContract, // Added import for SetLanguageContract
 } from "./subscriber.contracts"; // Adjusted import
 
 let subscriberService: SubscriberService;
@@ -393,9 +394,42 @@ export const proposeMistakeToleranceChangeTool: DynamicStructuredTool =
     },
   });
 
+export const proposeMistakeToleranceChangeTool: DynamicStructuredTool =
+  new DynamicStructuredTool({
+    name: "propose_mistake_tolerance_change",
+    description:
+      "Ask the user if they want to change their mistake tolerance. The tool returns a phrase that can be used to ask the user.",
+    schema: z.object({}),
+    func: async () => {
+      return "By the way, I was wondering if you're happy with how much I'm correcting your mistakes. We can adjust it if you like. Are you happy with the current setting?";
+    },
+  });
+
+export const setLanguageTool: DynamicStructuredTool =
+  new DynamicStructuredTool({
+    name: "set_language",
+    description: "Sets the user's current learning language.",
+    schema: SetLanguageContract,
+    func: async (input) => {
+      const phoneNumber = getContextVariable("phone") as string;
+      if (!phoneNumber) {
+        logger.error("Phone number not found in context");
+        return "Phone number is required to set the language";
+      }
+      try {
+        await subscriberService.setLanguage(phoneNumber, input.languageCode);
+        return `Successfully set learning language to ${input.languageCode}.`;
+      } catch (error) {
+        logger.error({ err: error, phoneNumber, languageCode: input.languageCode }, "Error setting language");
+        return "Error setting learning language.";
+      }
+    },
+  });
+
 export const subscriberTools = [
   updateSubscriberTool,
   createSubscriberTool,
   addLanguageDeficiencyTool,
   proposeMistakeToleranceChangeTool,
+  setLanguageTool,
 ];

@@ -16,19 +16,12 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
   let subscriberService: SubscriberService;
   const testPhone = '+1234567890';
 
-  beforeAll(() => {
+  beforeEach(async () => {
     redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
     });
-  });
-
-  afterAll(async () => {
-    await redis.quit();
-  });
-
-  beforeEach(async () => {
     // Clear ALL conversation count test data
     const keys = await redis.keys(`conversation_count:*`);
     if (keys.length > 0) {
@@ -40,10 +33,12 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
   });
 
   afterEach(async () => {
+    // Clean up Redis after each test
     const keys = await redis.keys(`*${testPhone}*`);
     if (keys.length > 0) {
       await redis.del(...keys);
     }
+    await redis.quit();
   });
 
   describe('Race condition: SET vs INCR', () => {
