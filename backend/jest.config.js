@@ -3,7 +3,8 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: [
     '**/tests/unit/**/*.test.ts',
-    '**/tests/int/**/*.test.ts'
+    '**/tests/int/**/*.test.ts',
+    '**/src/**/*.test.ts'
   ],
   testPathIgnorePatterns: [
     '/node_modules/',

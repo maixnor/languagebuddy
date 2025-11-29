@@ -1,9 +1,9 @@
-import { Subscriber } from '../types';
+import { Subscriber } from '../features/subscriber/subscriber.types';
 import { logger } from '../config';
-import { WhatsAppService } from '../services/whatsapp-service';
+import { WhatsAppService } from '../core/messaging/whatsapp';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
-import { SubscriberService } from '../services/subscriber-service';
-import { SchedulerService } from '../services/scheduler-service';
+import { SubscriberService } from '../features/subscriber/subscriber.service';
+import { SchedulerService } from '../features/scheduling/scheduler.service';
 
 export async function handleUserCommand(
     subscriber: Subscriber, 

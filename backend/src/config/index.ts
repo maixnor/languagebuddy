@@ -61,6 +61,7 @@ export const getConfig = () => ({
   },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY!,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

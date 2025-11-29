@@ -1,0 +1,3 @@
+- [ ] Migrate logic from backend/src/services/feedback-service.ts to feedback.service.ts
+- [ ] Extract Feedback types from backend/src/types/index.ts to feedback.types.ts
+- [ ] Migrate feedback tools from backend/src/tools/feedback-tools.ts to feedback.tools.ts

@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { Subscriber } from "../types";
+import { Subscriber } from "../features/subscriber/subscriber.types";
 import { logger } from "../config";
 
 export class StripeService {
@@ -35,9 +35,13 @@ export class StripeService {
     }
 
     try {
+      // Normalize the phone number to ensure it has exactly one leading '+'
+      // Remove all leading '+' and then add a single '+'
+      const normalizedPhoneNumber = '+' + phoneNumber.replace(/^\++/, '');
+
       const customers = await this.stripe.customers.search({
         limit: 1,
-        query: `phone:'+${phoneNumber}'`, // WhatsApp phone numbers are without the plus, adding it here
+        query: `phone:'${normalizedPhoneNumber}'`,
       });
 
       if (customers.data.length === 0) {
@@ -80,6 +84,17 @@ export class StripeService {
       );
       return false;
     }
+  }
+
+  constructEventFromWebhook(
+    payload: Buffer,
+    signature: string | string[],
+    secret: string
+  ): Stripe.Event {
+    if (!this.stripe) {
+      throw new Error("Stripe is not initialized. Cannot construct webhook event.");
+    }
+    return this.stripe.webhooks.constructEvent(payload, signature, secret);
   }
 
   /**

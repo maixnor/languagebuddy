@@ -1,11 +1,21 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI, OpenAI, OpenAIClient } from "@langchain/openai";
-import { Subscriber } from '../types';
+import { Subscriber } from '../features/subscriber/subscriber.types'; // Updated import
 import { logger } from '../config';
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
 import {RedisCheckpointSaver} from "../persistence/redis-checkpointer";
-import {tools} from "../tools";
+// import {tools} from "../tools"; // Original tools import - will need re-evaluation
+
+// Manually import the individual tools for now, until a better tool registration strategy is in place
+import {
+  updateSubscriberTool,
+  createSubscriberTool,
+  addLanguageDeficiencyTool,
+  proposeMistakeToleranceChangeTool,
+  initializeSubscriberTools // Also needed if the agent directly calls this
+} from "../features/subscriber/subscriber.tools";
+import { feedbackTools } from "../tools/feedback-tools"; // Keep original feedback tools for now
 
 export class LanguageBuddyAgent {
   private checkpointer: RedisCheckpointSaver;
@@ -14,15 +24,26 @@ export class LanguageBuddyAgent {
   constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI) {
     this.checkpointer = checkpointer;
 
+    // Combine all tools, including the newly moved subscriber tools
+    const allTools = [
+      updateSubscriberTool,
+      createSubscriberTool,
+      addLanguageDeficiencyTool,
+      proposeMistakeToleranceChangeTool,
+      ...feedbackTools, // Existing feedback tools
+      // ... any other tools that will be migrated later
+    ];
+
     this.agent = createReactAgent({
       llm: llm,
-      tools: tools,
+      tools: allTools, // Use the combined tools
       checkpointer: checkpointer,
     })
   }
   async initiateConversation(subscriber: Subscriber, systemPrompt: string, humanMessage: string): Promise<string> {
     try {
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
+      setContextVariable('phone', subscriber.connections.phone);
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { configurable: { thread_id: subscriber.connections.phone }}

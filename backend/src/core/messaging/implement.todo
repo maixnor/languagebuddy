@@ -1,0 +1,4 @@
+- [x] Migrate backend/src/services/whatsapp-service.ts to whatsapp.service.ts
+- [ ] Migrate backend/src/services/webhook-service.ts to webhook.service.ts
+- [x] Migrate backend/src/services/whatsapp-deduplication-service.ts to deduplication.service.ts
+- [ ] Extract WebhookMessage and other types from backend/src/types/index.ts to messaging.types.ts

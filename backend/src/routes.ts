@@ -1,6 +1,7 @@
 import express from "express";
 import { ServiceContainer } from './services/service-container';
 import { WebhookService } from './services/webhook-service';
+import { StripeWebhookService } from './services/stripe-webhook-service';
 import { logger, config } from './config';
 import { getCommitHash, getPackageVersion } from './util/version-info';
 
@@ -17,13 +18,25 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
     }
   });
 
-  // Main webhook endpoint
+  // Main webhook endpoint (WhatsApp)
   app.post("/webhook", async (req: any, res: any) => {
     try {
       await webhookService.handleWebhookMessage(req.body, res);
     } catch (error) {
       logger.error({ err: error }, "Error in /webhook endpoint");
       res.status(500).send("Internal server error while processing webhook.");
+    }
+  });
+
+  // Stripe Webhook Endpoint
+  app.post("/stripe-webhook", express.raw({ type: 'application/json' }), async (req: any, res: any) => {
+    const signature = req.headers['stripe-signature'];
+    try {
+      await services.stripeWebhookService.handleWebhookEvent(signature, req.rawBody);
+      res.sendStatus(200);
+    } catch (error) {
+      logger.error({ err: error }, "Error in /stripe-webhook endpoint");
+      res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
 

@@ -1,6 +1,6 @@
 // Handles information gathering mode for subscribers
 import { getMissingProfileFieldsReflective } from '../util/profile-reflection';
-import { Subscriber } from '../types';
+import { Subscriber } from '../features/subscriber/subscriber.types';
 
 /**
  * Returns the next missing field for the subscriber, or null if complete

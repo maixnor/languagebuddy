@@ -1,10 +1,12 @@
 import { ServiceContainer } from './service-container';
 import { logger, trackEvent, trackMetric, config } from '../config';
-import { WebhookMessage, Subscriber } from '../types';
+import { WebhookMessage } from '../types';
+import { Subscriber } from '../features/subscriber/subscriber.types';
 import { handleUserCommand } from '../util/user-commands';
 import { getNextMissingField, getPromptForField } from '../util/info-gathering';
-import { generateOnboardingSystemPrompt, generateRegularSystemPrompt } from '../util/system-prompts';
-import { getFirstLearningLanguage } from "../util/subscriber-utils";
+import { generateOnboardingSystemPrompt } from '../util/system-prompts';
+import { generateRegularSystemPrompt } from '../features/subscriber/subscriber.prompts';
+import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
 
 export class WebhookService {
   constructor(private services: ServiceContainer) {}

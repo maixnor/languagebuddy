@@ -1,0 +1,2 @@
+- [ ] Ensure SchedulerService is correctly instantiated and used in ServiceContainer.
+- [ ] Migrate `scheduler-service.ts` into `scheduler.service.ts` in the new feature folder. (already done).

@@ -10,20 +10,35 @@
 
 ## 2. Architecture & Core Patterns
 
-### Services (Dependency Injection)
-- **`ServiceContainer`**: Central singleton container initializing all services (`backend/src/services/service-container.ts`).
-- **All Services**: Follow `getInstance(redis)` pattern.
+### Feature-Based Architecture (New)
+We are migrating from a layered architecture (Services/Tools/Types) to a **Feature-Based Architecture** to improve cohesion and AI navigability.
+
+**Directory Structure (`backend/src/features/`)**:
+-   **`subscriber/`** (Migrated): Core user management.
+    -   `subscriber.service.ts`: Business logic.
+    -   `subscriber.types.ts`: Domain models (`Subscriber`, `Language`).
+    -   `subscriber.tools.ts`: LangChain tools.
+    -   `subscriber.contracts.ts`: Zod schemas for tools.
+    -   `subscriber.utils.ts`: Helper functions.
+    -   `subscriber.prompts.ts`: System prompts.
+-   **`digest/`** (Migrated): Daily conversation summaries.
+-   **`onboarding/`** (Migrated): User onboarding flow.
+-   **`feedback/`** (Pending): User feedback collection.
+-   **`subscription/`** (Pending): Stripe integration.
+
+### Services & Container
+-   **`ServiceContainer`**: Central singleton container initializing all feature services (`backend/src/services/service-container.ts`).
+-   **Pattern**: Services still follow `getInstance(redis)` pattern but are located within their feature folders.
 
 ### Data Model (Redis)
-- **Conversation State**: `checkpoint:${phone}` (Managed by LangGraph `RedisCheckpointSaver`).
-- **User Profile**: `subscriber:phone:${phone}` (Managed by `SubscriberService`).
-- **Onboarding State**: `onboarding:${phone}` (Managed by `OnboardingService`).
+-   **Conversation State**: `checkpoint:${phone}` (Managed by LangGraph `RedisCheckpointSaver`).
+-   **User Profile**: `subscriber:phone:${phone}` (Managed by `SubscriberService`).
+-   **Onboarding State**: `onboarding:${phone}` (Managed by `OnboardingService`).
 
 ### The Agent (`LanguageBuddyAgent`)
-- Uses `createReactAgent`.
-- **Thread ID**: The user's phone number.
-- **Tools**: Located in `backend/src/tools/`.
-    - **Critical**: Agent *must* use tools to read/write subscriber data (`get_subscriber_profile`, `update_subscriber_profile`). It cannot access Redis directly.
+-   **Orchestrator**: `backend/src/agents/language-buddy-agent.ts`.
+-   **Thread ID**: The user's phone number.
+-   **Tools**: Aggregated from features (e.g., `subscriber.tools.ts`). Agent *must* use tools to access data.
 
 ## 3. Development Workflow
 
@@ -34,32 +49,27 @@
 
 ### ⚠️ Testing Mandate ⚠️
 **Every new feature or bug fix MUST include tests.**
-The codebase currently lacks sufficient coverage. We must aggressively add tests with every change.
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
 
 ### Testing Strategy
-1.  **Unit Tests** (`*.test.ts`) - **PREFERRED**
+Within each feature folder (`backend/src/features/<feature_name>/`), we aim for up to three dedicated test files: `feature-name.unit.test.ts`, `feature-name.int.test.ts`, and `feature-name.e2e.test.ts`. This colocation ensures all testing concerns for a feature are kept together.
+
+1.  **Unit Tests** (`*.unit.test.ts`) - **PREFERRED**
     -   **Scope**: Individual functions/methods (business logic).
-    -   **Mocks**: Mock EVERYTHING external (Redis, OpenAI, other services).
+    -   **Location**: Collocated within the feature folder (e.g., `features/subscriber/subscriber.utils.unit.test.ts`).
+    -   **Mocks**: Mock EVERYTHING external.
     -   **Performance**: Must run in <200ms.
     -   **Usage**: `npm test` (runs fast).
 
 2.  **Integration Tests** (`*.int.test.ts`) - **REQUIRED for State/Service Logic**
-    -   **Scope**: Service interactions, Redis state persistence, complex workflows.
+    -   **Scope**: Service interactions, Redis state persistence.
+    -   **Location**: Collocated within the feature folder (e.g., `features/subscriber/subscriber.service.int.test.ts`).
     -   **Mocks**: Real Redis (local/container), MOCK OpenAI/LLM calls.
-    -   **Usage**: Use `OnboardingTestHelper` or similar fixtures.
 
 3.  **E2E Tests** (`*.e2e.test.ts`) - **SPARINGLY**
     -   **Scope**: Full system flow including real OpenAI responses.
-    -   **Cost**: Expensive and slow. Use only for critical "happy path" verification of the full bot.
-
-### Critical Test Gaps (Prioritize These)
-See [TEST_GAPS.md](./TEST_GAPS.md) for a comprehensive, prioritized list of missing tests.
--   **Throttling Logic**: `SubscriberService.shouldThrottle()` & `canStartConversationToday()`. (Fragile edge cases).
--   **Stripe Integration**: Webhooks, subscription status updates.
--   **Trial Transitions**: Day 7 cutoff, day 3-6 warnings.
--   **Conversation Counts**: Daily increments and Redis key expiration.
+    -   **Location**: Collocated within the feature folder (e.g., `features/subscriber/subscriber.e2e.test.ts`).
 
 ## 4. Current Focus: Automatic Nightly Digests
 
@@ -75,32 +85,30 @@ We are implementing a system to summarize conversations, update user profiles, a
     -   **Improvements**:
         -   **Vocabulary Extraction**: Extract new words to `subscriber.languages[].vocabulary`.
         -   **Deficiency Tracking**: Update `areasOfStruggle` and `deficiencies`.
-        -   **Next Session Seed**: Generate a "context hook" for the *next* conversation start (e.g., "Last time we practiced past tense...").
+        -   **Next Session Seed**: Generate a "context hook" for the *next* conversation start.
 3.  **History Cleanup**:
-    -   After digest is created and saved, **CLEAR** the LangGraph checkpoint (`languageBuddyAgent.clearConversation`).
+    -   After digest is created and saved, **CLEAR** the LangGraph checkpoint.
     -   Keep system prompts/essential context, but wipe the chat buffer.
-4.  **Silent User Fallback**:
-    -   If user hasn't replied in >48h, schedule a gentle re-engagement message based on previous digest/memos.
 
-### Key Files for Digest Task
--   `backend/src/services/digest-service.ts`: Logic for generating digests.
--   `backend/src/services/scheduler-service.ts`: Where the cron/check logic goes.
--   `backend/src/types/index.ts`: Update Subscriber model if needed (e.g., for tracking `lastDigestAt`).
+### Key Files for Digest Task (Target for Migration)
+-   `backend/src/features/digest/` (New home)
+-   `backend/src/services/digest-service.ts` (Old home - to be migrated)
+-   `backend/src/services/scheduler-service.ts` (Old home - to be migrated to `features/scheduling/`)
 
 ## 5. Known Issues & Watchlist
--   **Throttling**: Logic for trial vs. premium (1 msg/day) is fragile. Check `SubscriberService.shouldThrottle()`.
--   **Timezones**: Day boundaries for throttling and digests can be tricky. Always use `luxon` and the user's timezone.
+-   **Throttling**: Logic for trial vs. premium is fragile. Check `SubscriberService.shouldThrottle()`.
+-   **Timezones**: Day boundaries for throttling and digests can be tricky.
 -   **Stripe**: Webhook handling needs robust testing.
+-   **Detailed Bug Hunting**: Refer to [`backend/BUG-HUNTING-TESTS.md`](backend/BUG-HUNTING-TESTS.md) for a comprehensive list of known bugs and their associated test cases. All P0, P1, and P2 bugs have now been addressed and verified.
 
 ## 6. Conventions
+-   **Structure**: Feature-based (`backend/src/features/`).
 -   **Output**: Use `markdownToWhatsApp` formatter.
--   **Prompts**: `backend/src/util/system-prompts.ts`.
--   **Tools**: Always define schemas with Zod.
+-   **Tools**: Always define schemas with Zod in `*.contracts.ts`.
 -   **Logs**: Use structured logging (Pino).
 
 ## 7. Next Steps / Recommendations (Gemini's List)
--   [ ] **Implement Scheduler**: Create the 3 AM check loop in `SchedulerService`.
-    -   *Requirement*: Add Unit tests for timezone calculation.
+-   [ ] **Migrate Digest Feature**: Move `DigestService` and related logic to `backend/src/features/digest/`.
+-   [ ] **Migrate Onboarding**: Move `OnboardingService` to `backend/src/features/onboarding/`.
+-   [ ] **Implement Scheduler**: Create the 3 AM check loop in `features/scheduling/`.
 -   [ ] **Conversation Reset**: Ensure `clearConversation` works without breaking the user's *next* message handling.
-    -   *Requirement*: Add Integration test for state clearing.
--   [ ] **Deficiency Practice**: Ensure the `DigestService` explicitly prioritizes identified deficiencies for the *next* day's system prompt.

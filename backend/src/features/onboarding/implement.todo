@@ -1,0 +1,4 @@
+- [ ] Migrate logic from backend/src/services/onboarding-service.ts to onboarding.service.ts
+- [ ] Extract onboarding prompts from backend/src/util/system-prompts.ts to onboarding.prompts.ts
+- [ ] Extract/Identify onboarding specific types from backend/src/types/index.ts to onboarding.types.ts
+- [ ] Migrate e2e tests from backend/src/tests/e2e/onboarding-e2e.test.ts to onboarding.e2e.test.ts

@@ -1,0 +1,3 @@
+- [ ] Migrate logic from backend/src/services/stripe-service.ts to stripe.service.ts (or subscription.service.ts)
+- [ ] Extract subscription related types from backend/src/types/index.ts to subscription.types.ts
+- [ ] Migrate integration tests from backend/src/tests/int/stripe-integration.test.ts to subscription.int.test.ts

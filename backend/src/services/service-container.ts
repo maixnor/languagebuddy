@@ -1,18 +1,5 @@
-import Redis from 'ioredis';
-import { ChatOpenAI } from "@langchain/openai";
-import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
-import { SubscriberService } from './subscriber-service';
-import { OnboardingService } from './onboarding-service';
-import { FeedbackService } from './feedback-service';
-import { DigestService } from './digest-service';
-import { StripeService } from './stripe-service';
-import { WhatsAppService } from './whatsapp-service';
-import { SchedulerService } from './scheduler-service';
-import { WhatsappDeduplicationService } from './whatsapp-deduplication-service';
-import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
-import { logger, config } from '../config';
-import { initializeSubscriberTools } from "../tools/subscriber-tools";
-import { initializeFeedbackTools } from "../tools/feedback-tools";
+import { StripeWebhookService } from './stripe-webhook-service';
+import { SchedulerService } from '../features/scheduling/scheduler.service';
 
 export class ServiceContainer {
   public redisClient!: Redis;
@@ -26,6 +13,7 @@ export class ServiceContainer {
   public whatsappService!: WhatsAppService;
   public schedulerService!: SchedulerService;
   public whatsappDeduplicationService!: WhatsappDeduplicationService;
+  public stripeWebhookService!: StripeWebhookService;
 
   async initialize(): Promise<void> {
     this.redisClient = new Redis({
@@ -68,6 +56,13 @@ export class ServiceContainer {
 
     this.stripeService = StripeService.getInstance();
     this.stripeService.initialize(config.stripe.secretKey!);
+
+    // Instantiate StripeWebhookService
+    this.stripeWebhookService = new StripeWebhookService(
+      this.subscriberService,
+      this.stripeService,
+      config.stripe.webhookSecret!
+    );
 
     this.whatsappService = WhatsAppService.getInstance();
     this.whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
