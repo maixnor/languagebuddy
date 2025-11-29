@@ -13,6 +13,7 @@ import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
 import { initializeSubscriberTools } from '../features/subscriber/subscriber.tools';
 import { initializeFeedbackTools } from '../tools/feedback-tools';
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
+import { WhatsAppService } from '../core/messaging/whatsapp/whatsapp.service';
 
 export class ServiceContainer {
   public redisClient!: Redis;

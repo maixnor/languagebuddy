@@ -394,17 +394,6 @@ export const proposeMistakeToleranceChangeTool: DynamicStructuredTool =
     },
   });
 
-export const proposeMistakeToleranceChangeTool: DynamicStructuredTool =
-  new DynamicStructuredTool({
-    name: "propose_mistake_tolerance_change",
-    description:
-      "Ask the user if they want to change their mistake tolerance. The tool returns a phrase that can be used to ask the user.",
-    schema: z.object({}),
-    func: async () => {
-      return "By the way, I was wondering if you're happy with how much I'm correcting your mistakes. We can adjust it if you like. Are you happy with the current setting?";
-    },
-  });
-
 export const setLanguageTool: DynamicStructuredTool =
   new DynamicStructuredTool({
     name: "set_language",

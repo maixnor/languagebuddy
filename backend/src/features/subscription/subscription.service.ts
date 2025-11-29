@@ -12,7 +12,7 @@ export class SubscriptionService {
     if (!SubscriptionService.instance) {
       SubscriptionService.instance = new SubscriptionService();
     }
-    return StripeService.instance;
+    return SubscriptionService.instance;
   }
 
   initialize(apiKey: string): void {

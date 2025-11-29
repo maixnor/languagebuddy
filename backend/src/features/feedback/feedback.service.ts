@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 import { FeedbackEntry } from '../types';
-import { logger } from '../config';
+import { logger } from '@/config';
 
 export class FeedbackService {
   private static instance: FeedbackService;

@@ -184,10 +184,28 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async clearUserHistory(phoneNumber: string): Promise<void> {
     try {
-      await this.deleteCheckpoint(phoneNumber); // Pass only the raw phone number
-      logger.info({ phoneNumber }, "User conversation history cleared");
+      const checkpointTuple = await this.getCheckpoint(phoneNumber);
+
+      if (checkpointTuple) {
+        const { checkpoint, metadata, parentConfig } = checkpointTuple;
+
+        // Clear only the message history, assuming it's in checkpoint.values.messages
+        if (checkpoint.values && Array.isArray(checkpoint.values.messages)) {
+          checkpoint.values.messages = [];
+        }
+
+        await this.putTuple(
+          { configurable: { thread_id: phoneNumber } },
+          checkpoint,
+          metadata,
+          parentConfig
+        );
+        logger.info({ phoneNumber }, "User conversation history cleared selectively");
+      } else {
+        logger.info({ phoneNumber }, "No checkpoint found to clear for user");
+      }
     } catch (error) {
-      logger.error({ err: error, phoneNumber }, "Error clearing user history");
+      logger.error({ err: error, phoneNumber }, "Error clearing user history selectively");
       throw error;
     }
   }

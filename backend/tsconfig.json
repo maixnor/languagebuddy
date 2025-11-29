@@ -17,7 +17,11 @@
     "assumeChangesOnlyAffectDirectDependencies": true,
     "disableSourceOfProjectReferenceRedirect": true,
     "isolatedModules": true,
-    "useDefineForClassFields": true
+    "useDefineForClassFields": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"]
+    }
   },
   "include": [
     "src/**/*"

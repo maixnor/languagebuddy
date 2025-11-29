@@ -27,11 +27,6 @@ export const SubscriberUpdateContract = z.object({
   metadata: MetadataUpdateContract.optional(),
 });
 
-export const SubscriberUpdateContract = z.object({
-  profile: ProfileUpdateContract.optional(),
-  metadata: MetadataUpdateContract.optional(),
-});
-
 export const SetLanguageContract = z.object({
   languageCode: z.string().describe("The ISO 639-1 code of the language to set as the current learning language (e.g., 'es' for Spanish, 'en' for English)."),
 });

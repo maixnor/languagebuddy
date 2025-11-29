@@ -9,9 +9,9 @@
  * - Payment link generation
  */
 
-import { StripeService } from '../../services/stripe-service';
+import { SubscriptionService } from './subscription.service';
 import { SubscriberService } from '../subscriber/subscriber.service';
-import { StripeWebhookService } from '../../services/stripe-webhook-service';
+import { StripeWebhookService } from './subscription-webhook.service';
 import Stripe from 'stripe';
 import Redis from 'ioredis';
 import { config } from '../../config';
@@ -19,9 +19,9 @@ import { config } from '../../config';
 // Mock Stripe
 jest.mock('stripe');
 
-describe('StripeService & StripeWebhookService - Integration Tests', () => {
+describe('SubscriptionService & StripeWebhookService - Integration Tests', () => {
   let redis: Redis;
-  let stripeService: StripeService;
+  let subscriptionService: SubscriptionService;
   let subscriberService: SubscriberService;
   let stripeWebhookService: StripeWebhookService;
   let mockStripe: jest.Mocked<Stripe>;
@@ -55,17 +55,17 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
     (config.stripe as any).webhookSecret = 'wh_test_abc';
 
     // Reset singletons
-    (StripeService as any).instance = null;
+    (SubscriptionService as any).instance = null;
     (SubscriberService as any).instance = null;
 
-    stripeService = StripeService.getInstance();
+    subscriptionService = SubscriptionService.getInstance();
     // Initialize StripeService with the dummy API key from config
-    stripeService.initialize(config.stripe.secretKey);
+    subscriptionService.initialize(config.stripe.secretKey);
     
     subscriberService = SubscriberService.getInstance(redis);
     stripeWebhookService = new StripeWebhookService(
       subscriberService,
-      stripeService,
+      subscriptionService,
       config.stripe.webhookSecret! // Use config.stripe.webhookSecret
     );
 
@@ -83,7 +83,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
     } as any;
 
     // Initialize StripeService with mock
-    (stripeService as any).stripe = mockStripe;
+    (subscriptionService as any).stripe = mockStripe;
     // Set config webhook secret for the test
     (config.stripe as any).webhookSecret = testWebhookSecret;
   });
@@ -100,14 +100,14 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
 
   describe('initialize()', () => {
     it('should set stripe to null if no API key provided', () => {
-      const service = StripeService.getInstance();
+      const service = SubscriptionService.getInstance();
       service.initialize('');
       
       expect((service as any).stripe).toBeNull();
     });
 
     it('should initialize Stripe with valid API key', () => {
-      const service = StripeService.getInstance();
+      const service = SubscriptionService.getInstance();
       service.initialize('sk_test_12345');
       
       // Stripe should be initialized (mocked in real tests)
@@ -117,9 +117,9 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
 
   describe('checkSubscription()', () => {
     it('should return false if Stripe is not initialized', async () => {
-      (stripeService as any).stripe = null;
+      (subscriptionService as any).stripe = null;
       
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       // When Stripe is not initialized, checkSubscription should return false
       expect(result).toBe(false);
@@ -145,7 +145,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [mockSubscription],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(true);
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
@@ -164,7 +164,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
       expect(mockStripe.subscriptions.list).not.toHaveBeenCalled();
@@ -184,7 +184,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
     });
@@ -192,7 +192,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
     it('should handle Stripe API errors gracefully', async () => {
       mockStripe.customers.search.mockRejectedValue(new Error('Stripe API error'));
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       // Should return false on error, not throw
       expect(result).toBe(false);
@@ -213,7 +213,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [{ id: 'sub_123', status: 'active' }],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       // Should check first customer only (limit: 1)
       expect(result).toBe(true);
@@ -243,7 +243,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: mockSubscriptions,
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       // Should return true if any active subscription exists
       expect(result).toBe(true);
@@ -264,7 +264,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
     });
@@ -277,7 +277,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      await stripeService.checkSubscription(testPhone);
+      await subscriptionService.checkSubscription(testPhone);
       
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
         limit: 1,
@@ -291,7 +291,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      await stripeService.checkSubscription(testPhoneWithPlus);
+      await subscriptionService.checkSubscription(testPhoneWithPlus);
       
       const call = mockStripe.customers.search.mock.calls[0][0];
       // Should have a single plus: '+1234567890'
@@ -304,7 +304,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
       } as any);
 
       // Should not throw
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       expect(result).toBe(false);
     });
 
@@ -314,7 +314,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
       } as any);
 
       // Should not throw
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       expect(result).toBe(false);
     });
 
@@ -333,7 +333,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       // BUG POTENTIAL: Should past_due be considered valid?
       expect(result).toBe(false);
@@ -350,7 +350,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
       
       mockStripe.customers.search.mockRejectedValue(timeoutError);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
     });
@@ -361,7 +361,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
       
       mockStripe.customers.search.mockRejectedValue(rateLimitError);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
     });
@@ -372,7 +372,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
       
       mockStripe.customers.search.mockRejectedValue(authError);
 
-      const result = await stripeService.checkSubscription(testPhone);
+      const result = await subscriptionService.checkSubscription(testPhone);
       
       expect(result).toBe(false);
     });
@@ -380,30 +380,30 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
 
   describe('getPaymentLink()', () => {
     it('should return static payment link', async () => {
-      const link = await stripeService.getPaymentLink(testPhone);
+      const link = await subscriptionService.getPaymentLink(testPhone);
       
       expect(link).toBe('https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01');
     });
 
     it('should return same link for different phone numbers', async () => {
-      const link1 = await stripeService.getPaymentLink(testPhone);
-      const link2 = await stripeService.getPaymentLink('9876543210');
+      const link1 = await subscriptionService.getPaymentLink(testPhone);
+      const link2 = await subscriptionService.getPaymentLink('9876543210');
       
       // BUG?: Static link for all users - might want dynamic links per user
       expect(link1).toBe(link2);
     });
 
     it('should return valid HTTPS URL', async () => {
-      const link = await stripeService.getPaymentLink(testPhone);
+      const link = await subscriptionService.getPaymentLink(testPhone);
       
       expect(link).toMatch(/^https:\/\//);
     });
 
     it('should not depend on Stripe being initialized', async () => {
-      (stripeService as any).stripe = null;
+      (subscriptionService as any).stripe = null;
       
       // Should still return link even if Stripe not initialized
-      const link = await stripeService.getPaymentLink(testPhone);
+      const link = await subscriptionService.getPaymentLink(testPhone);
       expect(link).toBeDefined();
     });
   });
@@ -425,9 +425,9 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
 
       // Race condition: multiple checks at once
       const results = await Promise.all([
-        stripeService.checkSubscription(testPhone),
-        stripeService.checkSubscription(testPhone),
-        stripeService.checkSubscription(testPhone),
+        subscriptionService.checkSubscription(testPhone),
+        subscriptionService.checkSubscription(testPhone),
+        subscriptionService.checkSubscription(testPhone),
       ]);
 
       expect(results).toEqual([true, true, true]);
@@ -438,7 +438,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
     it('should correctly handle disabled Stripe in production-like scenario', async () => {
       // In a production scenario with no API key, Stripe initialization will fail.
       // checkSubscription should then correctly return false.
-      const service = StripeService.getInstance();
+      const service = SubscriptionService.getInstance();
       service.initialize(''); // Failed initialization
       
       const result = await service.checkSubscription(testPhone);
@@ -451,7 +451,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result = await stripeService.checkSubscription('');
+      const result = await subscriptionService.checkSubscription('');
       
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
         limit: 1,
@@ -467,7 +467,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      await stripeService.checkSubscription(phoneWithSpecialChars);
+      await subscriptionService.checkSubscription(phoneWithSpecialChars);
       
       // BUG POTENTIAL: No sanitization of phone number
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
@@ -491,7 +491,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: [],
       } as any);
 
-      const result1 = await stripeService.checkSubscription(testPhone);
+      const result1 = await subscriptionService.checkSubscription(testPhone);
       expect(result1).toBe(false);
 
       // Null/undefined data
@@ -499,7 +499,7 @@ describe('StripeService & StripeWebhookService - Integration Tests', () => {
         data: null as any,
       } as any);
 
-      const result2 = await stripeService.checkSubscription(testPhone);
+      const result2 = await subscriptionService.checkSubscription(testPhone);
       // BUG POTENTIAL: Might throw if not handling null properly
       expect(result2).toBe(false);
     });
