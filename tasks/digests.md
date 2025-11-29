@@ -54,10 +54,3 @@ Learning progress is continuously tracked and summarized
 User profiles get richer with accumulated memos and insights
 Reduced token costs from unbounded conversation histories
 Users re-engage more consistently with automatic outreach
-## Success Metrics:
-
-Digests created within 1 hour of user's 3 AM
-90%+ of active users get nightly digest
-Average conversation context stays under 4000 tokens
-Silent users receive re-engagement message after 2 days
-Profile memos grow over time (avg 5+ memos after 2 weeks)
