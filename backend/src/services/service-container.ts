@@ -1,5 +1,18 @@
-import { StripeWebhookService } from './stripe-webhook-service';
+import { StripeWebhookService } from '../features/subscription/subscription-webhook.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
+import { FeedbackService } from '../features/feedback/feedback.service';
+import { SubscriptionService } from '../features/subscription/subscription.service';
+import Redis from 'ioredis';
+import { config } from '@/config';
+import { ChatOpenAI } from '@langchain/openai';
+import { SubscriberService } from '../features/subscriber/subscriber.service';
+import { OnboardingService } from '../features/onboarding/onboarding.service';
+import { WhatsappDeduplicationService } from '../core/messaging/whatsapp/whatsapp-deduplication.service';
+import { DigestService } from '../features/digest/digest.service';
+import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
+import { initializeSubscriberTools } from '../features/subscriber/subscriber.tools';
+import { initializeFeedbackTools } from '../tools/feedback-tools';
+import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 
 export class ServiceContainer {
   public redisClient!: Redis;
@@ -9,7 +22,7 @@ export class ServiceContainer {
   public onboardingService!: OnboardingService;
   public feedbackService!: FeedbackService;
   public digestService!: DigestService;
-  public stripeService!: StripeService;
+  public subscriptionService!: SubscriptionService; // Renamed from stripeService
   public whatsappService!: WhatsAppService;
   public schedulerService!: SchedulerService;
   public whatsappDeduplicationService!: WhatsappDeduplicationService;
@@ -32,7 +45,6 @@ export class ServiceContainer {
     this.llm = new ChatOpenAI({
       model: 'gpt-4o-mini',
       temperature: 0.3,
-      maxTokens: 1000,
     });
 
     this.subscriberService = SubscriberService.getInstance(this.redisClient);
@@ -54,13 +66,13 @@ export class ServiceContainer {
     this.schedulerService = SchedulerService.getInstance(this.subscriberService, this.languageBuddyAgent);
     this.schedulerService.startSchedulers();
 
-    this.stripeService = StripeService.getInstance();
-    this.stripeService.initialize(config.stripe.secretKey!);
+    this.subscriptionService = SubscriptionService.getInstance(); // Instantiated as SubscriptionService
+    this.subscriptionService.initialize(config.stripe.secretKey!);
 
     // Instantiate StripeWebhookService
     this.stripeWebhookService = new StripeWebhookService(
       this.subscriberService,
-      this.stripeService,
+      this.subscriptionService, // Use new subscriptionService
       config.stripe.webhookSecret!
     );
 
