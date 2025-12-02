@@ -20,9 +20,6 @@ build-nix:
 deploy-prod:
   cd .. && just deploy-frontend-prod
 
-# Deploy to test
-deploy-test:
-  cd .. && just deploy-frontend-test
 
 # Clean build artifacts
 clean:
