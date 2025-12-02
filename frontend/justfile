@@ -17,8 +17,8 @@ build-nix:
   nix build .
 
 # Deploy to production
-deploy-prod:
-  cd .. && just deploy-frontend-prod
+deploy:
+  cd .. && just deploy-frontend
 
 
 # Clean build artifacts
