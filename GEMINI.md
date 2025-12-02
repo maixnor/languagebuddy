@@ -1,8 +1,7 @@
 # LanguageBuddy Project Context for Gemini
 
 ## 0. Git
-- **NEVER TOUCH GIT UNLESS PROMPTED TO OTHERWISE**
-- using `git log` or other read-only commands is fine, never add or commit or push anything
+- **NEVER TOUCH GIT UNLESS PROMPTED TO OTHERWISE. NEVER!**
 
 ## 1. Project Overview
 **LanguageBuddy** is a WhatsApp-based language learning service. It uses:
