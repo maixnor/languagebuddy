@@ -24,7 +24,7 @@ export class Application {
     setupRoutes(this.app, this.serviceContainer);
 
     // Set up static file serving for HTML files
-    this.app.use('/static', serveStatic(process.cwd() + "/static"));
+
   }
 
   getApp(): express.Application {

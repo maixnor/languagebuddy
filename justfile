@@ -2,8 +2,8 @@
 
 # Variables - CONFIGURE THESE FOR YOUR SERVER
 FRONTEND_SERVER := "wb.maixnor.com"
-FRONTEND_PROD_PATH := "/var/www/languagebuddy/prod/static"
-FRONTEND_TEST_PATH := "/var/www/languagebuddy/test/static"
+FRONTEND_PROD_PATH := "/var/www/languagebuddy/web"
+FRONTEND_TEST_PATH := "/var/www/languagebuddy/web"
 
 # Show available commands
 default:
