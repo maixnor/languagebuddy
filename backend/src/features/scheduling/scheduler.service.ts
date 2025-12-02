@@ -50,6 +50,15 @@ export class SchedulerService {
     return now.hour === 3;
   }
 
+  public shouldSendReengagementMessage(subscriber: any, nowUtc: DateTime): boolean {
+    if (!subscriber.lastMessageSentAt) {
+      return false; // No last message sent date, so no re-engagement
+    }
+    const lastSent = DateTime.fromISO(subscriber.lastMessageSentAt, { zone: 'utc' });
+    const diff = nowUtc.diff(lastSent, 'days').days;
+    return diff >= 3;
+  }
+
   private startPushMessageScheduler(): void {
     // Run every minute
     cron.schedule('* * * * *', async () => {

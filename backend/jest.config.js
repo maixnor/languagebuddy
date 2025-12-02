@@ -1,14 +1,21 @@
 module.exports = {
-  preset: 'ts-jest',
+  transform: {
+    '^.+\\.[tj]s$': [
+      '@swc/jest',
+      {},
+    ],
+  },
+  transformIgnorePatterns: [
+    '/node_modules/(?!(@langchain/core|@langchain/openai|p-retry|is-network-error)/)',
+  ],
   testEnvironment: 'node',
   testMatch: [
-    '**/tests/unit/**/*.test.ts',
-    '**/tests/int/**/*.test.ts',
-    '**/src/**/*.test.ts'
+    '**/src/**/*.unit.test.ts',
+    '**/src/**/*.int.test.ts'
   ],
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/tests/e2e/'
+    '/.e2e.test.ts$'
   ],
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   testTimeout: 30000, // 30 seconds for unit and integration tests

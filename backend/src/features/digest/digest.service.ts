@@ -49,14 +49,14 @@ export class DigestService {
       // Get the conversation history from Redis
       const conversationHistory = await this.getConversationHistory(subscriber.connections.phone);
       
-      if (!conversationHistory || conversationHistory.length <= 1) {
+      if (!conversationHistory || conversationHistory.length < 5) {
         logger.warn({
           operation: 'digest.create.no_history',
           operationId,
           phone: subscriber.connections.phone,
           historyLength: conversationHistory?.length || 0,
           durationMs: Date.now() - startTime
-        }, "No conversation history found for digest");
+        }, "Not enough conversation history for digest (less than 5 messages)");
         return undefined;
       }
 

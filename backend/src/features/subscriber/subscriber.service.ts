@@ -13,6 +13,8 @@ export class SubscriberService {
   /**
    * Returns true if the user can start a conversation today (throttle logic).
    * Only allows one conversation per day for non-premium users after trial.
+   * 
+   * @deprecated Use attemptToStartConversation for atomic check-and-act
    */
   public async canStartConversationToday(phoneNumber: string): Promise<boolean> {
     const subscriber = await this.getSubscriber(phoneNumber);
@@ -28,23 +30,59 @@ export class SubscriberService {
   }
 
   /**
+   * Atomically checks if the user can start a conversation and increments the count if allowed.
+   * Returns true if conversation is allowed (and count was incremented).
+   */
+  public async attemptToStartConversation(phoneNumber: string): Promise<boolean> {
+    const subscriber = await this.getSubscriber(phoneNumber);
+    
+    // Always allow premium users, but we still might want to track their usage.
+    if (subscriber && subscriber.isPremium) {
+      await this.incrementConversationCount(phoneNumber);
+      return true;
+    }
+
+    const today = this._getTodayInSubscriberTimezone(subscriber);
+    const key = `conversation_count:${phoneNumber}:${today}`;
+    const ttl = 86400;
+    const limit = 1;
+
+    // Atomic check-and-increment using Lua
+    // Returns 1 if allowed (incremented), 0 if denied
+    const result = await this.redis.eval(`
+      local count = redis.call("GET", KEYS[1])
+      if not count or tonumber(count) < tonumber(ARGV[2]) then
+         local new_count = redis.call("INCR", KEYS[1])
+         if new_count == 1 or redis.call("TTL", KEYS[1]) == -1 then
+            redis.call("EXPIRE", KEYS[1], ARGV[1])
+         end
+         return 1
+      else
+         return 0
+      end
+    `, 1, key, ttl, limit);
+    
+    return result === 1;
+  }
+
+  /**
    * Increments the daily conversation count for the user.
+   * Uses atomic Lua script to ensure TTL is set correctly.
    */
   public async incrementConversationCount(phoneNumber: string): Promise<void> {
     const subscriber = await this.getSubscriber(phoneNumber); // Get subscriber to access timezone
     const today = this._getTodayInSubscriberTimezone(subscriber); // Use helper
     const key = `conversation_count:${phoneNumber}:${today}`;
-    const newCount = await this.redis.incr(key);
+    const ttl = 86400;
 
-    // Check if the key has an expiration.
-    // If it was just created (newCount === 1) or existed without a TTL, its TTL would be -1.
-    const ttl = await this.redis.ttl(key);
-
-    // If there's no expiration, set it. This handles both new keys
-    // and pre-existing persistent keys.
-    if (ttl === -1) {
-      await this.redis.expire(key, 86400); // expire after 1 day (86400 seconds)
-    }
+    // Atomic INCR + EXPIRE using Lua
+    await this.redis.eval(`
+      local count = redis.call("INCR", KEYS[1])
+      if count == 1 or redis.call("TTL", KEYS[1]) == -1 then
+        redis.call("EXPIRE", KEYS[1], ARGV[1])
+      end
+      return count
+    `, 1, key, ttl);
   }
   private static instance: SubscriberService;
   private redis: Redis;

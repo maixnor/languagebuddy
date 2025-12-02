@@ -52,7 +52,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
 
     // Explicitly set config values for Stripe, ensuring they are available to StripeService
     (config.stripe as any).secretKey = 'sk_test_123';
-    (config.stripe as any).webhookSecret = 'wh_test_abc';
+    (config.stripe as any).webhookSecret = testWebhookSecret;
 
     // Reset singletons
     (SubscriptionService as any).instance = null;
@@ -84,8 +84,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
 
     // Initialize StripeService with mock
     (subscriptionService as any).stripe = mockStripe;
-    // Set config webhook secret for the test
-    (config.stripe as any).webhookSecret = testWebhookSecret;
+
   });
 
   afterEach(async () => {
