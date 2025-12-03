@@ -75,6 +75,20 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     if (!threadId) throw new Error("Thread ID is required for checkpoint saving");
 
     try {
+      if (checkpoint.values && Array.isArray(checkpoint.values.messages)) {
+        checkpoint.values.messages = checkpoint.values.messages.map((message: any) => {
+          if (!message.timestamp) {
+            return { ...message, timestamp: new Date().toISOString() };
+          }
+          return message;
+        });
+      }
+
+      // Set conversationStartedAt if not already present in the metadata
+      if (!metadata.conversationStartedAt) {
+        metadata.conversationStartedAt = new Date().toISOString();
+      }
+
       const checkpointData = {
         checkpoint,
         metadata,

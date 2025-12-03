@@ -2,7 +2,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { logger } from '../config';
 import { FeedbackEntry } from '../types';
-import { FeedbackService } from '../services/feedback-service';
+import { FeedbackService } from '../features/feedback/feedback.service';
 import { getContextVariable } from "@langchain/core/context";
 import { FeedbackContract, type FeedbackContract as FeedbackContractType } from './contracts';
 

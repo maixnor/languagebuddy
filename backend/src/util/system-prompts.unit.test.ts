@@ -1,24 +1,29 @@
-import { generateRegularSystemPrompt } from "../features/subscriber/subscriber.prompts";
-import { Subscriber, Language, LanguageDeficiency } from "../../types";
+import { generateSystemPrompt } from "./system-prompts";
+import { Subscriber } from "../features/subscriber/subscriber.types";
+import { DateTime } from "luxon";
 
-describe("generateRegularSystemPrompt - Deficiency Integration", () => {
-  const createSubscriber = (learningLanguages: Language[]): Subscriber => ({
+describe("generateSystemPrompt", () => {
+  const mockSubscriber: Subscriber = {
     profile: {
       name: "Test User",
-      speakingLanguages: [
+      speakingLanguages: [],
+      learningLanguages: [
         {
-          languageName: "English",
-          overallLevel: "C2",
+          languageName: "German",
+          overallLevel: "B1",
           skillAssessments: [],
           deficiencies: [],
           firstEncountered: new Date(),
           lastPracticed: new Date(),
           totalPracticeTime: 0,
-          confidenceScore: 100,
+          confidenceScore: 50,
+          isTarget: true,
         },
       ],
-      learningLanguages,
-      timezone: "UTC",
+      timezone: "America/New_York",
+      fluencyLevel: "intermediate",
+      areasOfStruggle: ["grammar", "vocabulary"],
+      mistakeTolerance: "normal"
     },
     connections: {
       phone: "+1234567890",
@@ -37,345 +42,106 @@ describe("generateRegularSystemPrompt - Deficiency Integration", () => {
     },
     isPremium: false,
     signedUpAt: new Date().toISOString(),
-  });
-
-  const createDeficiency = (
-    specificArea: string,
-    severity: "minor" | "moderate" | "major",
-    category:
-      | "grammar"
-      | "vocabulary"
-      | "comprehension"
-      | "cultural-context"
-      | "spelling"
-      | "syntax",
-    lastPracticedAt?: Date,
-  ): LanguageDeficiency => ({
-    category,
-    specificArea,
-    severity,
-    frequency: 50,
-    examples: [`Example mistake for ${specificArea}`],
-    improvementSuggestions: [`Practice ${specificArea} regularly`],
-    firstDetected: new Date("2024-01-01"),
-    lastOccurrence: new Date("2024-01-15"),
-    lastPracticedAt,
-    practiceCount: lastPracticedAt ? 1 : 0,
-  });
-
-  it("should include deficiency section when deficiencies exist", () => {
-    const deficiency = createDeficiency(
-      "past tense conjugation",
-      "major",
-      "grammar",
-    );
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [deficiency],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    expect(prompt).toContain(
-      "CURRENT LEARNING FOCUS - AREAS NEEDING IMPROVEMENT",
-    );
-    expect(prompt).toContain("past tense conjugation");
-    expect(prompt).toContain("major severity");
-    expect(prompt).toContain("grammar");
-  });
-
-  it("should not include deficiency section when no deficiencies exist", () => {
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    expect(prompt).not.toContain("CURRENT LEARNING FOCUS");
-  });
-
-  it("should include top 3 deficiencies sorted by priority", () => {
-    const deficiencies = [
-      createDeficiency("minor issue", "minor", "spelling"),
-      createDeficiency("major issue", "major", "grammar"),
-      createDeficiency("moderate issue", "moderate", "vocabulary"),
-      createDeficiency("another major", "major", "syntax"),
-      createDeficiency("another minor", "minor", "punctuation"),
-    ];
-
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies,
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    // Should include major deficiencies
-    expect(prompt).toContain("major issue");
-    expect(prompt).toContain("another major");
-
-    // Minor issues should not appear (only top 3)
-    const deficiencySection = prompt.split("CURRENT LEARNING FOCUS")[1];
-    const minorCount = (deficiencySection?.match(/minor issue/g) || []).length;
-    expect(minorCount).toBe(0);
-  });
-
-  it("should show practice status for each deficiency", () => {
-    const practicedDeficiency = createDeficiency(
-      "practiced area",
-      "major",
-      "grammar",
-      new Date("2024-01-10"),
-    );
-    const unpracticedDeficiency = createDeficiency(
-      "unpracticed area",
-      "major",
-      "vocabulary",
-    );
-
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [practicedDeficiency, unpracticedDeficiency],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    expect(prompt).toContain("last practiced");
-    expect(prompt).toContain("never practiced");
-  });
-
-  it("should include examples and improvement suggestions", () => {
-    const deficiency = createDeficiency("article usage", "moderate", "grammar");
-    deficiency.examples = ['Wrong: "Ich habe Katze"', 'Wrong: "Er ist Lehrer"'];
-    deficiency.improvementSuggestions = ["Focus on der/die/das patterns"];
-
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [deficiency],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    expect(prompt).toContain("Examples of struggles");
-    expect(prompt).toContain("Improvement approach");
-    expect(prompt).toContain("Focus on der/die/das patterns");
-  });
-
-  it("should include natural integration instructions", () => {
-    const deficiency = createDeficiency("past tense", "major", "grammar");
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [deficiency],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    expect(prompt).toContain(
-      "Weave these weak areas into the conversation naturally",
-    );
-    expect(prompt).toContain(
-      "Don't explicitly mention you're targeting these areas",
-    );
-    expect(prompt).toContain("add_language_deficiency tool");
-  });
-
-  it("should maintain all original prompt sections", () => {
-    const language: Language = {
-      languageName: "German",
-      overallLevel: "B1",
-      skillAssessments: [],
-      deficiencies: [],
-      firstEncountered: new Date(),
-      lastPracticed: new Date(),
-      totalPracticeTime: 0,
-      confidenceScore: 50,
-    };
-
-    const subscriber = createSubscriber([language]);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-
-    // Check original sections still exist
-    expect(prompt).toContain("USER PROFILE");
-    expect(prompt).toContain("CONVERSATION GUIDELINES");
-    expect(prompt).toContain("Test User");
-    expect(prompt).toContain("German at level B1");
-  });
-});
-
-describe("generateRegularSystemPrompt - Mistake Tolerance Integration", () => {
-  const createSubscriberWithDigests = (
-    digestCount: number,
-    mistakeTolerance?: "forgiving" | "normal" | "exact" | "hyperexact",
-  ): Subscriber => {
-    const digests = Array.from({ length: digestCount }, (_, i) => ({
-      topic: `Topic ${i + 1}`,
-      summary: `Summary ${i + 1}`,
-      timestamp: new Date().toISOString(),
-      vocabulary: {},
-      grammar: {},
-      phrases: {},
-    }));
-
-    return {
-      profile: {
-        name: "Test User",
-        speakingLanguages: [
-          {
-            languageName: "English",
-            overallLevel: "C2",
-            skillAssessments: [],
-            deficiencies: [],
-            firstEncountered: new Date(),
-          },
-        ],
-        learningLanguages: [
-          {
-            languageName: "German",
-            overallLevel: "B1",
-            skillAssessments: [],
-            deficiencies: [],
-            firstEncountered: new Date(),
-          },
-        ],
-        timezone: "UTC",
-      },
-      connections: { phone: "+1234567890" },
-      metadata: {
-        digests,
-        personality: "friendly",
-        streakData: {
-          currentStreak: 0,
-          longestStreak: 0,
-          lastActiveDate: new Date(),
-        },
-        predictedChurnRisk: 0,
-        engagementScore: 50,
-        difficultyPreference: "adaptive",
-        mistakeTolerance,
-      },
-      isPremium: false,
-      signedUpAt: new Date().toISOString(),
-    };
   };
 
-  const language: Language = {
-    languageName: "German",
-    overallLevel: "B1",
-    skillAssessments: [],
-    deficiencies: [],
-    firstEncountered: new Date(),
-  };
-
-  it('should default to "normal" mistake tolerance if not set', () => {
-    const subscriber = createSubscriberWithDigests(0);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain("Mistake tolerance: normal");
+  const createPromptContext = (
+    currentLocalTime: DateTime,
+    conversationDurationMinutes: number | null = null,
+    timeSinceLastMessageMinutes: number | null = null,
+    lastDigestTopic: string | null = null
+  ) => ({
+    subscriber: mockSubscriber,
+    conversationDurationMinutes,
+    timeSinceLastMessageMinutes,
+    currentLocalTime,
+    lastDigestTopic,
   });
 
-  it("should include special task to ask for mistake tolerance on the second day (1 digest)", () => {
-    const subscriber = createSubscriberWithDigests(1);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain(
-      "SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE",
-    );
+  it("should generate a basic prompt with subscriber info and current time", () => {
+    const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+    const context = createPromptContext(now);
+    const prompt = generateSystemPrompt(context);
+
+    expect(prompt).toContain("You are LanguageBuddy, an AI language tutor.");
+    expect(prompt).toContain("User's target language: German");
+    expect(prompt).toContain("User's current fluency level: intermediate");
+    expect(prompt).toContain("User's areas of struggle: grammar, vocabulary");
+    expect(prompt).toContain(`Current Date and Time (User's Local Time): ${now.toLocaleString(DateTime.DATETIME_FULL)}`);
   });
 
-  it("should not include special task if mistake tolerance is already set", () => {
-    const subscriber = createSubscriberWithDigests(1, "forgiving");
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).not.toContain(
-      "SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE",
-    );
+  it("should include conversation duration when provided", () => {
+    const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+    const context = createPromptContext(now, 45);
+    const prompt = generateSystemPrompt(context);
+    expect(prompt).toContain("Conversation started 45 minutes ago.");
   });
 
-  it("should not include special task if there are more than 1 digest", () => {
-    const subscriber = createSubscriberWithDigests(2);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).not.toContain(
-      "SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE",
-    );
+  describe("time since last message behavior", () => {
+    it("should suggest normal rapid conversation for < 5 minutes", () => {
+      const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+      const context = createPromptContext(now, 10, 3);
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("Time since last message: 3 minutes.");
+      expect(prompt).toContain("Continue the conversation as normal, it's a rapid exchange.");
+    });
+
+    it("should suggest acknowledging short break for 5-60 minutes", () => {
+      const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+      const context = createPromptContext(now, 60, 30);
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("Time since last message: 30 minutes.");
+      expect(prompt).toContain("Acknowledge the short break naturally");
+    });
+
+    it("should suggest referencing time gap for 1-6 hours", () => {
+      const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+      const context = createPromptContext(now, 180, 90); // 1.5 hours
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("Time since last message: 90 minutes.");
+      expect(prompt).toContain("Reference the time gap naturally");
+    });
+
+    it("should suggest new conversation day for 6-24 hours", () => {
+      const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+      const context = createPromptContext(now, 720, 480); // 8 hours
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("Time since last message: 480 minutes.");
+      expect(prompt).toContain("Treat this as a new conversation day. Offer a fresh start.");
+    });
+
+    it("should suggest warm welcome back and previous topic for > 24 hours", () => {
+      const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+      const context = createPromptContext(now, 1500, 1445, "German verbs"); // 24 hours + 5 min
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("Time since last message: 1445 minutes.");
+      expect(prompt).toContain("Offer a warm welcome back. If available, reference the previous topic.");
+      expect(prompt).toContain("Previous topic was: \"German verbs\". You can ask if they want to continue or start something new.");
+    });
   });
 
-  it("should not include special task if there are 0 digests", () => {
-    const subscriber = createSubscriberWithDigests(0);
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).not.toContain(
-      "SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE",
-    );
-  });
+  describe("night-time awareness", () => {
+    it("should suggest ending conversation during late night (22:00 local)", () => {
+      const now = DateTime.local(2025, 1, 1, 22, 30, { zone: "America/New_York" }); // 10:30 PM local
+      const context = createPromptContext(now);
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("It is currently late at night/early morning for the user (10:30 PM).");
+      expect(prompt).toContain("Suggest ending the conversation naturally soon");
+    });
 
-  it("should include forgiving conversation guidelines", () => {
-    const subscriber = createSubscriberWithDigests(0, "forgiving");
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain(
-      '- "forgiving": Only correct critical mistakes that impede understanding.',
-    );
-  });
+    it("should suggest ending conversation during early morning (02:00 local)", () => {
+      const now = DateTime.local(2025, 1, 1, 2, 0, { zone: "America/New_York" }); // 2:00 AM local
+      const context = createPromptContext(now);
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("It is currently late at night/early morning for the user (02:00 AM).");
+      expect(prompt).toContain("Suggest ending the conversation naturally soon");
+    });
 
-  it("should include normal conversation guidelines", () => {
-    const subscriber = createSubscriberWithDigests(0, "normal");
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain(
-      '    - "normal": Correct common errors and errors that affect clarity. Balance fluency with accuracy.',
-    );
-  });
-
-  it("should include exact conversation guidelines", () => {
-    const subscriber = createSubscriberWithDigests(0, "exact");
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain(
-      '- "exact": Correct most mistakes, including minor grammatical errors and awkward phrasing.',
-    );
-  });
-
-  it("should include hyperexact conversation guidelines", () => {
-    const subscriber = createSubscriberWithDigests(0, "hyperexact");
-    const prompt = generateRegularSystemPrompt(subscriber, language);
-    expect(prompt).toContain(
-      '    - "hyperexact": Correct every single mistake, including minor details, to achieve such precision.',
-    );
+    it("should not suggest ending conversation during day time (14:00 local)", () => {
+      const now = DateTime.fromISO("2025-01-01T14:00:00.000Z", { zone: "America/New_York" }); // 2:00 PM local
+      const context = createPromptContext(now);
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).not.toContain("It is currently late at night/early morning for the user");
+      expect(prompt).not.toContain("Suggest ending the conversation naturally soon");
+    });
   });
 });

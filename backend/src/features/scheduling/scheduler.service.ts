@@ -37,7 +37,24 @@ export class SchedulerService {
   }
 
   startSchedulers(): void {
-    this.startPushMessageScheduler();
+    this.startNightlyDigestScheduler();
+    this.startRegularPushMessageScheduler();
+  }
+
+  private startNightlyDigestScheduler(): void {
+    // Run hourly for nightly digest checks
+    cron.schedule('0 * * * *', async () => {
+      logger.info("Running nightly digest scheduler...");
+      await this.processNightlyDigests(); // This method will be created next
+    });
+  }
+
+  private startRegularPushMessageScheduler(): void {
+    // Run every minute for regular push messages
+    cron.schedule('* * * * *', async () => {
+      logger.info("Running regular push message scheduler...");
+      await this.processRegularPushMessages(); // This method will contain the original sendPushMessages logic
+    });
   }
 
   public isNightTimeForUser(subscriber: any, nowOverride?: DateTime): boolean {
@@ -59,12 +76,7 @@ export class SchedulerService {
     return diff >= 3;
   }
 
-  private startPushMessageScheduler(): void {
-    // Run every minute
-    cron.schedule('* * * * *', async () => {
-      await this.sendPushMessages();
-    });
-  }
+
 
   /**
    * Execute nightly tasks for a single subscriber:
@@ -125,43 +137,52 @@ export class SchedulerService {
     }
   }
 
-  private async sendPushMessages(): Promise<void> {
+  private async processNightlyDigests(): Promise<void> {
+    if (config.features.dailyMessages.enabled === false) return; // Assuming this flag also controls digests
+    try {
+      const subscribers = await this.subscriberService.getAllSubscribers();
+      const nowUtc = DateTime.utc();
+      for (const subscriber of subscribers) {
+        const subscriberTimezone = subscriber.profile.timezone || 'UTC';
+        const nowLocal = nowUtc.setZone(subscriberTimezone);
+        const todayLocalIso = nowLocal.toISODate();
+        const lastDigestRunIso = subscriber.metadata?.lastNightlyDigestRun;
+  
+        if (this.isNightTimeForUser(subscriber, nowLocal) && lastDigestRunIso !== todayLocalIso) {
+          logger.info({ phoneNumber: subscriber.connections.phone, localTime: nowLocal.toISO(), lastRun: lastDigestRunIso }, "Triggering nightly digest tasks for subscriber.");
+          const messageSent = await this.executeNightlyTasksForSubscriber(subscriber); // This also sends the initial message for the new day
+  
+          if (messageSent) {
+            // Update lastNightlyDigestRun only if tasks were successfully executed
+            const updatedMetadata = {
+              ...subscriber.metadata,
+              lastNightlyDigestRun: todayLocalIso,
+            };
+            await this.subscriberService.updateSubscriber(subscriber.connections.phone, {
+              metadata: updatedMetadata,
+            });
+            logger.info({ phoneNumber: subscriber.connections.phone }, "Nightly digest tasks completed and lastNightlyDigestRun updated.");
+          } else {
+            logger.error({ phoneNumber: subscriber.connections.phone }, "Nightly digest tasks failed for subscriber. Not updating lastNightlyDigestRun.");
+          }
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error }, "Error during nightly digest processing");
+    }
+  }
+
+  private async processRegularPushMessages(): Promise<void> {
     if (config.features.dailyMessages.enabled === false) return;
     try {
-          const subscribers = await this.subscriberService.getAllSubscribers();
-          const nowUtc = DateTime.utc();
-          for (const subscriber of subscribers) {
-            // --- START: Nightly Digest Trigger Logic ---
-            const subscriberTimezone = subscriber.profile.timezone || 'UTC';
-            // Ensure nowLocal reflects the current time in the subscriber's timezone
-            const nowLocal = nowUtc.setZone(subscriberTimezone);
-            const todayLocalIso = nowLocal.toISODate();
-            const lastDigestRunIso = subscriber.metadata?.lastNightlyDigestRun;
+      const subscribers = await this.subscriberService.getAllSubscribers();
+      const nowUtc = DateTime.utc(); // Get nowUtc once for all subscribers
+      for (const subscriber of subscribers) {
+        // Nightly Digest logic is now handled by processNightlyDigests
+        // No more 'continue' here for nightly digest
       
-            if (this.isNightTimeForUser(subscriber, nowLocal) && lastDigestRunIso !== todayLocalIso) {
-              logger.info({ phoneNumber: subscriber.connections.phone, localTime: nowLocal.toISO(), lastRun: lastDigestRunIso }, "Triggering nightly digest tasks for subscriber.");
-              const messageSent = await this.executeNightlyTasksForSubscriber(subscriber); // This also sends the initial message for the new day
-      
-              if (messageSent) {
-                // Update lastNightlyDigestRun only if tasks were successfully executed
-                const updatedMetadata = {
-                  ...subscriber.metadata,
-                  lastNightlyDigestRun: todayLocalIso,
-                };
-                await this.subscriberService.updateSubscriber(subscriber.connections.phone, {
-                  metadata: updatedMetadata,
-                });
-                logger.info({ phoneNumber: subscriber.connections.phone }, "Nightly digest tasks completed and lastNightlyDigestRun updated.");
-              } else {
-                logger.error({ phoneNumber: subscriber.connections.phone }, "Nightly digest tasks failed for subscriber. Not updating lastNightlyDigestRun.");
-              }
-              // If nightly tasks were just run, skip the regular push message logic for this iteration
-              continue;
-            }
-            // --- END: Nightly Digest Trigger Logic ---
-      
-            let nextPush: DateTime | undefined;
-            let shouldSendMessage = false;        
+        let nextPush: DateTime | undefined;
+        let shouldSendMessage = false;        
         if (!subscriber.nextPushMessageAt) {
           // If not set, send message immediately and schedule for +24h from now
           shouldSendMessage = true;
@@ -215,18 +236,16 @@ export class SchedulerService {
           nextPushMessageAt: finalNextTime.toISO()
         });
         
-        // Execute nightly tasks and send message
-        const messageSent = await this.executeNightlyTasksForSubscriber(subscriber);
-        
-        if (!messageSent) {
-          // If message failed, retry in 1 hour
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: DateTime.utc().plus({ hours: 1 }).toISO()
-          });
+        // Execute nightly tasks and send message (Removed: This was for nightly digest related message)
+        // For regular push messages, we send a re-engagement message here if needed
+        if (this.shouldSendReengagementMessage(subscriber, nowUtc)) {
+          const reengagementMessage = "Hey! It's been a while. Shall we continue our language practice?";
+          await this.whatsappService.sendMessage(subscriber.connections.phone, reengagementMessage);
+          logger.info({ phoneNumber: subscriber.connections.phone }, "Re-engagement message sent.");
         }
       }
     } catch (error) {
-      logger.error({ err: error }, "Error during push message broadcast");
+      logger.error({ err: error }, "Error during regular push message processing");
     }
   }
 
@@ -246,7 +265,7 @@ export class SchedulerService {
       // Default: morning
       const start = DateTime.fromFormat(windows.morning.start, 'HH:mm', { zone: tz });
       const end = DateTime.fromFormat(windows.morning.end, 'HH:mm', { zone: tz });
-      next = this.randomTimeInWindow(now, start, end, windows.fuzzinessMinutes);
+      next = this.randomTimeInWindow(now, start, end, config.features.dailyMessages.fuzzinessMinutes);
     } else if (prefs.type === 'fixed' && prefs.times && prefs.times.length > 0) {
       // Find next fixed time
       next = this.nextFixedTime(now, prefs.times, tz);
@@ -255,7 +274,9 @@ export class SchedulerService {
       const win = windows[prefs.type as 'morning' | 'midday' | 'evening'];
       const start = DateTime.fromFormat(win.start, 'HH:mm', { zone: tz });
       const end = DateTime.fromFormat(win.end, 'HH:mm', { zone: tz });
-      next = this.randomTimeInWindow(now, start, end, prefs.fuzzinessMinutes || windows.fuzzinessMinutes);
+      // Here fuzziness is prefs.fuzzinessMinutes (from mockSubscriber) or config.features.dailyMessages.fuzzinessMinutes
+      const fuzzinessToPass = prefs.fuzzinessMinutes || config.features.dailyMessages.fuzzinessMinutes;
+      next = this.randomTimeInWindow(now, start, end, fuzzinessToPass);
     }
     return next;
   }

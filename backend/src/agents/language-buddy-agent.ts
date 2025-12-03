@@ -4,7 +4,9 @@ import { Subscriber } from '../features/subscriber/subscriber.types'; // Updated
 import { logger } from '../config';
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
-import {RedisCheckpointSaver} from "../persistence/redis-checkpointer";
+import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
+import { DateTime } from "luxon";
+import { generateSystemPrompt } from "../util/system-prompts";
 // import {tools} from "../tools"; // Original tools import - will need re-evaluation
 
 // Manually import the individual tools for now, until a better tool registration strategy is in place
@@ -40,10 +42,23 @@ export class LanguageBuddyAgent {
       checkpointer: checkpointer,
     })
   }
-  async initiateConversation(subscriber: Subscriber, systemPrompt: string, humanMessage: string): Promise<string> {
+  async initiateConversation(subscriber: Subscriber, humanMessage: string): Promise<string> {
     try {
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
       setContextVariable('phone', subscriber.connections.phone);
+
+      const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
+      const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
+      const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+
+      const systemPrompt = generateSystemPrompt({
+        subscriber,
+        conversationDurationMinutes,
+        timeSinceLastMessageMinutes,
+        currentLocalTime,
+        lastDigestTopic: null, // TODO: Implement fetching last digest topic
+      });
+
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { configurable: { thread_id: subscriber.connections.phone }}
@@ -70,8 +85,21 @@ export class LanguageBuddyAgent {
     logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Processing user message: ${humanMessage}`);
 
     setContextVariable('phone', subscriber.connections.phone);
+
+    const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
+    const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
+    const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+
+    const systemPrompt = generateSystemPrompt({
+      subscriber,
+      conversationDurationMinutes,
+      timeSinceLastMessageMinutes,
+      currentLocalTime,
+      lastDigestTopic: null, // TODO: Implement fetching last digest topic
+    });
+
     const response = await this.agent.invoke(
-        { messages: [new HumanMessage(humanMessage)] },
+        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)] },
         { configurable: { thread_id: subscriber.connections.phone } }
     );
 
@@ -114,6 +142,39 @@ export class LanguageBuddyAgent {
     } catch (error) {
       logger.error({ err: error }, "Error in oneShotMessage");
       return "An error occurred while generating the message.";
+    }
+  }
+
+  async getConversationDuration(phone: string): Promise<number | null> {
+    try {
+      const checkpoint = await this.checkpointer.getCheckpoint(phone);
+      if (checkpoint && checkpoint.metadata?.conversationStartedAt) {
+        const startedAt = DateTime.fromISO(checkpoint.metadata.conversationStartedAt);
+        const now = DateTime.now();
+        return now.diff(startedAt, 'minutes').minutes;
+      }
+      return null;
+    } catch (error) {
+      logger.error({ err: error, phone }, "Error getting conversation duration");
+      return null;
+    }
+  }
+
+  async getTimeSinceLastMessage(phone: string): Promise<number | null> {
+    try {
+      const checkpoint = await this.checkpointer.getCheckpoint(phone);
+      if (checkpoint && checkpoint.checkpoint.values && Array.isArray(checkpoint.checkpoint.values.messages) && checkpoint.checkpoint.values.messages.length > 0) {
+        const lastMessage = checkpoint.checkpoint.values.messages[checkpoint.checkpoint.values.messages.length - 1];
+        if (lastMessage.timestamp) {
+          const lastMessageTime = DateTime.fromISO(lastMessage.timestamp);
+          const now = DateTime.now();
+          return now.diff(lastMessageTime, 'minutes').minutes;
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.error({ err: error, phone }, "Error getting time since last message");
+      return null;
     }
   }
 }
