@@ -62,7 +62,7 @@ describe("generateSystemPrompt", () => {
     const context = createPromptContext(now);
     const prompt = generateSystemPrompt(context);
 
-    expect(prompt).toContain("You are LanguageBuddy, an AI language tutor.");
+    expect(prompt).toContain("You are Maya, an AI language tutor.");
     expect(prompt).toContain("User's target language: German");
     expect(prompt).toContain("User's current fluency level: intermediate");
     expect(prompt).toContain("User's areas of struggle: grammar, vocabulary");
@@ -143,5 +143,24 @@ describe("generateSystemPrompt", () => {
       expect(prompt).not.toContain("It is currently late at night/early morning for the user");
       expect(prompt).not.toContain("Suggest ending the conversation naturally soon");
     });
+  });
+
+  it("should robustly handle missing areasOfStruggle in profile", () => {
+      // Construct a subscriber that matches the runtime shape where the property is missing
+      // We cast to any to bypass strict type checking for this regression test
+      const subscriberWithoutAreas: any = {
+        ...mockSubscriber,
+        profile: {
+          ...mockSubscriber.profile,
+          // explicitly remove areasOfStruggle if it exists in mock, or ensure it's undefined
+          areasOfStruggle: undefined
+        }
+      };
+  
+      const context = createPromptContext(DateTime.now());
+      context.subscriber = subscriberWithoutAreas;
+  
+      const prompt = generateSystemPrompt(context);
+      expect(prompt).toContain("User's areas of struggle: none");
   });
 });

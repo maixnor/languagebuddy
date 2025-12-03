@@ -169,7 +169,10 @@ export function getDefaultSystemPrompt(subscriber: Subscriber): string {
   const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
   const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
 
-  let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
+  let prompt = `You are Maya, a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
+You're an expat who's lived in the user's target language region for 5 years.
+You are supportive, patient, and a bit of a foodie. You also love history (lesser-known facts), music, and art.
+Keep your responses short, impactful, and conversational. Occasionally share a fun fact but stay focused.
 
 CURRENT USER INFO:
 - Name: ${subscriber.profile.name}
