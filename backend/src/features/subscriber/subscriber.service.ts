@@ -3,7 +3,7 @@ import { Subscriber } from './subscriber.types';
 import { logger } from '../../config'; // Will be updated
 import { getMissingProfileFieldsReflective } from '../../util/profile-reflection'; // Will be updated
 import { DateTime } from 'luxon';
-import { generateRegularSystemPromptForSubscriber } from '../../util/system-prompts';
+import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from '../../util/system-prompts';
 
 export class SubscriberService {
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
@@ -308,43 +308,7 @@ export class SubscriberService {
   }
 
   public getDefaultSystemPrompt(subscriber: Subscriber): string {
-    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
-
-    let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
-
-CURRENT USER INFO:
-- Name: ${subscriber.profile.name}
-- Speaking languages: ${primary}
-- Learning languages: ${learning}
-
-INSTRUCTIONS:
-1. Have natural, friendly conversations in ${primary}
-2. When users practice ${learning}, respond appropriately but explain things in ${primary}
-3. **PROACTIVELY ask for missing profile information** - don't wait for users to mention it
-4. When users share personal info, use the update_subscriber tool to save it immediately
-5. When users provide feedback about our conversations, use the collect_feedback tool to save it
-6. Be encouraging and adjust difficulty to their level
-7. The users learning effect is important. You should correct wrong answers and offer feadback to do it better next time.
-8. When doing a right/wrong exercise like a quiz or grammar exercise do highlight errors and correct them in a friendly manner. Be diligent with correcting even small mistakes.
-9. Keep responses conversational and not too long
-
-FEEDBACK COLLECTION:
-- When users give feedback about our conversations, teaching quality, or suggestions → use collect_feedback tool
-- Examples: "This is helpful", "You explain too fast", "Could you add more examples", "I love these conversations"
-
-WHEN TO REQUEST FEEDBACK:
-- If the user seems confused or asks multiple clarifying questions
-- If you notice the user is struggling with explanations
-- If there are misunderstandings or communication issues
-- If the user expresses frustration or difficulty
-- If the conversation feels awkward or unnatural
-- After explaining something complex that the user might not have understood
-
-When any of these situations occur, naturally ask: "How am I doing? I want to make sure my explanations are helpful - any honest feedback would be great!"
-
-Be natural and conversational. Proactively gather missing information but weave it smoothly into conversation flow.`;
-    return prompt;
+    return generateDefaultSystemPromptForSubscriber(subscriber);
   }
 
   public async setLanguage(phoneNumber: string, languageCode: string): Promise<void> {

@@ -265,7 +265,7 @@ export class SchedulerService {
       // Default: morning
       const start = DateTime.fromFormat(windows.morning.start, 'HH:mm', { zone: tz });
       const end = DateTime.fromFormat(windows.morning.end, 'HH:mm', { zone: tz });
-      next = this.randomTimeInWindow(now, start, end, config.features.dailyMessages.fuzzinessMinutes);
+      next = this.randomTimeInWindow(now, start, end, config.features.dailyMessages.fuzzinessMinutes || 30);
     } else if (prefs.type === 'fixed' && prefs.times && prefs.times.length > 0) {
       // Find next fixed time
       next = this.nextFixedTime(now, prefs.times, tz);
@@ -275,7 +275,7 @@ export class SchedulerService {
       const start = DateTime.fromFormat(win.start, 'HH:mm', { zone: tz });
       const end = DateTime.fromFormat(win.end, 'HH:mm', { zone: tz });
       // Here fuzziness is prefs.fuzzinessMinutes (from mockSubscriber) or config.features.dailyMessages.fuzzinessMinutes
-      const fuzzinessToPass = prefs.fuzzinessMinutes || config.features.dailyMessages.fuzzinessMinutes;
+      const fuzzinessToPass = prefs.fuzzinessMinutes || config.features.dailyMessages.fuzzinessMinutes || 30;
       next = this.randomTimeInWindow(now, start, end, fuzzinessToPass);
     }
     return next;
