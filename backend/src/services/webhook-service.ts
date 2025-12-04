@@ -5,8 +5,9 @@ import { Subscriber } from '../features/subscriber/subscriber.types';
 import { handleUserCommand } from '../util/user-commands';
 import { getNextMissingField, getPromptForField } from '../util/info-gathering';
 import { generateOnboardingSystemPrompt } from '../util/system-prompts';
-import { generateRegularSystemPrompt } from '../util/system-prompts';
+import { generateSystemPrompt } from '../util/system-prompts';
 import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
+import { DateTime } from "luxon";
 
 export class WebhookService {
   constructor(private services: ServiceContainer) {}
@@ -230,7 +231,16 @@ export class WebhookService {
 
     if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
       logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
-      const systemPrompt = generateRegularSystemPrompt(subscriber, getFirstLearningLanguage(subscriber));
+      const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);
+      const lastDigestTopic = subscriber.metadata?.digests?.[0]?.topic || null;
+
+      const systemPrompt = generateSystemPrompt({
+        subscriber,
+        conversationDurationMinutes: null, // This info is not readily available here.
+        timeSinceLastMessageMinutes: null, // This info is not readily available here.
+        currentLocalTime,
+        lastDigestTopic,
+      });
       response = await this.services.languageBuddyAgent.initiateConversation(
         subscriber, 
         systemPrompt, 

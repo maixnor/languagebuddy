@@ -38,7 +38,9 @@ async function main() {
     
     // Start server
     const port = Number(config.server.port) || 3000;
-    app.listen(port, () => {});
+    app.listen(port, () => {
+      logger.info(`Server running on port ${port}`);
+    });
     
     return {
       languageBuddyAgent: services.languageBuddyAgent,

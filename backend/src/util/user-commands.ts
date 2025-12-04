@@ -17,6 +17,8 @@ export async function handleUserCommand(
     }
 
     if (message.startsWith('!clear')) {
+        logger.info({ phone: subscriber.connections.phone }, "Handling !clear command.");
+        logger.debug({ phone: subscriber.connections.phone }, "Calling clearConversation for !clear command.");
         await languageBuddyAgent.clearConversation(subscriber.connections.phone);
         await whatsappService.sendMessage(subscriber.connections.phone, "Conversation history cleared.");
         return '!clear';
