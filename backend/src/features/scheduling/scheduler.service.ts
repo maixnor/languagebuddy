@@ -52,7 +52,7 @@ export class SchedulerService {
   private startRegularPushMessageScheduler(): void {
     // Run every minute for regular push messages
     cron.schedule('* * * * *', async () => {
-      logger.info("Running regular push message scheduler...");
+      logger.trace("Running regular push message scheduler...");
       await this.processRegularPushMessages(); // This method will contain the original sendPushMessages logic
     });
   }
