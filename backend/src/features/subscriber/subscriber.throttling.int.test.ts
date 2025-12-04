@@ -31,6 +31,13 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     // Reset singleton instance for fresh state
     (SubscriberService as any).instance = null;
     subscriberService = SubscriberService.getInstance(redis);
+
+    // Ensure test subscriber has a default timezone for consistent key generation
+    await subscriberService.createSubscriber(testPhone, {
+      profile: {
+        timezone: 'UTC'
+      }
+    });
   });
 
   afterEach(async () => {
@@ -234,21 +241,24 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     });
 
     it('should NOT reset TTL on subsequent increments', async () => {
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      // Wait a bit
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const today = DateTime.now().toISODate();
+      // Get the subscriber to determine the correct timezone for key generation
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
       const key = `conversation_count:${testPhone}:${today}`;
+
+      await subscriberService.incrementConversationCount(testPhone);
+      
+      // Wait a bit longer to ensure TTL has definitely decreased
+      await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds
+
+      await subscriberService.incrementConversationCount(testPhone);
+      
       const ttl = await redis.ttl(key);
       
-      // BUG POTENTIAL: If INCR doesn't preserve TTL, key might become persistent
-      // TTL should still be set and less than original 86400
-      expect(ttl).toBeGreaterThan(0);
-      expect(ttl).toBeLessThan(86400);
+      // TTL should still be set and less than original 86400, but not reset
+      // We expect it to be around 86400 - 2 seconds (for the timeout)
+      expect(ttl).toBeGreaterThan(86400 - 5); // Allow up to 5 seconds for test execution
+      expect(ttl).toBeLessThan(86400 - 1); // Should definitely be less than 86400 - 1
     });
 
     it('should handle concurrent increments (race condition test)', async () => {
@@ -268,13 +278,16 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     });
 
     it('should handle rapid increments without losing count', async () => {
+      // Get the subscriber to determine the correct timezone for key generation
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
+      const key = `conversation_count:${testPhone}:${today}`;
+
       // Simulate rapid fire messages
       for (let i = 0; i < 10; i++) {
         await subscriberService.incrementConversationCount(testPhone);
       }
       
-      const today = DateTime.now().toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
       expect(count).toBe('10');

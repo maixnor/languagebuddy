@@ -23,20 +23,33 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       password: process.env.REDIS_PASSWORD,
     });
     // Clear ALL conversation count test data
-    const keys = await redis.keys(`conversation_count:*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    const keysToDelete = await redis.keys(`conversation_count:*`);
+    if (keysToDelete.length > 0) {
+      await redis.del(...keysToDelete);
     }
     
     (SubscriberService as any).instance = null;
     subscriberService = SubscriberService.getInstance(redis);
+
+    // Ensure test subscriber has a default timezone for consistent key generation
+    // This subscriber is for the general testPhone, not necessarily for special cases
+    await subscriberService.createSubscriber(testPhone, {
+      profile: {
+        timezone: 'UTC'
+      }
+    });
   });
 
   afterEach(async () => {
-    // Clean up Redis after each test
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    // Clean up ALL conversation count test data after each test
+    const keysToDelete = await redis.keys(`conversation_count:*`);
+    if (keysToDelete.length > 0) {
+      await redis.del(...keysToDelete);
+    }
+    // Also clean up subscriber-related keys for the main testPhone
+    const subscriberKeys = await redis.keys(`subscriber:${testPhone}`);
+    if (subscriberKeys.length > 0) {
+      await redis.del(...subscriberKeys);
     }
     await redis.quit();
   });
@@ -59,6 +72,11 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
     });
 
     it('should handle multiple rapid increments correctly', async () => {
+      // Get the subscriber to determine the correct timezone for key generation
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
+      const key = `conversation_count:${testPhone}:${today}`;
+
       // Hammer the increment with 100 concurrent calls
       const promises = [];
       for (let i = 0; i < 100; i++) {
@@ -67,8 +85,6 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       await Promise.all(promises);
       
-      const today = DateTime.now().toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
       console.log('100 concurrent increments - Count:', count);
@@ -80,16 +96,18 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
 
   describe('Redis TTL behavior', () => {
     it('should preserve TTL when using INCR after SET', async () => {
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const today = DateTime.now().toISODate();
+      // Get the subscriber to determine the correct timezone for key generation
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
       const key = `conversation_count:${testPhone}:${today}`;
+
+      await subscriberService.incrementConversationCount(testPhone);
       
       const ttl1 = await redis.ttl(key);
       expect(ttl1).toBeGreaterThan(86000);
       
-      // Wait 2 seconds
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait a bit longer to ensure TTL has definitely decreased
+      await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds
       
       // Increment again
       await subscriberService.incrementConversationCount(testPhone);
@@ -97,9 +115,9 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       const ttl2 = await redis.ttl(key);
       
       // BUG CHECK: INCR should NOT reset TTL
-      // TTL should be 2-3 seconds less than original
-      expect(ttl2).toBeLessThan(ttl1);
-      expect(ttl2).toBeGreaterThan(86000 - 10); // Allow 10s margin
+      // TTL should be 3-4 seconds less than original
+      expect(ttl2).toBeGreaterThan(86400 - 5); // Allow up to 5 seconds for test execution
+      expect(ttl2).toBeLessThan(86400 - 1); // Should definitely be less than 86400 - 1
     });
 
     it('should expire key after 24 hours', async () => {
@@ -171,10 +189,10 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       const yesterday = DateTime.now().minus({ days: 1 }).toISODate();
       const yesterdayKey = `conversation_count:${testPhone}:${yesterday}`;
       await redis.set(yesterdayKey, '5', 'EX', 86400);
-      
+
       // Increment today
       await subscriberService.incrementConversationCount(testPhone);
-      
+
       const today = DateTime.now().toISODate();
       const todayKey = `conversation_count:${testPhone}:${today}`;
       const todayCount = await redis.get(todayKey);
@@ -208,14 +226,17 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
 
   describe('Concurrent user access patterns', () => {
     it('should handle user sending multiple messages in quick succession', async () => {
+      // Get the subscriber to determine the correct timezone for key generation
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
+      const key = `conversation_count:${testPhone}:${today}`;
+
       // Real-world: User sends 3 messages within 1 second
       
       await subscriberService.incrementConversationCount(testPhone);
       await subscriberService.incrementConversationCount(testPhone);
       await subscriberService.incrementConversationCount(testPhone);
       
-      const today = DateTime.now().toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
       expect(count).toBe('3');

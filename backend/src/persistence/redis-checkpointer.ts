@@ -135,24 +135,53 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async deleteCheckpoint(phone: string): Promise<void> {
     try {
-      const key = `checkpoint:${phone}`;
-      const exists = await this.redis.exists(key);
+      // Normalize phone variants to handle potential format mismatches
+      const phoneRaw = phone;
+      const phoneStripped = phone.replace(/^\+/, '');
+      const phoneWithPlus = `+${phoneStripped}`;
+
+      // Try all plausible variants
+      const keysToDelete = [
+        `checkpoint:${phoneRaw}`,
+        `checkpoint:${phoneStripped}`,
+        `checkpoint:${phoneWithPlus}`
+      ];
+
+      // Deduplicate keys
+      const uniqueKeys = [...new Set(keysToDelete)];
       
-      await this.redis.del(key);
+      let totalDeleted = 0;
+      const deletedKeys: string[] = [];
+
+      for (const key of uniqueKeys) {
+        const exists = await this.redis.exists(key);
+        if (exists) {
+            await this.redis.del(key);
+            deletedKeys.push(key);
+            totalDeleted++;
+        }
+      }
       
       // Also cleanup writes which might persist
-      // scan is better than keys for performance, but keys is simpler for now given the likely volume
-      const writesKeys = await this.redis.keys(`writes:${phone}:*`);
-      if (writesKeys.length > 0) {
-        await this.redis.del(...writesKeys);
+      // We use the same phone variants logic for writes
+      const phoneVariants = [...new Set([phoneRaw, phoneStripped, phoneWithPlus])];
+      let writesDeleted = 0;
+      
+      for (const variant of phoneVariants) {
+          const writesKeys = await this.redis.keys(`writes:${variant}:*`);
+          if (writesKeys.length > 0) {
+            await this.redis.del(...writesKeys);
+            writesDeleted += writesKeys.length;
+          }
       }
 
       logger.info({ 
         phone, 
-        key, 
-        existedBeforeDelete: exists === 1, 
-        writesDeleted: writesKeys.length 
-      }, "Checkpoint and associated writes deleted");
+        attemptedKeys: uniqueKeys,
+        deletedKeys,
+        totalDeleted, 
+        writesDeleted 
+      }, "Checkpoint and associated writes deleted (robust)");
     } catch (error) {
       logger.error({ err: error, phone }, "Error deleting checkpoint");
     }

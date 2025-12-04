@@ -50,8 +50,11 @@ export class StripeWebhookService {
     const subscription = event.data.object as Stripe.Subscription;
     const customer = subscription.customer as Stripe.Customer; // Customer ID might be string or object
     const phoneNumber = customer.phone; // Assuming phone number is stored on customer metadata or directly
+    // Normalize the phone number to ensure it has exactly one leading '+'
+    // Remove all leading '+' and then add a single '+'
+    const normalizedPhoneNumber = '+' + phoneNumber.replace(/^\++/, '');
 
-    if (!phoneNumber) {
+    if (!normalizedPhoneNumber) {
       logger.warn({ customerId: customer.id }, "Stripe customer without phone number. Cannot update subscriber.");
       return;
     }
@@ -59,10 +62,10 @@ export class StripeWebhookService {
     const isPremium = subscription.status === 'active' || subscription.status === 'trialing';
 
     logger.info(
-      { phoneNumber, subscriptionStatus: subscription.status, isPremium },
-      `Stripe subscription change for ${phoneNumber}. Setting isPremium to ${isPremium}.`
+      { phoneNumber: normalizedPhoneNumber, subscriptionStatus: subscription.status, isPremium },
+      `Stripe subscription change for ${normalizedPhoneNumber}. Setting isPremium to ${isPremium}.`
     );
 
-    await this.subscriberService.updateSubscriber(phoneNumber, { isPremium });
+    await this.subscriberService.updateSubscriber(normalizedPhoneNumber, { isPremium });
   }
 }

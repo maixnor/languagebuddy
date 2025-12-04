@@ -258,6 +258,7 @@ export class SubscriberService {
       );
     } catch (error) {
       logger.error({ err: error, phone: subscriber.connections.phone }, "Error caching subscriber");
+      throw error; // Re-throw the error to prevent silent failures
     }
   }
 

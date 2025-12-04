@@ -2,28 +2,30 @@ import pino from 'pino';
 import { getTraceContext } from '../observability/tracing';
 
 // Configure Pino logger
+let _transport: any; // To hold the pino-pretty transport stream
+
 const createLogger = () => {
   const baseConfig = {
     level: process.env.LOG_LEVEL || 'info',
     // Automatically inject trace context into every log
     mixin: () => getTraceContext(),
   };
-  
+
   // Only use pretty printing in development
   const isDevelopment = process.env.ENVIRONMENT !== 'production';
-  
+
   if (isDevelopment) {
+    _transport = pino.transport({
+      target: 'pino-pretty',
+      options: {
+        colorize: true,
+        translateTime: 'SYS:standard',
+        ignore: 'pid,hostname'
+      }
+    })
     return pino({
       ...baseConfig,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname'
-        }
-      }
-    });
+    }, _transport);
   } else {
     // Production: use structured JSON logging without colors
     return pino({
@@ -32,6 +34,12 @@ const createLogger = () => {
     });
   }
 };
+
+export const closeLoggerTransport = () => {
+  if (_transport) {
+    _transport.end();
+  }
+}
 
 export const logger = createLogger();
 
@@ -75,8 +83,8 @@ export const getConfig = () => ({
         morning: { start: '07:00', end: '10:00' },
         midday: { start: '11:00', end: '14:00' },
         evening: { start: '18:00', end: '21:00' },
-        fuzzinessMinutes: 30
-      }
+      },
+      fuzzinessMinutes: 30
     },
     feedback: {
       collectionProbability: 0.1, // 10% chance to ask for feedback

@@ -5,7 +5,7 @@ import { Subscriber } from '../features/subscriber/subscriber.types';
 import { handleUserCommand } from '../util/user-commands';
 import { getNextMissingField, getPromptForField } from '../util/info-gathering';
 import { generateOnboardingSystemPrompt } from '../util/system-prompts';
-import { generateRegularSystemPrompt } from '../features/subscriber/subscriber.prompts';
+import { generateRegularSystemPrompt } from '../util/system-prompts';
 import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
 
 export class WebhookService {

@@ -126,7 +126,12 @@ describe('RedisCheckpointSaver', () => {
   it('should handle deleteCheckpoint when no writes exist', async () => {
     const phone = '1234567890';
     
-    mockRedis.exists.mockResolvedValue(1);
+    mockRedis.exists.mockImplementation((key: string) => {
+      if (key === `checkpoint:${phone}`) {
+        return Promise.resolve(1);
+      }
+      return Promise.resolve(0);
+    });
     mockRedis.keys.mockResolvedValue([]); // No writes
     
     await saver.deleteCheckpoint(phone);
