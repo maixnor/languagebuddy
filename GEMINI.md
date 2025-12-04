@@ -1,4 +1,4 @@
-# LanguageBuddy Project Context for Gemini
+ LanguageBuddy Project Context for Gemini
 
 ## 0. Git
 - **NEVER TOUCH GIT UNLESS PROMPTED TO OTHERWISE. NEVER!**
@@ -55,7 +55,13 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 **Every new feature or bug fix MUST include tests.**
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
--   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 10s npm run start` as these commands run in watch mode and do not exit automatically).
+-   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 5s npm run start` as these commands run in watch mode and do not exit automatically).
+
+### Bug Fix Tests
+-   **Bug Fixes**: When fixing a bug, first write a *failing* unit test that precisely reproduces the bug. Only after the test fails, implement the fix, ensuring the test now passes. This guarantees the bug is addressed and prevents regressions.
+-   **Test First**: Always when presented with a bug or error (e.g. a prompt of a stack trace) proceed by exploring the tests and writing a failing unit test. If that is not possible for you to do so without looking at the code first have a look at the implementation without changing it. When you then created a failing unit test fix the implementation.
+-   **Granularity**: Try to run as few test files as possible and e2e tests only when necessary. Only when you finished your task(s) and are confident everything works run the entire test suite to verify your changes.
+
 
 ### Testing Strategy
 Within each feature folder (`backend/src/features/<feature_name>/`), we aim for up to three dedicated test files: `feature-name.unit.test.ts`, `feature-name.int.test.ts`, and `feature-name.e2e.test.ts`. This colocation ensures all testing concerns for a feature are kept together.
