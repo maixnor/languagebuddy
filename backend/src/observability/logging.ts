@@ -14,6 +14,19 @@ const createLogger = () => {
     // Add trace context to every log automatically
     mixin: traceMixin,
   };
+
+  // Conditionally add error serializer to suppress stack traces
+  if (process.env.SUPPRESS_LOG_STACK_TRACES === 'true') {
+    baseConfig.serializers = {
+      err: (error) => {
+        if (error instanceof Error) {
+          const { stack, ...rest } = error;
+          return rest;
+        }
+        return error;
+      },
+    };
+  }
   
   // Only use pretty printing in development
   const isDevelopment = process.env.ENVIRONMENT?.toLowerCase() !== 'production';
@@ -28,7 +41,7 @@ const createLogger = () => {
           translateTime: 'SYS:standard',
           ignore: 'pid,hostname',
           // Show trace context in development for debugging
-          messageFormat: '{traceId} {msg}'
+          messageFormat: '{traceId} {msg}',
         }
       }
     });
