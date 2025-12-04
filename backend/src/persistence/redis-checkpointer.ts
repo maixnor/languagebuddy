@@ -150,15 +150,17 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       // Deduplicate keys
       const uniqueKeys = [...new Set(keysToDelete)];
       
+      logger.info({ uniqueKeys, phone }, "Attempting to delete checkpoints and associated writes (robust method)");
+
       let totalDeleted = 0;
       const deletedKeys: string[] = [];
 
+      // Use del directly without checking exists first to avoid race conditions or inconsistencies
       for (const key of uniqueKeys) {
-        const exists = await this.redis.exists(key);
-        if (exists) {
-            await this.redis.del(key);
+        const result = await this.redis.del(key); // result is the number of keys deleted (0 or 1)
+        if (result > 0) {
             deletedKeys.push(key);
-            totalDeleted++;
+            totalDeleted += result;
         }
       }
       
