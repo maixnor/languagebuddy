@@ -26,38 +26,8 @@ build-frontend:
   cd frontend && nix build .
 
 # Deploy frontend to production
-deploy-frontend: build-frontend
-  #!/usr/bin/env bash
-  set -e
-  echo "🚀 Starting frontend production deployment..."
-  
-  # Create temporary directory for deployment
-  TEMP_DIR=$(mktemp -d)
-  echo "📁 Using temporary directory: $TEMP_DIR"
-  
-  # Copy built artifacts from Nix result
-  echo "📋 Copying built artifacts..."
-  if [ -L frontend/result ]; then
-    cp -rL frontend/result/* "$TEMP_DIR/"
-  else
-    cp -r frontend/result/* "$TEMP_DIR/"
-  fi
-  
-  # Deploy to server
-  echo "🌐 Deploying to production server..."
-  # First, remove old read-only directories if they exist and fix permissions
-  ssh "{{FRONTEND_SERVER}}" "sudo rm -rf {{FRONTEND_PROD_PATH}}/_astro {{FRONTEND_PROD_PATH}}/impressum {{FRONTEND_PROD_PATH}}/privacy 2>/dev/null || true && sudo mkdir -p {{FRONTEND_PROD_PATH}} && sudo chown -R languagebuddy:languagebuddy {{FRONTEND_PROD_PATH}} && sudo chmod -R u+rwX,g+rwX {{FRONTEND_PROD_PATH}}"
-  # Deploy with rsync
-  rsync -az --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "{{FRONTEND_SERVER}}:{{FRONTEND_PROD_PATH}}/"
-  # Fix ownership and permissions after deployment
-  ssh "{{FRONTEND_SERVER}}" "sudo chown -R languagebuddy:languagebuddy {{FRONTEND_PROD_PATH}} && sudo chmod -R u+rwX,g+rwX {{FRONTEND_PROD_PATH}}"
-  
-  # Cleanup
-  chmod -R u+w "$TEMP_DIR" 2>/dev/null || true
-  rm -rf "$TEMP_DIR"
-  
-  echo "✅ Frontend production deployment completed successfully!"
-  echo "📍 Deployed to: {{FRONTEND_SERVER}}:{{FRONTEND_PROD_PATH}}"
+deploy-frontend:
+  nix run .#deploy-frontend
 
 # Build everything
 build-all:
