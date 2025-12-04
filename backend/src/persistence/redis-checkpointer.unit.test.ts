@@ -123,30 +123,12 @@ describe('RedisCheckpointSaver', () => {
     expect(savedMessages[0].timestamp).toEqual(existingTimestamp);
   });
 
-  it('should clear messages but preserve metadata in clearUserHistory', async () => {
+  it('should delete the entire checkpoint in clearUserHistory', async () => {
     const threadId = 'testThread';
-    const checkpoint: Checkpoint = {
-      channel_versions: {},
-      versions_seen: {},
-      ts: '2023-01-01T00:00:00Z',
-      id: 'some_id',
-      values: {
-        messages: [{ content: 'Old message', type: 'human', timestamp: '2023-01-01T09:00:00.000Z' }],
-      },
-    };
-    const metadata = { conversationStartedAt: '2023-01-01T08:00:00.000Z', otherKey: 'value' };
-
-    // Simulate a checkpoint already existing
-    redisMock.get.mockResolvedValueOnce(JSON.stringify({ checkpoint, metadata, parentConfig: undefined }));
-
+    
     await saver.clearUserHistory(threadId);
 
-    expect(redisMock.get).toHaveBeenCalledWith(`checkpoint:${threadId}`);
-    expect(redisMock.set).toHaveBeenCalledTimes(1); // putTuple is called internally
-
-    const savedData = JSON.parse(redisMock.set.mock.calls[0][1]);
-    expect(savedData.checkpoint.values.messages).toEqual([]); // Messages cleared
-    expect(savedData.metadata.conversationStartedAt).toEqual(metadata.conversationStartedAt); // Preserved
-    expect(savedData.metadata.otherKey).toEqual(metadata.otherKey); // Other metadata preserved
+    expect(redisMock.del).toHaveBeenCalledWith(`checkpoint:${threadId}`);
+    expect(redisMock.set).not.toHaveBeenCalled();
   });
 });

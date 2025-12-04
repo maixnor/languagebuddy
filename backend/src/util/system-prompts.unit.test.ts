@@ -4,29 +4,35 @@ import { DateTime } from "luxon";
 
 describe("generateSystemPrompt", () => {
   const mockSubscriber: Subscriber = {
+    connections: {
+      phone: "+1234567890",
+    },
     profile: {
       name: "Test User",
-      speakingLanguages: [],
+      speakingLanguages: [{
+        languageName: "English",
+        overallLevel: "C2",
+        skillAssessments: [],
+        deficiencies: [],
+        firstEncountered: new Date(),
+        lastPracticed: new Date(),
+        totalPracticeTime: 0,
+        confidenceScore: 100
+      }],
       learningLanguages: [
         {
           languageName: "German",
           overallLevel: "B1",
           skillAssessments: [],
           deficiencies: [],
+          currentObjectives: ["Learn business German"],
           firstEncountered: new Date(),
           lastPracticed: new Date(),
           totalPracticeTime: 0,
           confidenceScore: 50,
-          isTarget: true,
         },
       ],
       timezone: "America/New_York",
-      fluencyLevel: "intermediate",
-      areasOfStruggle: ["grammar", "vocabulary"],
-      mistakeTolerance: "normal"
-    },
-    connections: {
-      phone: "+1234567890",
     },
     metadata: {
       digests: [],
@@ -34,11 +40,11 @@ describe("generateSystemPrompt", () => {
       streakData: {
         currentStreak: 0,
         longestStreak: 0,
-        lastActiveDate: new Date(),
+        lastIncrement: new Date(),
       },
       predictedChurnRisk: 0,
       engagementScore: 50,
-      difficultyPreference: "adaptive",
+      mistakeTolerance: "normal"
     },
     isPremium: false,
     signedUpAt: new Date().toISOString(),
@@ -62,11 +68,14 @@ describe("generateSystemPrompt", () => {
     const context = createPromptContext(now);
     const prompt = generateSystemPrompt(context);
 
-    expect(prompt).toContain("You are Maya, an AI language tutor.");
-    expect(prompt).toContain("User's target language: German");
-    expect(prompt).toContain("User's current fluency level: intermediate");
-    expect(prompt).toContain("User's areas of struggle: grammar, vocabulary");
-    expect(prompt).toContain(`Current Date and Time (User's Local Time): ${now.toLocaleString(DateTime.DATETIME_FULL)}`);
+    // Check for new Persona format
+    expect(prompt).toContain("You are Maya, Test User's personal language learning buddy.");
+    expect(prompt).toContain("You're an expat who's lived in their target language region for 5 years.");
+    
+    // Check for User Profile info
+    expect(prompt).toContain("Native language(s): English");
+    expect(prompt).toContain("Learning language(s): German at level B1");
+    expect(prompt).toContain("Mistake tolerance: normal");
   });
 
   it("should include conversation duration when provided", () => {
@@ -143,24 +152,5 @@ describe("generateSystemPrompt", () => {
       expect(prompt).not.toContain("It is currently late at night/early morning for the user");
       expect(prompt).not.toContain("Suggest ending the conversation naturally soon");
     });
-  });
-
-  it("should robustly handle missing areasOfStruggle in profile", () => {
-      // Construct a subscriber that matches the runtime shape where the property is missing
-      // We cast to any to bypass strict type checking for this regression test
-      const subscriberWithoutAreas: any = {
-        ...mockSubscriber,
-        profile: {
-          ...mockSubscriber.profile,
-          // explicitly remove areasOfStruggle if it exists in mock, or ensure it's undefined
-          areasOfStruggle: undefined
-        }
-      };
-  
-      const context = createPromptContext(DateTime.now());
-      context.subscriber = subscriberWithoutAreas;
-  
-      const prompt = generateSystemPrompt(context);
-      expect(prompt).toContain("User's areas of struggle: none");
   });
 });

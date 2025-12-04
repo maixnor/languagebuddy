@@ -261,7 +261,7 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
         return latestSubscriber ? [latestSubscriber] : [];
       });
 
-      await scheduler.sendPushMessages();
+      await scheduler.processNightlyDigests();
 
       expect(digestService.saveDigestToSubscriber).not.toHaveBeenCalled();
       expect(agent.clearConversation).toHaveBeenCalledWith(testPhone); // Still clears conversation
@@ -296,7 +296,7 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
 
       jest.spyOn(scheduler, 'isNightTimeForUser').mockReturnValue(true);
 
-      await scheduler.sendPushMessages();
+      await scheduler.processNightlyDigests();
 
       expect(digestService.saveDigestToSubscriber).not.toHaveBeenCalled();
     });
@@ -340,7 +340,7 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
       };
       (digestService.createConversationDigest as jest.Mock).mockResolvedValue(mockDigest);
 
-      await scheduler.sendPushMessages();
+      await scheduler.processNightlyDigests();
 
       expect(digestService.createConversationDigest).toHaveBeenCalled();
     });
@@ -380,7 +380,7 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
         lastDigestDate: undefined, // Also reset this for a clean test
       });
 
-      await scheduler.sendPushMessages();
+      await scheduler.processNightlyDigests();
 
       // Only assert agent.clearConversation, as the success check is no longer valid
       expect(agent.clearConversation).toHaveBeenCalledWith(testPhone); // Still clears conversation

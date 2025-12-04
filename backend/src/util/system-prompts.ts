@@ -1,5 +1,6 @@
-import { Language, Subscriber } from "../features/subscriber/subscriber.types";
+import { Subscriber, Language } from "../features/subscriber/subscriber.types";
 import { DateTime } from "luxon";
+import { generateRegularSystemPrompt } from "../features/subscriber/subscriber.prompts";
 
 interface SystemPromptContext {
   subscriber: Subscriber;
@@ -16,49 +17,43 @@ export function generateSystemPrompt({
   currentLocalTime,
   lastDigestTopic
 }: SystemPromptContext): string {
-  let prompt = `You are Maya, an AI language tutor. Your goal is to help the user practice and improve their target language.
-You're an expat who's lived in the user's target language region for 5 years, so you understand the challenges of learning.
-You are supportive and patient. You're also a bit of a foodie, loving to share recent discoveries.
-History (especially lesser-known facts), music, and art are also passions of yours.
-Your responses are short and impactful. Occasionally, you drift off to share a fun fact but always return to the main conversation within one message.
-  
-User's target language: ${subscriber.profile.learningLanguages?.[0]?.languageName || 'English'}
-User's native language: ${subscriber.profile.speakingLanguages?.[0]?.languageName || 'unknown'}
-User's current fluency level: ${subscriber.profile.fluencyLevel || 'beginner'}
-User's areas of struggle: ${subscriber.profile.areasOfStruggle?.join(', ') || 'none'}
-Mistake tolerance: ${subscriber.profile.mistakeTolerance || 'none'}
+  // Determine target language (default to first learning language or a placeholder)
+  // Ideally this should come from the current conversation context if multiple languages are being learned
+  const targetLanguage: Language = subscriber.profile.learningLanguages?.[0] || {
+    languageName: 'English',
+    overallLevel: 'A1',
+    skillAssessments: [],
+    deficiencies: [],
+    firstEncountered: new Date(),
+    lastPracticed: new Date(),
+    totalPracticeTime: 0,
+    confidenceScore: 0
+  };
 
-Current Date and Time (User's Local Time): ${currentLocalTime.toLocaleString(DateTime.DATETIME_FULL)}
-`;
+  // Use the detailed "Maya" persona from subscriber features
+  let prompt = generateRegularSystemPrompt(subscriber, targetLanguage);
 
+  // Append dynamic time-aware context
   if (conversationDurationMinutes !== null) {
-    prompt += `Conversation started ${conversationDurationMinutes.toFixed(0)} minutes ago.
-`;
+    prompt += `\n\nCONTEXT - CURRENT SESSION:\nConversation started ${conversationDurationMinutes.toFixed(0)} minutes ago.\n`;
   }
 
   if (timeSinceLastMessageMinutes !== null) {
-    prompt += `Time since last message: ${timeSinceLastMessageMinutes.toFixed(0)} minutes.
-`;
+    prompt += `Time since last message: ${timeSinceLastMessageMinutes.toFixed(0)} minutes.\n`;
 
     // Agent's behavior based on time gaps
     if (timeSinceLastMessageMinutes < 5) {
-      prompt += `Continue the conversation as normal, it's a rapid exchange.
-`;
+      prompt += `Continue the conversation as normal, it's a rapid exchange.\n`;
     } else if (timeSinceLastMessageMinutes >= 5 && timeSinceLastMessageMinutes < 60) {
-      prompt += `Acknowledge the short break naturally, e.g., "Welcome back!" or "Back to our conversation!".
-`;
+      prompt += `Acknowledge the short break naturally, e.g., "Welcome back!" or "Back to our conversation!".\n`;
     } else if (timeSinceLastMessageMinutes >= 60 && timeSinceLastMessageMinutes < 6 * 60) { // 1 to 6 hours
-      prompt += `Reference the time gap naturally, e.g., "Good to hear from you again after a while!".
-`;
+      prompt += `Reference the time gap naturally, e.g., "Good to hear from you again after a while!".\n`;
     } else if (timeSinceLastMessageMinutes >= 6 * 60 && timeSinceLastMessageMinutes < 24 * 60) { // 6 to 24 hours
-      prompt += `Treat this as a new conversation day. Offer a fresh start.
-`;
+      prompt += `Treat this as a new conversation day. Offer a fresh start.\n`;
     } else if (timeSinceLastMessageMinutes >= 24 * 60) { // >24 hours
-      prompt += `Offer a warm welcome back. If available, reference the previous topic.
-`;
+      prompt += `Offer a warm welcome back. If available, reference the previous topic.\n`;
       if (lastDigestTopic) {
-        prompt += `Previous topic was: "${lastDigestTopic}". You can ask if they want to continue or start something new.
-`;
+        prompt += `Previous topic was: "${lastDigestTopic}". You can ask if they want to continue or start something new.\n`;
       }
     }
   }
@@ -67,8 +62,7 @@ Current Date and Time (User's Local Time): ${currentLocalTime.toLocaleString(Dat
   const hour = currentLocalTime.hour;
   if (hour >= 22 || hour < 6) { // 10 PM to 6 AM local time
     prompt += `It is currently late at night/early morning for the user (${currentLocalTime.toFormat('hh:mm a')}).
-Suggest ending the conversation naturally soon, e.g., "It's getting late, perhaps we should continue tomorrow?" or "Good night!".
-`;
+Suggest ending the conversation naturally soon, e.g., "It's getting late, perhaps we should continue tomorrow?" or "Good night!".\n`;
   }
 
   return prompt;

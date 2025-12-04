@@ -137,7 +137,7 @@ export class SchedulerService {
     }
   }
 
-  private async processNightlyDigests(): Promise<void> {
+  public async processNightlyDigests(): Promise<void> {
     if (config.features.dailyMessages.enabled === false) return; // Assuming this flag also controls digests
     try {
       const subscribers = await this.subscriberService.getAllSubscribers();
@@ -172,7 +172,7 @@ export class SchedulerService {
     }
   }
 
-  private async processRegularPushMessages(): Promise<void> {
+  public async processRegularPushMessages(): Promise<void> {
     if (config.features.dailyMessages.enabled === false) return;
     try {
       const subscribers = await this.subscriberService.getAllSubscribers();
