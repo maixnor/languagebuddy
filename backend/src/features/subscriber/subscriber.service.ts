@@ -3,6 +3,7 @@ import { Subscriber } from './subscriber.types';
 import { logger } from '../../config'; // Will be updated
 import { getMissingProfileFieldsReflective } from '../../util/profile-reflection'; // Will be updated
 import { DateTime } from 'luxon';
+import { generateRegularSystemPrompt } from './subscriber.prompts';
 
 export class SubscriberService {
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
@@ -282,77 +283,27 @@ export class SubscriberService {
   }
 
   public getDailySystemPrompt(subscriber: Subscriber): string {
-    const primary = subscriber.profile.speakingLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
-    const learning = subscriber.profile.learningLanguages?.map(l => `${l.languageName} (${l.overallLevel || 'unknown level'})`).join(', ') || 'Not specified';
-    const objectives = subscriber.profile.learningLanguages
-      ?.flatMap(l => l.currentObjectives || [])
-      .filter(obj => !!obj);
+    const targetLanguage = subscriber.profile.learningLanguages?.[0] || {
+      languageName: 'English',
+      overallLevel: 'A1',
+      skillAssessments: [],
+      deficiencies: [],
+      firstEncountered: new Date(),
+      lastPracticed: new Date(),
+      totalPracticeTime: 0,
+      confidenceScore: 0,
+      currentLanguage: true,
+    };
 
-    const topic = objectives && objectives.length > 0
-      ? objectives[Math.floor(Math.random() * objectives.length)]
-      : "None";
+    let prompt = generateRegularSystemPrompt(subscriber, targetLanguage);
 
-    let prompt = `You are a helpful language learning buddy. Your role is to have natural conversations that help users practice languages.
-
-CURRENT USER INFO:
-- Name: ${subscriber.profile.name}
-- Speaking languages: ${primary}
-- Learning languages: ${learning}
-- Topic/Goal for today: ${topic}
-
-CONVERSATIONS OF THE LAST DAYS:
-${subscriber.metadata.digests && subscriber.metadata.digests.length > 0
-  ? subscriber.metadata.digests.slice(-3).map(d => {
-      const parts = [`Topic: ${d.topic}`, `Summary: ${d.summary}`];
-      
-      // Include areas of struggle if any
-      if (d.areasOfStruggle && d.areasOfStruggle.length > 0) {
-        parts.push(`Struggles: ${d.areasOfStruggle.join(', ')}`);
-      }
-      
-      // Include key breakthroughs if any
-      if (d.keyBreakthroughs && d.keyBreakthroughs.length > 0) {
-        parts.push(`Breakthroughs: ${d.keyBreakthroughs.join(', ')}`);
-      }
-      
-      // Include user memos if any (very important for personalization)
-      if (d.userMemos && d.userMemos.length > 0) {
-        parts.push(`Personal notes: ${d.userMemos.join('; ')}`);
-      }
-      
-      return parts.join(' | ');
-    }).join('\n\n')
-  : "- No previous conversations"}
-
-INSTRUCTIONS:
-1. Initiate a conversation about the topic of the day (${topic}) in ${learning}. Don't ask the user if they want to have a conversation or practice something, just do it with them, don't ask for their opinion, don't introduce any topic. Disguise your conversation starters as trying to find out more information about the user.
-1b. If there is no topic, ask for the interests of the user before starting the conversation and use the update_subscriber tool to update the current interests
-2. Have a naturl conversations in ${learning} as if talking to a good friend, but should the user not understand something explain things in ${primary}, but keep the use of ${primary} minimal for the conversation, leave them out completely if possible. At best you are just using individual words in ${primary}
-3. **PROACTIVELY ask for missing profile information** - don't wait for users to mention it
-4. When users share personal info, use the update_subscriber tool to save it immediately
-4.1 When users switch languages (they might know more than one) then please continue the conversation in the language they have switched to. For example: The conversation starts off in English and then the user switches to German, then switch to German.
-5. When users provide feedback about our conversations, use the collect_feedback tool to save it
-6. Be encouraging and adjust difficulty to their level
-7. The users learning effect is important. You should correct wrong answers and offer feadback to do it better next time.
-8. When doing a right/wrong exercise like a quiz or grammar exercise do highlight errors and correct them in a friendly manner. Be diligent with correcting even small mistakes.
-9. Keep responses conversational and not too long
-10. When they mention their interest ("I want to learn", "I'm interested in") -> update objectives
-
-FEEDBACK COLLECTION:
-- When users give feedback about our conversations, teaching quality, or suggestions → use collect_feedback tool
-- Examples: "This is helpful", "You explain too fast", "Could you add more examples", "I love these conversations"
-
-WHEN TO REQUEST FEEDBACK:
-- If the user seems confused or asks multiple clarifying questions
-- If you notice the user is struggling with explanations
-- If there are misunderstandings or communication issues
-- If the user expresses frustration or difficulty
-- If the conversation feels awkward or unnatural
-- After explaining something complex that the user might not have understood
-
-When any of these situations occur, naturally ask: "How am I doing? I want to make sure my explanations are helpful - any honest feedback would be great!"
-
-Be natural and conversational. Proactively gather missing information but weave it smoothly into conversation flow.`;
+    prompt += `\n\nTASK: INITIATE NEW DAY CONVERSATION
+    - This is a fresh start after a nightly reset.
+    - Initiate a conversation naturally.
+    - If there's a topic from the last digest, you might reference it or start something new.
+    - Don't ask "Do you want to practice?". Just start talking.
+    - Disguise your conversation starters as trying to find out more information about the user if appropriate.
+    `;
     return prompt;
   }
 

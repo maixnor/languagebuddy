@@ -76,7 +76,7 @@ describe('LanguageBuddyAgent', () => {
     mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
     // Mock the internal agent directly
     mockAgentInvoke = jest.fn().mockResolvedValue({
-      messages: [{ text: 'AI Response' }]
+      messages: [{ content: 'AI Response' }]
     });
     mockLlm = {
       // Mock the createReactAgent config directly if needed, or rely on its internal invoke for tests
@@ -220,6 +220,24 @@ describe('LanguageBuddyAgent', () => {
       const humanMessage = 'Hello!';
       const response = await agent.initiateConversation(mockSubscriber, humanMessage);
       expect(response).toEqual('AI Response');
+    });
+
+    it('should use systemPromptOverride if provided', async () => {
+      const humanMessage = 'Hello!';
+      const overridePrompt = 'Override Prompt';
+      
+      mockGenerateSystemPrompt.mockClear(); // Reset mock call count
+      
+      await agent.initiateConversation(mockSubscriber, humanMessage, overridePrompt);
+
+      expect(mockGenerateSystemPrompt).not.toHaveBeenCalled();
+      expect(mockAgentInvoke).toHaveBeenCalledWith(
+        { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
+        { configurable: { thread_id: mockSubscriber.connections.phone }}
+      );
+      const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
+      expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
+      expect(invokeArgs[0].content).toEqual(overridePrompt);
     });
 
     it('should handle errors gracefully', async () => {

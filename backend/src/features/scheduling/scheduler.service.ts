@@ -116,8 +116,8 @@ export class SchedulerService {
       await this.languageBuddyAgent.clearConversation(subscriber.connections.phone);
       const message = await this.languageBuddyAgent.initiateConversation(
         subscriber,
-        this.subscriberService.getDailySystemPrompt(subscriber),
-        ""
+        "",
+        this.subscriberService.getDailySystemPrompt(subscriber)
       );
       
       const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);

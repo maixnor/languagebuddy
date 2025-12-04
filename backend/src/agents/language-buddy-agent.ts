@@ -42,30 +42,36 @@ export class LanguageBuddyAgent {
       checkpointer: checkpointer,
     })
   }
-  async initiateConversation(subscriber: Subscriber, humanMessage: string): Promise<string> {
+  async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<string> {
     try {
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
       setContextVariable('phone', subscriber.connections.phone);
 
-      const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
-      const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
-      const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+      let systemPrompt: string;
 
-      const systemPrompt = generateSystemPrompt({
-        subscriber,
-        conversationDurationMinutes,
-        timeSinceLastMessageMinutes,
-        currentLocalTime,
-        lastDigestTopic: null, // TODO: Implement fetching last digest topic
-      });
+      if (systemPromptOverride) {
+        systemPrompt = systemPromptOverride;
+      } else {
+        const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
+        const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
+        const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+
+        systemPrompt = generateSystemPrompt({
+          subscriber,
+          conversationDurationMinutes,
+          timeSinceLastMessageMinutes,
+          currentLocalTime,
+          lastDigestTopic: null, // TODO: Implement fetching last digest topic
+        });
+      }
 
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { configurable: { thread_id: subscriber.connections.phone }}
       );
 
-      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${result.messages[result.messages.length - 1].text}`);
-      return result.messages[result.messages.length - 1].text || "initiateConversation() failed";
+      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${result.messages[result.messages.length - 1].content}`);
+      return result.messages[result.messages.length - 1].content || "initiateConversation() failed";
     } catch (error) {
       logger.error({ err: error, subscriber: subscriber }, "Error in initiate method");
       return "An error occurred while initiating the conversation. Please try again later.";
@@ -103,8 +109,8 @@ export class LanguageBuddyAgent {
         { configurable: { thread_id: subscriber.connections.phone } }
     );
 
-    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].text}`);
-    return response.messages.pop().text || "processUserMessage()?";
+    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].content}`);
+    return response.messages[response.messages.length - 1].content || "processUserMessage()?";
   }
 
   async clearConversation(phone: string): Promise<void> {

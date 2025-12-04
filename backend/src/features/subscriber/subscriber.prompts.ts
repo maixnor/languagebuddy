@@ -138,12 +138,15 @@ export function generateRegularSystemPrompt(
       }
     });
 
-    prompt += `\nIMPORTANT: Weave these weak areas into the conversation naturally and organically. For example:`
-    prompt += `\n- If "${priorityDeficiencies[0]?.specificArea}" is a weakness, start a conversation that requires using this area`
-    prompt += `\n- Don't explicitly mention you're targeting these areas - just create opportunities for practice`
-    prompt += `\n- Gently correct mistakes and provide natural examples of correct usage`
-    prompt += `\n- Use the add_language_deficiency tool to record any NEW deficiencies you identify during conversation`
-    prompt += `\n- After successful practice of a deficiency, the system will track improvement automatically\n`;
+    prompt += `\nIMPORTANT: ACTIVELY STEER the conversation to force practice of these specific areas, but do it naturally.
+    - PHASE 1 (Warm-up): Start the session with 1-2 light, friendly messages to build rapport. Don't dive into complex tasks immediately.
+    - PHASE 2 (Strategic Practice): After the warm-up, ask questions or set up scenarios where the user MUST use the target concept to answer naturally.
+    - Example (Past Tense): "Tell me about what you did last weekend?" (Forces past tense) rather than "Do you like weekends?"
+    - Example (Conditional): "What would you do if you won the lottery?" (Forces conditional)
+    - Example (Vocabulary): Ask about a topic related to the weak vocabulary area.
+    - Gently correct mistakes and provide natural examples of correct usage.
+    - Use the add_language_deficiency tool to record any NEW deficiencies you identify.
+    - The system automatically tracks when you practice these areas, so just focus on the conversation.\n`;
   }
 
   prompt += `\n\nCONVERSATION GUIDELINES:
