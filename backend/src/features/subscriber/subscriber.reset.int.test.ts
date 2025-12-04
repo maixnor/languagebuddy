@@ -142,8 +142,8 @@ describe('Conversation Reset Integration', () => {
     // Verify a new conversation was initiated
     expect(languageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
       mockSubscriber,
-      systemPrompt,
-      ""
+      "", // humanMessage is empty as it's a system-initiated prompt
+      systemPrompt // systemPromptOverride
     );
 
     // 3. Simulate user sending a message AFTER the conversation was cleared and re-initiated

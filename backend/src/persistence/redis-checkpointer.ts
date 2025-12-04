@@ -16,7 +16,11 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     if (!threadId) return undefined;
 
     try {
-      const checkpointData = await this.redis.get(`checkpoint:${threadId}`);
+      const key = `checkpoint:${threadId}`;
+      const checkpointData = await this.redis.get(key);
+      
+      logger.debug({ threadId, key, found: !!checkpointData }, "Retrieving checkpoint tuple");
+      
       if (!checkpointData) return undefined;
 
       const parsed = JSON.parse(checkpointData);
@@ -95,14 +99,15 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
         parentConfig,
       };
 
+      const key = `checkpoint:${threadId}`;
       await this.redis.set(
-        `checkpoint:${threadId}`,
+        key,
         JSON.stringify(checkpointData),
         'EX',
         60 * 60 * 24 * 3 // 3 days expiration
       );
 
-      logger.debug({ threadId }, "Checkpoint saved");
+      logger.debug({ threadId, key }, "Checkpoint saved");
       return config;
     } catch (error) {
       logger.error({ err: error, threadId }, "Error saving checkpoint");
@@ -130,8 +135,24 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
   async deleteCheckpoint(phone: string): Promise<void> {
     try {
-      await this.redis.del(`checkpoint:${phone}`);
-      logger.debug({ phone }, "Checkpoint deleted");
+      const key = `checkpoint:${phone}`;
+      const exists = await this.redis.exists(key);
+      
+      await this.redis.del(key);
+      
+      // Also cleanup writes which might persist
+      // scan is better than keys for performance, but keys is simpler for now given the likely volume
+      const writesKeys = await this.redis.keys(`writes:${phone}:*`);
+      if (writesKeys.length > 0) {
+        await this.redis.del(...writesKeys);
+      }
+
+      logger.info({ 
+        phone, 
+        key, 
+        existedBeforeDelete: exists === 1, 
+        writesDeleted: writesKeys.length 
+      }, "Checkpoint and associated writes deleted");
     } catch (error) {
       logger.error({ err: error, phone }, "Error deleting checkpoint");
     }

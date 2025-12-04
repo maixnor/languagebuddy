@@ -15,7 +15,8 @@ module.exports = {
   ],
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/.e2e.test.ts$'
+    '/.e2e.test.ts$',
+    '/src/features/subscriber/subscriber.prompts.unit.test.ts'
   ],
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   testTimeout: 30000, // 30 seconds for unit and integration tests

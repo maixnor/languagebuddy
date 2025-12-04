@@ -3,7 +3,7 @@ import { Subscriber } from './subscriber.types';
 import { logger } from '../../config'; // Will be updated
 import { getMissingProfileFieldsReflective } from '../../util/profile-reflection'; // Will be updated
 import { DateTime } from 'luxon';
-import { generateRegularSystemPrompt } from './subscriber.prompts';
+import { generateRegularSystemPromptForSubscriber } from '../../util/system-prompts';
 
 export class SubscriberService {
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
@@ -295,7 +295,7 @@ export class SubscriberService {
       currentLanguage: true,
     };
 
-    let prompt = generateRegularSystemPrompt(subscriber, targetLanguage);
+    let prompt = generateRegularSystemPromptForSubscriber(subscriber, targetLanguage);
 
     prompt += `\n\nTASK: INITIATE NEW DAY CONVERSATION
     - This is a fresh start after a nightly reset.

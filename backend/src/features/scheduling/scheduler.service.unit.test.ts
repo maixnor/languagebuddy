@@ -191,8 +191,8 @@ describe('SchedulerService', () => {
           expect(mockLanguageBuddyAgent.clearConversation).toHaveBeenCalledWith(mockSubscriber.connections.phone);
           expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
               mockSubscriber, 
-              "Daily Prompt", 
-              ""
+              "", // humanMessage is empty in this scenario as it's a system-initiated prompt
+              "Daily Prompt" // systemPromptOverride
           );
           expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockSubscriber.connections.phone, "Hello there!");
           expect(result).toBe("Hello there!");

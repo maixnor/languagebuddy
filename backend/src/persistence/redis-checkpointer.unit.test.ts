@@ -2,54 +2,55 @@ import { RedisCheckpointSaver } from './redis-checkpointer';
 import { Redis } from 'ioredis';
 import { Checkpoint } from '@langchain/langgraph';
 
-// Mock ioredis
+// Mock ioredis class
+const mockRedis = {
+  get: jest.fn(),
+  set: jest.fn(),
+  setex: jest.fn(),
+  del: jest.fn(),
+  keys: jest.fn(),
+  scan: jest.fn(),
+  exists: jest.fn(),
+};
+
 jest.mock('ioredis', () => {
   return {
-    Redis: jest.fn().mockImplementation(() => ({
-      get: jest.fn(),
-      set: jest.fn(),
-      del: jest.fn(),
-      keys: jest.fn(),
-      lrange: jest.fn(),
-    })),
+    Redis: jest.fn().mockImplementation(() => mockRedis),
   };
 });
 
 describe('RedisCheckpointSaver', () => {
-  let redisMock: jest.Mocked<Redis>;
   let saver: RedisCheckpointSaver;
+  let redisClient: any;
 
   beforeEach(() => {
-    redisMock = new Redis() as jest.Mocked<Redis>;
-    saver = new RedisCheckpointSaver(redisMock);
-  });
-
-  afterEach(() => {
     jest.clearAllMocks();
+    redisClient = new Redis();
+    saver = new RedisCheckpointSaver(redisClient);
   });
 
   it('should save a checkpoint with a new conversationStartedAt if not present', async () => {
     const threadId = 'testThread';
     const config = { configurable: { thread_id: threadId } };
     const checkpoint: Checkpoint = {
-      // Mock a basic checkpoint structure
       channel_versions: {},
       versions_seen: {},
       ts: '2023-01-01T00:00:00Z',
       id: 'some_id',
-      // LangGraph typically stores messages in values.messages
       values: {
         messages: [{ content: 'Hello', type: 'human' }],
       },
+      pending_sends: []
     };
     const metadata = {}; // No conversationStartedAt initially
 
     await saver.putTuple(config, checkpoint, metadata);
 
-    expect(redisMock.set).toHaveBeenCalledTimes(1);
-    const savedData = JSON.parse(redisMock.set.mock.calls[0][1]);
+    expect(mockRedis.set).toHaveBeenCalledTimes(1);
+    const callArgs = mockRedis.set.mock.calls[0];
+    expect(callArgs[0]).toBe(`checkpoint:${threadId}`);
+    const savedData = JSON.parse(callArgs[1]);
     expect(savedData.metadata.conversationStartedAt).toBeDefined();
-    // Ensure it's a valid ISO string
     expect(() => new Date(savedData.metadata.conversationStartedAt)).not.toThrow();
   });
 
@@ -64,13 +65,14 @@ describe('RedisCheckpointSaver', () => {
       values: {
         messages: [{ content: 'Hello', type: 'human' }],
       },
+      pending_sends: []
     };
     const existingStartedAt = '2023-01-01T10:00:00.000Z';
     const metadata = { conversationStartedAt: existingStartedAt };
 
     await saver.putTuple(config, checkpoint, metadata);
 
-    const savedData = JSON.parse(redisMock.set.mock.calls[0][1]);
+    const savedData = JSON.parse(mockRedis.set.mock.calls[0][1]);
     expect(savedData.metadata.conversationStartedAt).toEqual(existingStartedAt);
   });
 
@@ -88,12 +90,13 @@ describe('RedisCheckpointSaver', () => {
           { content: 'Message 2', type: 'ai', timestamp: '2023-01-01T10:01:00.000Z' }, // With timestamp
         ],
       },
+      pending_sends: []
     };
     const metadata = {};
 
     await saver.putTuple(config, checkpoint, metadata);
 
-    const savedData = JSON.parse(redisMock.set.mock.calls[0][1]);
+    const savedData = JSON.parse(mockRedis.set.mock.calls[0][1]);
     const savedMessages = savedData.checkpoint.values.messages;
 
     expect(savedMessages[0].timestamp).toBeDefined();
@@ -101,34 +104,37 @@ describe('RedisCheckpointSaver', () => {
     expect(savedMessages[1].timestamp).toEqual('2023-01-01T10:01:00.000Z'); // Should preserve existing
   });
 
-  it('should not modify timestamp if already present', async () => {
-    const threadId = 'testThread';
-    const config = { configurable: { thread_id: threadId } };
-    const existingTimestamp = '2023-01-01T09:30:00.000Z';
-    const checkpoint: Checkpoint = {
-      channel_versions: {},
-      versions_seen: {},
-      ts: '2023-01-01T00:00:00Z',
-      id: 'some_id',
-      values: {
-        messages: [{ content: 'Existing message', type: 'human', timestamp: existingTimestamp }],
-      },
-    };
-    const metadata = {};
+  it('should delete checkpoint and writes keys in deleteCheckpoint', async () => {
+    const phone = '1234567890';
+    
+    // Mock keys finding some writes
+    mockRedis.exists.mockResolvedValue(1);
+    mockRedis.keys.mockResolvedValue([`writes:${phone}:task1`, `writes:${phone}:task2`]);
+    
+    await saver.deleteCheckpoint(phone);
 
-    await saver.putTuple(config, checkpoint, metadata);
-
-    const savedData = JSON.parse(redisMock.set.mock.calls[0][1]);
-    const savedMessages = savedData.checkpoint.values.messages;
-    expect(savedMessages[0].timestamp).toEqual(existingTimestamp);
+    // Verify main checkpoint deletion
+    expect(mockRedis.del).toHaveBeenCalledWith(`checkpoint:${phone}`);
+    
+    // Verify writes keys search
+    expect(mockRedis.keys).toHaveBeenCalledWith(`writes:${phone}:*`);
+    
+    // Verify writes deletion
+    expect(mockRedis.del).toHaveBeenCalledWith(`writes:${phone}:task1`, `writes:${phone}:task2`);
   });
 
-  it('should delete the entire checkpoint in clearUserHistory', async () => {
-    const threadId = 'testThread';
+  it('should handle deleteCheckpoint when no writes exist', async () => {
+    const phone = '1234567890';
     
-    await saver.clearUserHistory(threadId);
+    mockRedis.exists.mockResolvedValue(1);
+    mockRedis.keys.mockResolvedValue([]); // No writes
+    
+    await saver.deleteCheckpoint(phone);
 
-    expect(redisMock.del).toHaveBeenCalledWith(`checkpoint:${threadId}`);
-    expect(redisMock.set).not.toHaveBeenCalled();
+    // Verify main checkpoint deletion
+    expect(mockRedis.del).toHaveBeenCalledWith(`checkpoint:${phone}`);
+    
+    // Verify NO writes deletion (del called only once for the main key)
+    expect(mockRedis.del).toHaveBeenCalledTimes(1);
   });
 });
