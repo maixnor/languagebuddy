@@ -4,8 +4,7 @@ import { WebhookMessage } from '../types';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { handleUserCommand } from '../util/user-commands';
 import { getNextMissingField, getPromptForField } from '../util/info-gathering';
-import { generateOnboardingSystemPrompt } from '../util/system-prompts';
-import { generateSystemPrompt } from '../util/system-prompts';
+import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
 import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
 import { DateTime } from "luxon";
 
@@ -174,7 +173,8 @@ export class WebhookService {
 
   private async startNewUserOnboarding(phone: string, messageBody: string): Promise<void> {
     await this.services.onboardingService.startOnboarding(phone);
-    const systemPrompt = generateOnboardingSystemPrompt();
+    const subscriberForPrompt = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
+    const systemPrompt = generateDefaultSystemPromptForSubscriber(subscriberForPrompt);
     const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
       { connections: { phone } } as Subscriber,
       systemPrompt,
