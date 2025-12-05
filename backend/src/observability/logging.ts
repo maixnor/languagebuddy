@@ -9,7 +9,7 @@ const traceMixin = () => {
 
 // Configure Pino logger with tracing support
 const createLogger = () => {
-  const baseConfig = {
+  const baseConfig: any = {
     level: process.env.LOG_LEVEL || 'info',
     // Add trace context to every log automatically
     mixin: traceMixin,

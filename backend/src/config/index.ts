@@ -110,7 +110,8 @@ export const getConfig = () => ({
   },
   server: {
     port: process.env.PORT || 8080,
-  }
+  },
+  fallbackTimezone: 'UTC',
 });
 
 // Lazy-loaded config that gets the fresh env vars when accessed

@@ -5,6 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "swc src --out-dir dist",
+    "build:swc": "swc src --out-dir dist",
     "build-watch": "swc src --out-dir dist --watch",
     "type-check": "tsc --noEmit",
     "build:full": "npm run type-check && npm run build:swc",

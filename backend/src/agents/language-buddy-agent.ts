@@ -1,7 +1,9 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI, OpenAI, OpenAIClient } from "@langchain/openai";
 import { Subscriber } from '../features/subscriber/subscriber.types'; // Updated import
+import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { logger } from '../config';
+// @ts-ignore
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
 import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
@@ -44,6 +46,9 @@ export class LanguageBuddyAgent {
   }
   async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<string> {
     try {
+      // Ensure subscriber is hydrated (Dates are Dates, not strings)
+      SubscriberService.getInstance().hydrateSubscriber(subscriber);
+
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
       setContextVariable('phone', subscriber.connections.phone);
 
@@ -78,7 +83,7 @@ export class LanguageBuddyAgent {
     }
   }
 
-  async processUserMessage(subscriber: Subscriber, humanMessage: string): Promise<string> {
+  async processUserMessage(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<string> {
     if (!subscriber) {
         logger.error("Subscriber is required to process user message");
         throw new Error("Subscriber is required to process user message");
@@ -88,21 +93,30 @@ export class LanguageBuddyAgent {
         throw new Error("Invalid message provided");
     }
 
+    // Ensure subscriber is hydrated
+    SubscriberService.getInstance().hydrateSubscriber(subscriber);
+
     logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Processing user message: ${humanMessage}`);
 
     setContextVariable('phone', subscriber.connections.phone);
 
-    const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
-    const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
-    const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+    let systemPrompt: string;
 
-    const systemPrompt = generateSystemPrompt({
-      subscriber,
-      conversationDurationMinutes,
-      timeSinceLastMessageMinutes,
-      currentLocalTime,
-      lastDigestTopic: null, // TODO: Implement fetching last digest topic
-    });
+    if (systemPromptOverride) {
+      systemPrompt = systemPromptOverride;
+    } else {
+      const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
+      const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
+      const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+
+      systemPrompt = generateSystemPrompt({
+        subscriber,
+        conversationDurationMinutes,
+        timeSinceLastMessageMinutes,
+        currentLocalTime,
+        lastDigestTopic: null, // TODO: Implement fetching last digest topic
+      });
+    }
 
     const response = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)] },
@@ -156,8 +170,8 @@ export class LanguageBuddyAgent {
   async getConversationDuration(phone: string): Promise<number | null> {
     try {
       const checkpoint = await this.checkpointer.getCheckpoint(phone);
-      if (checkpoint && checkpoint.metadata?.conversationStartedAt) {
-        const startedAt = DateTime.fromISO(checkpoint.metadata.conversationStartedAt);
+      if (checkpoint && (checkpoint.metadata as any)?.conversationStartedAt) {
+        const startedAt = DateTime.fromISO((checkpoint.metadata as any).conversationStartedAt);
         const now = DateTime.now();
         return now.diff(startedAt, 'minutes').minutes;
       }
@@ -171,8 +185,8 @@ export class LanguageBuddyAgent {
   async getTimeSinceLastMessage(phone: string): Promise<number | null> {
     try {
       const checkpoint = await this.checkpointer.getCheckpoint(phone);
-      if (checkpoint && checkpoint.checkpoint.values && Array.isArray(checkpoint.checkpoint.values.messages) && checkpoint.checkpoint.values.messages.length > 0) {
-        const lastMessage = checkpoint.checkpoint.values.messages[checkpoint.checkpoint.values.messages.length - 1];
+      if (checkpoint && (checkpoint.checkpoint as any).values && Array.isArray((checkpoint.checkpoint as any).values.messages) && (checkpoint.checkpoint as any).values.messages.length > 0) {
+        const lastMessage = (checkpoint.checkpoint as any).values.messages[(checkpoint.checkpoint as any).values.messages.length - 1];
         if (lastMessage.timestamp) {
           const lastMessageTime = DateTime.fromISO(lastMessage.timestamp);
           const now = DateTime.now();

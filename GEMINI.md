@@ -56,6 +56,7 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
 -   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 5s npm run start` as these commands run in watch mode and do not exit automatically).
+-   **Build Stability**: A task is considered truly complete only when `npm run build:full` passes without errors.
 
 ### Bug Fix Tests
 -   **Bug Fixes**: When fixing a bug, first write a *failing* unit test that precisely reproduces the bug. Only after the test fails, implement the fix, ensuring the test now passes. This guarantees the bug is addressed and prevents regressions.

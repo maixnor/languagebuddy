@@ -262,7 +262,7 @@ export class DigestService {
       aiMessageCount: conversationHistory.filter(m => m.type === 'ai').length,
       learningLanguage: subscriber.profile.learningLanguages?.[0]?.languageName,
       userLevel: subscriber.profile.learningLanguages?.[0]?.overallLevel,
-      modelName: this.llm.modelName || 'unknown'
+      modelName: (this.llm as any).modelName || 'unknown'
     }, "Starting LLM analysis with structured output");
     
     const systemPrompt = this.createDigestSystemPrompt(subscriber);
@@ -305,7 +305,7 @@ Extract actionable learning insights that will help personalize future conversat
       logger.debug({
         operation: 'digest.llm.invoke.start',
         phone: subscriber.connections.phone,
-        modelName: this.llm.modelName,
+        modelName: (this.llm as any).modelName,
         promptLength: analysisPrompt.length,
         systemPromptLength: systemPrompt.length
       }, "Invoking LLM with structured output");
@@ -402,7 +402,7 @@ Extract actionable learning insights that will help personalize future conversat
         operation: 'digest.llm.analyze.complete',
         phone: subscriber.connections.phone,
         llmDurationMs: llmDuration,
-        modelName: this.llm.modelName || 'unknown',
+        modelName: (this.llm as any).modelName || 'unknown',
         hasTopic: !!analysisData.topic,
         hasSummary: !!analysisData.summary,
         topicValue: analysisData.topic || 'MISSING',
@@ -471,7 +471,7 @@ Extract actionable learning insights that will help personalize future conversat
         errorMessage: error instanceof Error ? error.message : 'Unknown error',
         errorStack: error instanceof Error ? error.stack : undefined,
         durationMs: Date.now() - startTime,
-        modelName: this.llm.modelName || 'unknown'
+        modelName: (this.llm as any).modelName || 'unknown'
       }, "Error analyzing conversation with LLM structured output");
       
       // Re-throw the error so tests can see it

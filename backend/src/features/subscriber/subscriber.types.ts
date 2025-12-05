@@ -80,7 +80,7 @@ export interface Subscriber {
     };
     // favoriteColor?: string;
   };
-  signedUpAt?: string; // ISO timestamp
+  signedUpAt?: Date;
   metadata: {
     digests: Digest[];
     personality: string;
@@ -91,7 +91,7 @@ export interface Subscriber {
       longestStreak: number; // Days
       lastIncrement: Date; // used to invalidate streaks
     };
-    lastNightlyDigestRun?: string; // ISO date string of the last time nightly digest tasks were run for this subscriber (local date)
+    lastNightlyDigestRun?: Date; // ISO date string of the last time nightly digest tasks were run for this subscriber (local date)
 
     // AI model insights about user
     // TODO actually use them
@@ -101,5 +101,5 @@ export interface Subscriber {
   };
   isPremium?: boolean;
   lastActiveAt?: Date;
-  nextPushMessageAt?: string; // ISO string in UTC
+  nextPushMessageAt?: Date;
 }

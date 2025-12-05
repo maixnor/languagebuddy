@@ -5,6 +5,7 @@ import { Subscriber } from '../features/subscriber/subscriber.types';
 import { handleUserCommand } from '../util/user-commands';
 import { getNextMissingField, getPromptForField } from '../util/info-gathering';
 import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
+import { generateOnboardingSystemPrompt } from '../features/onboarding/onboarding.prompts';
 import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
 import { DateTime } from "luxon";
 
@@ -22,7 +23,7 @@ export class WebhookService {
     let subscriber = await this.services.subscriberService.getSubscriber(phone) ?? 
                     await this.services.subscriberService.createSubscriber(phone);
 
-    const hasPaid = await this.services.stripeService.checkSubscription(phone);
+    const hasPaid = await this.services.subscriptionService.checkSubscription(phone);
     if (!hasPaid) {
       logger.info({ phone }, "/initiate: User has not paid at Stripe.");
     } else {
@@ -33,7 +34,7 @@ export class WebhookService {
     if (this.services.subscriberService.shouldThrottle(subscriber)) {
       const canStart = await this.services.subscriberService.canStartConversationToday(phone);
       if (!canStart) {
-        const paymentLink = await this.services.stripeService.getPaymentLink(phone);
+        const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
         await this.services.whatsappService.sendMessage(
           phone, 
           `⏳ You have reached your daily limit. Subscribe for unlimited conversations: ${paymentLink}`
@@ -57,7 +58,7 @@ export class WebhookService {
       await this.services.whatsappService.sendMessage(phone, initialMessage);
       
       if (this.services.subscriberService.shouldPromptForSubscription(subscriber)) {
-        const paymentLink = await this.services.stripeService.getPaymentLink(phone);
+        const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
         const paymentMsg = `Your trial period has ended. To continue unlimited conversations, please subscribe here: ${paymentLink}`;
         await this.services.whatsappService.sendMessage(phone, paymentMsg);
       }
@@ -174,9 +175,9 @@ export class WebhookService {
   private async startNewUserOnboarding(phone: string, messageBody: string): Promise<void> {
     await this.services.onboardingService.startOnboarding(phone);
     const subscriberForPrompt = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
-    const systemPrompt = generateDefaultSystemPromptForSubscriber(subscriberForPrompt);
+    const systemPrompt = generateOnboardingSystemPrompt();
     const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
-      { connections: { phone } } as Subscriber,
+      subscriberForPrompt,
       systemPrompt,
       messageBody
     );
@@ -184,9 +185,12 @@ export class WebhookService {
   }
 
   private async continueOnboarding(phone: string, messageBody: string): Promise<void> {
+    const tempSubscriber = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
+    const systemPrompt = generateOnboardingSystemPrompt();
     const response = await this.services.languageBuddyAgent.processUserMessage(
-      { connections: { phone } } as Subscriber,
-      messageBody
+      tempSubscriber,
+      messageBody,
+      systemPrompt
     );
     await this.services.whatsappService.sendMessage(phone, response);
   }

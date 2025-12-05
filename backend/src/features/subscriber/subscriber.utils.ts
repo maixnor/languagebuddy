@@ -39,16 +39,18 @@ export const selectDeficienciesToPractice = (
             return severityDiff;
         }
 
+        const getTime = (d: Date | string | undefined) => d ? new Date(d).getTime() : 0;
+
         // Then, sort by least recently practiced (or never practiced)
-        const aLastPracticed = a.lastPracticedAt?.getTime() ?? 0;
-        const bLastPracticed = b.lastPracticedAt?.getTime() ?? 0;
+        const aLastPracticed = getTime(a.lastPracticedAt);
+        const bLastPracticed = getTime(b.lastPracticedAt);
         if (aLastPracticed !== bLastPracticed) {
             return aLastPracticed - bLastPracticed; // Older (smaller timestamp) first
         }
 
         // Finally, sort by most recent occurrence
-        const aLastOccurrence = a.lastOccurrence?.getTime() ?? 0;
-        const bLastOccurrence = b.lastOccurrence?.getTime() ?? 0;
+        const aLastOccurrence = getTime(a.lastOccurrence);
+        const bLastOccurrence = getTime(b.lastOccurrence);
         return bLastOccurrence - aLastOccurrence; // More recent first
     });
 

@@ -92,15 +92,16 @@ export class SubscriberService {
    * Returns the number of days since the user signed up.
    */
   public getDaysSinceSignup(subscriber: Subscriber): number {
-    if (!subscriber.signedUpAt || typeof subscriber.signedUpAt !== 'string') {
-      subscriber.signedUpAt = new Date().toISOString();
+    if (!subscriber.signedUpAt || !(subscriber.signedUpAt instanceof Date)) {
+      subscriber.signedUpAt = new Date();
       this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
     }
-    const signedUp = DateTime.fromISO(subscriber.signedUpAt);
+    
     const timezone = subscriber.profile.timezone || 'UTC';
 
     // Parse signedUpAt and set its zone to the user's timezone
-    const signedUpInUserTimezone = DateTime.fromISO(subscriber.signedUpAt).setZone(timezone);
+    // @ts-ignore - Luxon handles Dates, but to be safe we use fromJSDate if it is a date
+    const signedUpInUserTimezone = DateTime.fromJSDate(subscriber.signedUpAt).setZone(timezone);
 
     // Get the current time in the user's timezone
     const nowInUserTimezone = DateTime.now().setZone(timezone);
@@ -147,11 +148,53 @@ export class SubscriberService {
     return SubscriberService.instance;
   }
 
+  public hydrateSubscriber(subscriber: any): Subscriber {
+    const toDate = (val: any) => (val ? new Date(val) : undefined);
+
+    if (subscriber.signedUpAt) subscriber.signedUpAt = toDate(subscriber.signedUpAt);
+    if (subscriber.lastActiveAt) subscriber.lastActiveAt = toDate(subscriber.lastActiveAt);
+    if (subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = toDate(subscriber.nextPushMessageAt);
+    if (subscriber.metadata?.streakData?.lastIncrement) {
+      subscriber.metadata.streakData.lastIncrement = toDate(subscriber.metadata.streakData.lastIncrement);
+    }
+    if (subscriber.metadata?.lastNightlyDigestRun) {
+      subscriber.metadata.lastNightlyDigestRun = toDate(subscriber.metadata.lastNightlyDigestRun);
+    }
+
+    const hydrateLanguages = (languages: any[]) => {
+      if (!languages) return;
+      languages.forEach(lang => {
+        if (lang.firstEncountered) lang.firstEncountered = toDate(lang.firstEncountered);
+        if (lang.lastPracticed) lang.lastPracticed = toDate(lang.lastPracticed);
+        
+        if (lang.skillAssessments) {
+          lang.skillAssessments.forEach((sa: any) => {
+            if (sa.lastAssessed) sa.lastAssessed = toDate(sa.lastAssessed);
+          });
+        }
+
+        if (lang.deficiencies) {
+          lang.deficiencies.forEach((def: any) => {
+             if (def.firstDetected) def.firstDetected = toDate(def.firstDetected);
+             if (def.lastOccurrence) def.lastOccurrence = toDate(def.lastOccurrence);
+             if (def.lastPracticedAt) def.lastPracticedAt = toDate(def.lastPracticedAt);
+          });
+        }
+      });
+    };
+
+    hydrateLanguages(subscriber.profile.speakingLanguages);
+    hydrateLanguages(subscriber.profile.learningLanguages);
+
+    return subscriber as Subscriber;
+  }
+
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
       const cachedSubscriber = await this.redis.get(`subscriber:${phoneNumber}`);
       if (cachedSubscriber) {
         const subscriber = JSON.parse(cachedSubscriber);
+        this.hydrateSubscriber(subscriber);
         subscriber.lastActiveAt = new Date();
         return subscriber;
       }
@@ -172,7 +215,7 @@ export class SubscriberService {
         speakingLanguages: [],
         learningLanguages: [],
       },
-      signedUpAt: new Date().toISOString(),
+      signedUpAt: new Date(),
       metadata: {
         digests: [],
         personality: "A friendly language buddy talking about everything",
@@ -187,7 +230,7 @@ export class SubscriberService {
       },
       isPremium: false,
       lastActiveAt: new Date(),
-      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toISO(),
+      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
       ...initialData
     };
 
@@ -238,6 +281,7 @@ export class SubscriberService {
         const cachedSubscriber = await this.redis.get(key);
         if (cachedSubscriber) {
           const subscriber = JSON.parse(cachedSubscriber);
+          this.hydrateSubscriber(subscriber);
           subscribers.push(subscriber);
         }
       }

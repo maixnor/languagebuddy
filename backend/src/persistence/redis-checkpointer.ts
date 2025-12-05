@@ -79,8 +79,8 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     if (!threadId) throw new Error("Thread ID is required for checkpoint saving");
 
     try {
-      if (checkpoint.values && Array.isArray(checkpoint.values.messages)) {
-        checkpoint.values.messages = checkpoint.values.messages.map((message: any) => {
+      if ((checkpoint as any).values && Array.isArray((checkpoint as any).values.messages)) {
+        (checkpoint as any).values.messages = (checkpoint as any).values.messages.map((message: any) => {
           if (!message.timestamp) {
             return { ...message, timestamp: new Date().toISOString() };
           }
@@ -89,8 +89,8 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       }
 
       // Set conversationStartedAt if not already present in the metadata
-      if (!metadata.conversationStartedAt) {
-        metadata.conversationStartedAt = new Date().toISOString();
+      if (!(metadata as any).conversationStartedAt) {
+        (metadata as any).conversationStartedAt = new Date().toISOString();
       }
 
       const checkpointData = {
@@ -130,6 +130,12 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       }
     } catch (error) {
       logger.error({ err: error, threadId }, "Error listing checkpoints");
+    }
+  }
+
+  async deleteThread(threadId: string): Promise<void> {
+    if (threadId) {
+      await this.deleteCheckpoint(threadId);
     }
   }
 

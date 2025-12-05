@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { FeedbackEntry } from '../types';
+import { FeedbackEntry } from './feedback.types';
 import { logger } from '@/config';
 
 export class FeedbackService {

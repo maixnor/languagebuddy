@@ -1,7 +1,7 @@
 import express from "express";
 import { ServiceContainer } from './services/service-container';
 import { WebhookService } from './services/webhook-service';
-import { StripeWebhookService } from './services/stripe-webhook-service';
+import { StripeWebhookService } from './features/subscription/subscription-webhook.service';
 import { logger, config } from './config';
 import { getCommitHash, getPackageVersion } from './util/version-info';
 

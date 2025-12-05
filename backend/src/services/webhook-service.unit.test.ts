@@ -2,6 +2,7 @@ import { WebhookService } from './webhook-service';
 import { ServiceContainer } from './service-container';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
+import { generateOnboardingSystemPrompt } from '../features/onboarding/onboarding.prompts';
 
 // Mock the ServiceContainer and its services
 const mockOnboardingService = {
@@ -72,22 +73,41 @@ describe('WebhookService', () => {
       mockOnboardingService.isInOnboarding.mockResolvedValue(false);
       mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Welcome message');
 
-      const expectedSubscriberForPrompt = {
-        connections: { phone: mockMessage.from },
-        profile: { name: "", speakingLanguages: [], learningLanguages: [] },
-        metadata: {}
-      } as Subscriber;
-      const expectedSystemPrompt = generateDefaultSystemPromptForSubscriber(expectedSubscriberForPrompt);
+      const expectedSystemPrompt = generateOnboardingSystemPrompt();
 
       await (webhookService as any).processTextMessage(mockMessage);
 
       expect(mockOnboardingService.startOnboarding).toHaveBeenCalledWith(mockMessage.from);
+      // Expect the call to include the profile structure to avoid crashes in the agent
       expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
-        { connections: { phone: mockMessage.from } },
+        expect.objectContaining({
+          connections: { phone: mockMessage.from },
+          profile: expect.any(Object)
+        }),
         expectedSystemPrompt,
         mockMessage.text!.body
       );
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Welcome message');
+    });
+
+    it('should continue onboarding if subscriber does not exist but is in onboarding', async () => {
+      mockSubscriberService.getSubscriber.mockResolvedValue(null);
+      mockOnboardingService.isInOnboarding.mockResolvedValue(true);
+      mockLanguageBuddyAgent.processUserMessage.mockResolvedValue('Next onboarding step');
+      const expectedSystemPrompt = generateOnboardingSystemPrompt();
+
+      await (webhookService as any).processTextMessage(mockMessage);
+
+      // Expect the call to include the profile structure to avoid crashes in the agent
+      expect(mockLanguageBuddyAgent.processUserMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connections: { phone: mockMessage.from },
+          profile: expect.any(Object)
+        }),
+        mockMessage.text!.body,
+        expectedSystemPrompt
+      );
+      expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Next onboarding step');
     });
 
     // Add more test cases here for other scenarios in processTextMessage if needed

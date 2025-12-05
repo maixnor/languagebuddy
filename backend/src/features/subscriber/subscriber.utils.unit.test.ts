@@ -160,4 +160,24 @@ describe('selectDeficienciesToPractice', () => {
     
     expect(language.deficiencies).toEqual(originalOrder);
   });
+
+  it('should handle string dates gracefully (hydration fallback)', () => {
+    // Simulate unhydrated data where dates are strings
+    const def1 = createDeficiency('def1', 'major');
+    // @ts-ignore
+    def1.lastPracticedAt = "2024-01-01T12:00:00.000Z";
+    
+    const def2 = createDeficiency('def2', 'major');
+    // @ts-ignore
+    def2.lastPracticedAt = "2024-01-02T12:00:00.000Z";
+
+    const language = createLanguage([def1, def2]);
+    
+    // Should not throw
+    const result = selectDeficienciesToPractice(language);
+    
+    // Should sort correctly (older string date first)
+    expect(result[0].specificArea).toBe('def1');
+    expect(result[1].specificArea).toBe('def2');
+  });
 });

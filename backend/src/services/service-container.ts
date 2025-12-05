@@ -3,7 +3,7 @@ import { SchedulerService } from '../features/scheduling/scheduler.service';
 import { FeedbackService } from '../features/feedback/feedback.service';
 import { SubscriptionService } from '../features/subscription/subscription.service';
 import Redis from 'ioredis';
-import { config } from '@/config';
+import { config, logger } from '@/config';
 import { ChatOpenAI } from '@langchain/openai';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { OnboardingService } from '../features/onboarding/onboarding.service';

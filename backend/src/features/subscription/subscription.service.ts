@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { Subscriber } from "../features/subscriber/subscriber.types";
+import { Subscriber } from "../subscriber/subscriber.types";
 import { logger } from "../../config";
 
 export class SubscriptionService {
