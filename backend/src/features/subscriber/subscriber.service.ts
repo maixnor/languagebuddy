@@ -239,7 +239,7 @@ export class SubscriberService {
       },
       isPremium: false,
       lastActiveAt: new Date(),
-      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toISO(),
+      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
       ...initialData
     };
 

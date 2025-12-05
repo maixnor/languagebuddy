@@ -138,13 +138,21 @@ export class WebhookService {
       const currentLocalTime = DateTime.local().setZone(existingSubscriber.profile.timezone || config.fallbackTimezone);
       const lastDigestTopic = existingSubscriber.metadata?.digests?.[0]?.topic || null;
 
-      const systemPromptForNewConversation = generateSystemPrompt({
+      let systemPromptForNewConversation = generateSystemPrompt({
         subscriber: existingSubscriber,
         conversationDurationMinutes: null,
         timeSinceLastMessageMinutes: null,
         currentLocalTime,
         lastDigestTopic,
       });
+
+      systemPromptForNewConversation += `\n\nTASK: INITIATE NEW DAY CONVERSATION
+    - This is a fresh start after a nightly reset (or in this case, after onboarding).
+    - Initiate a conversation naturally.
+    - If there's a topic from the last digest, you might reference it or start something new.
+    - Don't ask "Do you want to practice?". Just start talking.
+    - Disguise your conversation starters as trying to find out more information about the user if appropriate.
+    `;
 
       const initialConversationMessage = await this.services.languageBuddyAgent.initiateConversation(
         existingSubscriber,

@@ -249,9 +249,16 @@ describe('SchedulerService', () => {
         expect(mockSubscriberService.updateSubscriber).toHaveBeenCalledWith(
             eligibleSubscriber.connections.phone,
             expect.objectContaining({
-                metadata: expect.objectContaining({ lastNightlyDigestRun: '2025-01-02' })
+                metadata: expect.objectContaining({ 
+                    lastNightlyDigestRun: expect.any(Date) 
+                })
             })
         );
+        // Verify the date part specifically
+        const updatedSubscriberCall = mockSubscriberService.updateSubscriber.mock.calls[0];
+        const updatedMetadata = updatedSubscriberCall[1].metadata;
+        expect(DateTime.fromJSDate(updatedMetadata.lastNightlyDigestRun).toISODate()).toEqual('2025-01-02');
+
     });
 
     it('should skip if already run today', async () => {
@@ -262,7 +269,7 @@ describe('SchedulerService', () => {
         const alreadyRunSubscriber = {
             ...mockSubscriber,
             profile: { ...mockSubscriber.profile, timezone: tz },
-            metadata: { ...mockSubscriber.metadata, lastNightlyDigestRun: '2025-01-02' } // Run today
+            metadata: { ...mockSubscriber.metadata, lastNightlyDigestRun: nowNy.toJSDate() } // Run today
         };
 
         mockSubscriberService.getAllSubscribers.mockResolvedValue([alreadyRunSubscriber]);
@@ -296,8 +303,16 @@ describe('SchedulerService', () => {
         
         expect(mockSubscriberService.updateSubscriber).toHaveBeenCalledWith(
             dueSubscriber.connections.phone,
-            expect.objectContaining({ nextPushMessageAt: tomorrow.toISO() })
+            expect.objectContaining({ 
+                nextPushMessageAt: expect.any(Date)
+            })
         );
+        // Verify the date part specifically
+        const updatedSubscriberCall = mockSubscriberService.updateSubscriber.mock.calls[0];
+        const updatedSubscriberData = updatedSubscriberCall[1];
+        expect(DateTime.fromJSDate(updatedSubscriberData.nextPushMessageAt).setZone('utc').toISO()).toEqual(tomorrow.toISO());
+
+
         
         // Should check for re-engagement
         // Default mock behavior for shouldSendReengagementMessage needs to be checked or mocked

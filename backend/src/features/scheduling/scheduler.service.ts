@@ -70,7 +70,7 @@ export class SchedulerService {
     if (!subscriber.lastMessageSentAt) {
       return false; // No last message sent date, so no re-engagement
     }
-    const lastSent = DateTime.fromISO(subscriber.lastMessageSentAt, { zone: 'utc' });
+    const lastSent = DateTime.fromJSDate(subscriber.lastMessageSentAt).setZone('utc');
     const diff = nowUtc.diff(lastSent, 'days').days;
     return diff >= 3;
   }
@@ -146,9 +146,7 @@ export class SchedulerService {
         const nowLocal = nowUtc.setZone(subscriberTimezone);
         const todayLocalIso = nowLocal.toISODate();
         const lastDigestRun = subscriber.metadata?.lastNightlyDigestRun;
-        const lastDigestRunIso = lastDigestRun instanceof Date 
-            ? DateTime.fromJSDate(lastDigestRun).toISODate() 
-            : lastDigestRun;
+        const lastDigestRunIso = lastDigestRun ? DateTime.fromJSDate(lastDigestRun).setZone(subscriberTimezone).toISODate() : null;
   
         if (this.isNightTimeForUser(subscriber, nowLocal) && lastDigestRunIso !== todayLocalIso) {
           logger.info({ phoneNumber: subscriber.connections.phone, localTime: nowLocal.toISO(), lastRun: lastDigestRunIso }, "Triggering nightly digest tasks for subscriber.");
@@ -158,7 +156,7 @@ export class SchedulerService {
             // Update lastNightlyDigestRun only if tasks were successfully executed
             const updatedMetadata = {
               ...subscriber.metadata,
-              lastNightlyDigestRun: todayLocalIso,
+              lastNightlyDigestRun: nowLocal.toJSDate(), // Store as Date
             };
             await this.subscriberService.updateSubscriber(subscriber.connections.phone, {
               metadata: updatedMetadata,
@@ -190,7 +188,7 @@ export class SchedulerService {
           shouldSendMessage = true;
           nextPush = nowUtc.plus({ hours: 24 });
         } else {
-          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
+          nextPush = DateTime.fromJSDate(subscriber.nextPushMessageAt).setZone('utc');
           if (!nextPush.isValid) {
             // If invalid, send message immediately and schedule for +24h from now
             shouldSendMessage = true;
@@ -207,7 +205,7 @@ export class SchedulerService {
           await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
           // Set next push to tomorrow to prevent spam
           await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: nowUtc.plus({ hours: 24 }).toISO()
+            nextPushMessageAt: nowUtc.plus({ hours: 24 }).toJSDate()
           });
           continue;
         }
@@ -235,7 +233,7 @@ export class SchedulerService {
         
         // Update next push time immediately to prevent duplicate sends
         await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-          nextPushMessageAt: finalNextTime.toISO()
+          nextPushMessageAt: finalNextTime.toJSDate()
         });
         
         // Execute nightly tasks and send message (Removed: This was for nightly digest related message)

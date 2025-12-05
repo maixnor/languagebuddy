@@ -8,6 +8,7 @@ import { generateOnboardingSystemPrompt } from '../features/onboarding/onboardin
 const mockOnboardingService = {
   isInOnboarding: jest.fn(),
   startOnboarding: jest.fn(),
+  completeOnboarding: jest.fn(),
 };
 
 const mockSubscriberService = {
@@ -108,6 +109,39 @@ describe('WebhookService', () => {
         expectedSystemPrompt
       );
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Next onboarding step');
+    });
+
+    it('should complete onboarding and initiate new conversation if subscriber exists and is in onboarding', async () => {
+      const mockSubscriber = { 
+        connections: { phone: mockMessage.from }, 
+        profile: { timezone: 'UTC' },
+        metadata: {} 
+      };
+      mockSubscriberService.getSubscriber.mockResolvedValue(mockSubscriber);
+      mockOnboardingService.isInOnboarding.mockResolvedValue(true);
+      
+      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Hello! Ready to chat?');
+
+      await (webhookService as any).processTextMessage(mockMessage);
+
+      expect(mockOnboardingService.completeOnboarding).toHaveBeenCalledWith(mockMessage.from);
+      expect(mockLanguageBuddyAgent.clearConversation).toHaveBeenCalledWith(mockMessage.from);
+      
+      // 1. Confirmation message
+      expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(
+        mockMessage.from, 
+        "🎉 Great! Your Language Buddy profile has been successfully created."
+      );
+
+      // 2. New conversation initiation
+      expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
+        mockSubscriber,
+        'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
+        expect.stringContaining('TASK: INITIATE NEW DAY CONVERSATION') // Partial match for the system prompt
+      );
+
+      // 3. Sending the new conversation message
+      expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Hello! Ready to chat?');
     });
 
     // Add more test cases here for other scenarios in processTextMessage if needed
