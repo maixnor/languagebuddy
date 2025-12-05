@@ -77,6 +77,7 @@ export interface Subscriber {
     messagingPreferences?: {
       type: "morning" | "midday" | "evening" | "fixed";
       times?: string[]; // for fixed
+      fuzzinessMinutes?: number;
     };
     // favoriteColor?: string;
   };
@@ -101,5 +102,6 @@ export interface Subscriber {
   };
   isPremium?: boolean;
   lastActiveAt?: Date;
+  lastMessageSentAt?: Date;
   nextPushMessageAt?: Date;
 }

@@ -1,5 +1,39 @@
 import { Language, LanguageDeficiency, Subscriber } from "./subscriber.types"; // Adjusted import
+import { DateTime } from 'luxon';
+import { logger } from '../../config';
 
+/**
+ * Ensures that the provided timezone string is a valid Luxon timezone.
+ * Supports IANA zone names (e.g., "America/Lima") and UTC offsets (e.g., "UTC-5").
+ * Also attempts to correct simple numeric offsets (e.g., "-5" -> "UTC-5").
+ * defaults to 'UTC' if invalid.
+ */
+export const ensureValidTimezone = (timezone: string | number | undefined | null): string => {
+    if (timezone === undefined || timezone === null || timezone === '') {
+        return 'UTC';
+    }
+
+    let tzStr = String(timezone).trim();
+
+    // 1. Check if it's already valid
+    if (DateTime.local().setZone(tzStr).isValid) {
+        return tzStr;
+    }
+
+    // 2. Try to interpret as numeric offset (e.g., "-5", "5", "+5")
+    // Luxon expects "UTC+5", "UTC-5"
+    if (/^[+-]?\d+$/.test(tzStr)) {
+        const offset = parseInt(tzStr, 10);
+        const potentialTz = offset >= 0 ? `UTC+${offset}` : `UTC${offset}`;
+        if (DateTime.local().setZone(potentialTz).isValid) {
+            return potentialTz;
+        }
+    }
+
+    // 3. If still invalid, log warning and default to UTC
+    logger.warn({ invalidTimezone: timezone }, "Invalid timezone provided, defaulting to UTC");
+    return 'UTC';
+};
 
 export const getFirstLearningLanguage = (subscriber: Subscriber): Language => {
     return subscriber.profile.learningLanguages[0];

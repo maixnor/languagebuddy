@@ -49,8 +49,8 @@ export class WebhookService {
     await this.services.languageBuddyAgent.clearConversation(subscriber.connections.phone);
     const initialMessage = await this.services.languageBuddyAgent.initiateConversation(
       subscriber, 
-      selectedPrompt, 
-      ''
+      'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.', // Human message for system initiation
+      selectedPrompt // Actual system prompt
     );
 
     if (initialMessage) {
@@ -127,6 +127,39 @@ export class WebhookService {
     if (existingSubscriber && isInOnboarding) {
       await this.services.onboardingService.completeOnboarding(phone);
       await this.services.languageBuddyAgent.clearConversation(existingSubscriber.connections.phone);
+
+      // 1. Send profile created confirmation message
+      await this.services.whatsappService.sendMessage(
+        phone,
+        "🎉 Great! Your Language Buddy profile has been successfully created."
+      );
+
+      // 2. Initiate a new conversation (like a daily proactive start)
+      const currentLocalTime = DateTime.local().setZone(existingSubscriber.profile.timezone || config.fallbackTimezone);
+      const lastDigestTopic = existingSubscriber.metadata?.digests?.[0]?.topic || null;
+
+      const systemPromptForNewConversation = generateSystemPrompt({
+        subscriber: existingSubscriber,
+        conversationDurationMinutes: null,
+        timeSinceLastMessageMinutes: null,
+        currentLocalTime,
+        lastDigestTopic,
+      });
+
+      const initialConversationMessage = await this.services.languageBuddyAgent.initiateConversation(
+        existingSubscriber,
+        'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
+        systemPromptForNewConversation, // The prompt was in the wrong order. This is a fix.
+      );
+
+      if (initialConversationMessage) {
+        await this.services.whatsappService.sendMessage(phone, initialConversationMessage);
+      } else {
+        logger.error({ phone }, "Failed to initiate first conversation after onboarding completion.");
+      }
+
+      // Exit early, as the conversation has been re-initiated by the agent
+      return;
     }
 
     const subscriber = existingSubscriber ?? await this.services.subscriberService.getSubscriber(phone);
@@ -178,8 +211,8 @@ export class WebhookService {
     const systemPrompt = generateOnboardingSystemPrompt();
     const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
       subscriberForPrompt,
-      systemPrompt,
-      messageBody
+      messageBody, // User's actual message
+      systemPrompt // Actual system prompt
     );
     await this.services.whatsappService.sendMessage(phone, welcomeMessage);
   }

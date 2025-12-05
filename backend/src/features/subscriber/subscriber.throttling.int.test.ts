@@ -356,7 +356,7 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       const days = subscriberService.getDaysSinceSignup(subscriber);
       
       // Should handle gracefully and reset
-      expect(typeof subscriber.signedUpAt).toBe('string');
+      expect(typeof subscriber.signedUpAt).toBe('object');
     });
   });
 

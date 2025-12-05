@@ -137,6 +137,120 @@ export class LanguageBuddyAgent {
     }
   }
 
+  async checkLastResponse(subscriber: Subscriber): Promise<string> {
+    const phone = subscriber.connections.phone;
+    const checkpoint = await this.checkpointer.getCheckpoint(phone);
+
+    if (!checkpoint || !checkpoint.checkpoint || !(checkpoint.checkpoint as any).values?.messages?.length) {
+      return "I can't check anything yet because the conversation is empty.";
+    }
+
+    const history = (checkpoint.checkpoint as any).values.messages;
+    
+    // Use a temporary thread ID for the check to avoid polluting main history
+    const tempThreadId = `check-${phone}-${Date.now()}`;
+    
+    const checkSystemPrompt = `You are a strict Quality Assurance auditor for an AI Language Tutor.
+Your goal is to find mistakes in the *last* message sent by the 'assistant' in the conversation history.
+
+Check for:
+1.  **Hallucinations**: Did the assistant invent facts, places, or events that don't exist? (e.g. "There is a famous Eiffel Tower in Berlin").
+2.  **Language Errors**: Did the assistant teach incorrect grammar or vocabulary?
+3.  **Consistency**: Does the response contradict previous facts established in the chat?
+
+**Instructions**:
+- Analyze the conversation history provided.
+- If the last assistant message is correct and helpful, respond with JSON: {"status": "OK"}
+- If you find a mistake, respond with JSON: 
+  {
+    "status": "ERROR", 
+    "explanation": "Brief explanation for the user about what was wrong.", 
+    "system_correction": "Short instruction for the system to avoid this error in the future."
+  }
+- Be strict about facts and grammar. Be lenient about style.
+- IGNORE mistakes made by the 'user' (Human). Only check the 'assistant'.
+- Output ONLY the JSON object.
+`;
+
+    try {
+      // Construct the message payload
+      const messages = [
+        new SystemMessage(checkSystemPrompt),
+        ...history,
+        new HumanMessage("!check_audit_request: Perform the audit on the last assistant response now. Output JSON only.")
+      ];
+
+      const result = await this.agent.invoke(
+        { messages },
+        { configurable: { thread_id: tempThreadId } }
+      );
+      
+      // Cleanup temp thread
+      await this.checkpointer.deleteCheckpoint(tempThreadId);
+      
+      const responseText = result.messages[result.messages.length - 1].content;
+      
+      // Attempt to parse JSON
+      let resultJson: any;
+      try {
+        // extract json if surrounded by text
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          resultJson = JSON.parse(jsonMatch[0]);
+        } else {
+          logger.warn({ responseText }, "Could not parse JSON from check response");
+          return "I couldn't verify the last message automatically. Please try asking me to explain if you are unsure!";
+        }
+      } catch (e) {
+        logger.error({ err: e, responseText }, "JSON parse error in checkLastResponse");
+        return "I encountered an error while checking. Please try again.";
+      }
+
+      if (resultJson.status === "OK") {
+        return "I've checked the last message and it looks correct to me! ✅";
+      } else if (resultJson.status === "ERROR") {
+        // Apply system correction to main thread
+        if (resultJson.system_correction) {
+          await this.injectSystemCorrection(phone, resultJson.system_correction);
+        }
+        return `⚠️ Potential mistake found:\n\n${resultJson.explanation}`;
+      } else {
+        return "I completed the check but the result was inconclusive.";
+      }
+
+    } catch (error) {
+      logger.error({ err: error, phone }, "Error in checkLastResponse");
+      return "An error occurred while performing the check.";
+    }
+  }
+
+  private async injectSystemCorrection(phone: string, correction: string): Promise<void> {
+    const checkpointTuple = await this.checkpointer.getCheckpoint(phone);
+    if (!checkpointTuple) return;
+
+    const newMessages = [
+      ...((checkpointTuple.checkpoint as any).values as any).messages,
+      new SystemMessage(`[SYSTEM CORRECTION from !check]: ${correction}`)
+    ];
+
+    const newCheckpoint = {
+      ...checkpointTuple.checkpoint,
+      values: {
+        ...(checkpointTuple.checkpoint as any).values,
+        messages: newMessages
+      }
+    };
+    
+    // We need to update the checkpoint. 
+    await this.checkpointer.putTuple(
+      checkpointTuple.config,
+      newCheckpoint,
+      checkpointTuple.metadata,
+      checkpointTuple.parentConfig
+    );
+    logger.info({ phone, correction }, "Injected system correction into conversation");
+  }
+
   async currentlyInActiveConversation(userPhone: string) {
     try {
       const checkpoint = await this.checkpointer.getCheckpoint(userPhone);

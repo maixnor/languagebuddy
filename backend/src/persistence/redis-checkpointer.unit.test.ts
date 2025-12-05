@@ -139,7 +139,8 @@ describe('RedisCheckpointSaver', () => {
     // Verify main checkpoint deletion
     expect(mockRedis.del).toHaveBeenCalledWith(`checkpoint:${phone}`);
     
-    // Verify NO writes deletion (del called only once for the main key)
-    expect(mockRedis.del).toHaveBeenCalledTimes(1);
+    // Verify NO writes deletion (del called only once for the main key variants)
+    // The implementation iterates over phoneRaw, phoneStripped, phoneWithPlus, which for '1234567890' results in 2 unique keys
+    expect(mockRedis.del).toHaveBeenCalledTimes(2);
   });
 });

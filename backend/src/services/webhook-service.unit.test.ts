@@ -84,8 +84,8 @@ describe('WebhookService', () => {
           connections: { phone: mockMessage.from },
           profile: expect.any(Object)
         }),
-        expectedSystemPrompt,
-        mockMessage.text!.body
+        mockMessage.text!.body,
+        expectedSystemPrompt
       );
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Welcome message');
     });

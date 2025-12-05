@@ -4,10 +4,11 @@ import { logger } from '../../config'; // Will be updated
 import { getMissingProfileFieldsReflective } from '../../util/profile-reflection'; // Will be updated
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from '../../util/system-prompts';
+import { ensureValidTimezone } from './subscriber.utils';
 
 export class SubscriberService {
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
-    const timezone = subscriber?.profile.timezone || 'UTC';
+    const timezone = ensureValidTimezone(subscriber?.profile.timezone);
     return DateTime.now().setZone(timezone).toISODate();
   }
 
@@ -92,12 +93,23 @@ export class SubscriberService {
    * Returns the number of days since the user signed up.
    */
   public getDaysSinceSignup(subscriber: Subscriber): number {
-    if (!subscriber.signedUpAt || !(subscriber.signedUpAt instanceof Date)) {
-      subscriber.signedUpAt = new Date();
-      this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
+    // Ensure signedUpAt is a valid Date object
+    if (!subscriber.signedUpAt) {
+        subscriber.signedUpAt = new Date();
+        this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
+    } else if (!(subscriber.signedUpAt instanceof Date)) {
+        // Try to parse string (e.g. ISO string from Redis/JSON)
+        const parsed = new Date(subscriber.signedUpAt);
+        if (!isNaN(parsed.getTime())) {
+            subscriber.signedUpAt = parsed;
+        } else {
+             logger.warn({ invalidDate: subscriber.signedUpAt, phone: subscriber.connections.phone }, "Invalid signedUpAt date string, resetting to now");
+             subscriber.signedUpAt = new Date();
+             this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after resetting invalid signedUpAt"));
+        }
     }
     
-    const timezone = subscriber.profile.timezone || 'UTC';
+    const timezone = ensureValidTimezone(subscriber.profile.timezone);
 
     // Parse signedUpAt and set its zone to the user's timezone
     // @ts-ignore - Luxon handles Dates, but to be safe we use fromJSDate if it is a date
@@ -154,9 +166,6 @@ export class SubscriberService {
     if (subscriber.signedUpAt) subscriber.signedUpAt = toDate(subscriber.signedUpAt);
     if (subscriber.lastActiveAt) subscriber.lastActiveAt = toDate(subscriber.lastActiveAt);
     if (subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = toDate(subscriber.nextPushMessageAt);
-    if (subscriber.metadata?.streakData?.lastIncrement) {
-      subscriber.metadata.streakData.lastIncrement = toDate(subscriber.metadata.streakData.lastIncrement);
-    }
     if (subscriber.metadata?.lastNightlyDigestRun) {
       subscriber.metadata.lastNightlyDigestRun = toDate(subscriber.metadata.lastNightlyDigestRun);
     }
@@ -230,9 +239,14 @@ export class SubscriberService {
       },
       isPremium: false,
       lastActiveAt: new Date(),
-      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
+      nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toISO(),
       ...initialData
     };
+
+    // Validate timezone in initialData if present
+    if (subscriber.profile.timezone) {
+      subscriber.profile.timezone = ensureValidTimezone(subscriber.profile.timezone);
+    }
 
     // Check if profile is missing required fields (reflection-based)
     const missingFields = getMissingProfileFieldsReflective(subscriber.profile!);
@@ -250,6 +264,11 @@ export class SubscriberService {
       let subscriber = await this.getSubscriber(phoneNumber);
       if (!subscriber) {
         subscriber = await this.createSubscriber(phoneNumber);
+      }
+
+      // Validate timezone if it's being updated
+      if (updates.profile && updates.profile.timezone) {
+        updates.profile.timezone = ensureValidTimezone(updates.profile.timezone);
       }
 
       Object.assign(subscriber, updates);

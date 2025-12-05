@@ -1,10 +1,12 @@
 import * as cron from 'node-cron';
 import { logger, config } from '../../config';
 import { SubscriberService } from '../subscriber/subscriber.service';
+import { ensureValidTimezone } from '../subscriber/subscriber.utils';
 import { WhatsAppService } from '../../core/messaging/whatsapp';
 import { DigestService } from '../digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { DateTime } from 'luxon';
+import { Subscriber } from '../subscriber/subscriber.types';
 
 export class SchedulerService {
   private static instance: SchedulerService;
@@ -57,17 +59,14 @@ export class SchedulerService {
     });
   }
 
-  public isNightTimeForUser(subscriber: any, nowOverride?: DateTime): boolean {
-    let tz = subscriber.profile.timezone || 'UTC';
-    if (!DateTime.local().setZone(tz).isValid) {
-      tz = 'UTC';
-    }
+  public isNightTimeForUser(subscriber: Subscriber, nowOverride?: DateTime): boolean {
+    const tz = ensureValidTimezone(subscriber.profile.timezone);
     const now = nowOverride ? nowOverride.setZone(tz) : DateTime.now().setZone(tz);
     // Check if it's between 3 AM and 3:59 AM local time
     return now.hour === 3;
   }
 
-  public shouldSendReengagementMessage(subscriber: any, nowUtc: DateTime): boolean {
+  public shouldSendReengagementMessage(subscriber: Subscriber, nowUtc: DateTime): boolean {
     if (!subscriber.lastMessageSentAt) {
       return false; // No last message sent date, so no re-engagement
     }
@@ -89,7 +88,7 @@ export class SchedulerService {
    * @param subscriber - The subscriber to process
    * @returns The message that was sent to the subscriber, or null if failed
    */
-  async executeNightlyTasksForSubscriber(subscriber: any): Promise<string | null> {
+  async executeNightlyTasksForSubscriber(subscriber: Subscriber): Promise<string | null> {
     try {
       await this.subscriberService.incrementConversationCount(subscriber.connections.phone);
       
@@ -143,10 +142,13 @@ export class SchedulerService {
       const subscribers = await this.subscriberService.getAllSubscribers();
       const nowUtc = DateTime.utc();
       for (const subscriber of subscribers) {
-        const subscriberTimezone = subscriber.profile.timezone || 'UTC';
+        const subscriberTimezone = ensureValidTimezone(subscriber.profile.timezone);
         const nowLocal = nowUtc.setZone(subscriberTimezone);
         const todayLocalIso = nowLocal.toISODate();
-        const lastDigestRunIso = subscriber.metadata?.lastNightlyDigestRun;
+        const lastDigestRun = subscriber.metadata?.lastNightlyDigestRun;
+        const lastDigestRunIso = lastDigestRun instanceof Date 
+            ? DateTime.fromJSDate(lastDigestRun).toISODate() 
+            : lastDigestRun;
   
         if (this.isNightTimeForUser(subscriber, nowLocal) && lastDigestRunIso !== todayLocalIso) {
           logger.info({ phoneNumber: subscriber.connections.phone, localTime: nowLocal.toISO(), lastRun: lastDigestRunIso }, "Triggering nightly digest tasks for subscriber.");
@@ -188,7 +190,7 @@ export class SchedulerService {
           shouldSendMessage = true;
           nextPush = nowUtc.plus({ hours: 24 });
         } else {
-          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' }); // TODO adjust for timezone of user
+          nextPush = DateTime.fromISO(subscriber.nextPushMessageAt, { zone: 'utc' });
           if (!nextPush.isValid) {
             // If invalid, send message immediately and schedule for +24h from now
             shouldSendMessage = true;
@@ -249,14 +251,9 @@ export class SchedulerService {
     }
   }
 
-  public calculateNextPushTime(subscriber: any, nowOverride?: DateTime): DateTime | undefined {
+  public calculateNextPushTime(subscriber: Subscriber, nowOverride?: DateTime): DateTime | undefined {
     // Determine user timezone
-    let tz = subscriber.profile.timezone || 'UTC';
-    // check if the time zone is not just some random string
-    if (!DateTime.local().setZone(tz).isValid) {
-      logger.warn({ timezone: tz }, "Invalid timezone for subscriber, defaulting to UTC");
-      tz = 'UTC';
-    }
+    const tz = ensureValidTimezone(subscriber.profile.timezone);
     const prefs = subscriber.profile.messagingPreferences;
     const windows = config.features.dailyMessages.defaultWindows;
     const now = nowOverride ? nowOverride.setZone(tz) : DateTime.now().setZone(tz);
@@ -275,7 +272,7 @@ export class SchedulerService {
       const start = DateTime.fromFormat(win.start, 'HH:mm', { zone: tz });
       const end = DateTime.fromFormat(win.end, 'HH:mm', { zone: tz });
       // Here fuzziness is prefs.fuzzinessMinutes (from mockSubscriber) or config.features.dailyMessages.fuzzinessMinutes
-      const fuzzinessToPass = prefs.fuzzinessMinutes || config.features.dailyMessages.fuzzinessMinutes || 30;
+      const fuzzinessToPass = prefs?.fuzzinessMinutes || config.features.dailyMessages.fuzzinessMinutes || 30;
       next = this.randomTimeInWindow(now, start, end, fuzzinessToPass);
     }
     return next;

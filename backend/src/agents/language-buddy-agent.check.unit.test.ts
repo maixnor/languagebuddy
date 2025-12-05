@@ -1,0 +1,157 @@
+import { LanguageBuddyAgent } from './language-buddy-agent';
+import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
+import { ChatOpenAI } from '@langchain/openai';
+import { Checkpoint } from '@langchain/langgraph';
+import { Subscriber } from '../features/subscriber/subscriber.types';
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+
+jest.mock('../persistence/redis-checkpointer');
+jest.mock('@langchain/openai');
+jest.mock('../util/system-prompts');
+
+describe('LanguageBuddyAgent - checkLastResponse', () => {
+  let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
+  let mockLlm: jest.Mocked<ChatOpenAI>;
+  let agent: LanguageBuddyAgent;
+  let mockAgentInvoke: jest.Mock;
+
+  const mockSubscriber: Subscriber = {
+    profile: {
+      name: "Test User",
+      speakingLanguages: [],
+      learningLanguages: [{ languageName: "Spanish", overallLevel: "A1", skillAssessments: [], deficiencies: [], firstEncountered: new Date(), lastPracticed: new Date(), totalPracticeTime: 0, confidenceScore: 50, isTarget: true }],
+      timezone: "UTC"
+    } as any,
+    connections: {
+      phone: "1234567890",
+    },
+    metadata: {} as any,
+    isPremium: false,
+    signedUpAt: new Date().toISOString(),
+  };
+
+  beforeEach(() => {
+    mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
+    mockAgentInvoke = jest.fn();
+    mockLlm = {} as any;
+
+    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm);
+    (agent as any).agent = { invoke: mockAgentInvoke };
+    
+    // Default empty checkpoint
+    mockCheckpointer.getCheckpoint.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should return message if no history found', async () => {
+    const result = await agent.checkLastResponse(mockSubscriber);
+    expect(result).toContain("can't check anything yet");
+  });
+
+  it('should identify no mistake (OK status)', async () => {
+    // Setup history
+    const history = [new HumanMessage("Hola"), new AIMessage("Hola, ¿cómo estás?")];
+    const checkpoint: Checkpoint = {
+      id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+      values: { messages: history }
+    };
+    mockCheckpointer.getCheckpoint.mockResolvedValue({
+      config: {}, checkpoint, metadata: {}, parentConfig: {}
+    });
+
+    // Mock agent response (OK)
+    mockAgentInvoke.mockResolvedValue({
+      messages: [new AIMessage('{"status": "OK"}')]
+    });
+
+    const result = await agent.checkLastResponse(mockSubscriber);
+    
+    expect(result).toContain("looks correct to me");
+    expect(mockCheckpointer.putTuple).not.toHaveBeenCalled(); // No correction injected
+    expect(mockCheckpointer.deleteCheckpoint).toHaveBeenCalled(); // Cleanup
+  });
+
+  it('should identify mistake and inject correction', async () => {
+    // Setup history
+    const history = [new HumanMessage("Where is the Eiffel Tower?"), new AIMessage("It is in Berlin.")];
+    const checkpoint: Checkpoint = {
+      id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+      values: { messages: history }
+    };
+    mockCheckpointer.getCheckpoint.mockResolvedValue({
+      config: {}, checkpoint, metadata: {}, parentConfig: {}
+    });
+
+    // Mock agent response (ERROR)
+    const agentResponse = JSON.stringify({
+      status: "ERROR",
+      explanation: "The Eiffel Tower is in Paris, not Berlin.",
+      system_correction: "The Eiffel Tower is in Paris. Never say it is in Berlin."
+    });
+    mockAgentInvoke.mockResolvedValue({
+      messages: [new AIMessage(agentResponse)]
+    });
+
+    const result = await agent.checkLastResponse(mockSubscriber);
+    
+    expect(result).toContain("Potential mistake found");
+    expect(result).toContain("Paris"); // Explanation
+    
+    // Verify injection
+    expect(mockCheckpointer.putTuple).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        values: expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.any(HumanMessage),
+            expect.any(AIMessage),
+            expect.objectContaining({ content: expect.stringContaining("SYSTEM CORRECTION") })
+          ])
+        })
+      }),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('should handle JSON parse errors', async () => {
+    // Setup history
+    const history = [new HumanMessage("Hi"), new AIMessage("Hi")];
+    const checkpoint: Checkpoint = {
+        id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+        values: { messages: history }
+    };
+    mockCheckpointer.getCheckpoint.mockResolvedValue({
+        config: {}, checkpoint, metadata: {}, parentConfig: {}
+    });
+
+    // Mock invalid JSON
+    mockAgentInvoke.mockResolvedValue({
+      messages: [new AIMessage('This is not JSON')]
+    });
+
+    const result = await agent.checkLastResponse(mockSubscriber);
+    expect(result).toContain("couldn't verify");
+  });
+
+  it('should handle agent execution errors', async () => {
+     // Setup history
+     const history = [new HumanMessage("Hi"), new AIMessage("Hi")];
+     const checkpoint: Checkpoint = {
+         id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+         values: { messages: history }
+     };
+     mockCheckpointer.getCheckpoint.mockResolvedValue({
+         config: {}, checkpoint, metadata: {}, parentConfig: {}
+     });
+ 
+     // Mock error
+     mockAgentInvoke.mockRejectedValue(new Error("OpenAI error"));
+ 
+     const result = await agent.checkLastResponse(mockSubscriber);
+     expect(result).toContain("error occurred while performing the check");
+  });
+});

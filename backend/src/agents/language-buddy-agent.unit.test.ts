@@ -6,11 +6,13 @@ import { DateTime } from 'luxon';
 import { generateSystemPrompt } from '../util/system-prompts';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { SubscriberService } from '../features/subscriber/subscriber.service';
 
 
 jest.mock('../persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
 jest.mock('../util/system-prompts'); // Mock generateSystemPrompt
+jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
 
 const mockGenerateSystemPrompt = generateSystemPrompt as jest.Mock;
 
@@ -84,6 +86,11 @@ describe('LanguageBuddyAgent', () => {
       // The constructor of LanguageBuddyAgent creates the agent, so we'll need to mock its .invoke
     } as any; // Cast to any to bypass strict type checking for the mock
 
+    // Mock SubscriberService.getInstance()
+    (SubscriberService.getInstance as jest.Mock).mockReturnValue({
+      hydrateSubscriber: jest.fn(),
+    });
+
     // When LanguageBuddyAgent is instantiated, createReactAgent is called.
     // We need to ensure the 'agent' property in LanguageBuddyAgent is a mock
     // that has an 'invoke' method.
@@ -101,6 +108,7 @@ describe('LanguageBuddyAgent', () => {
     jest.clearAllMocks();
     jest.useRealTimers(); // Restore real timers
   });
+
 
   describe('getConversationDuration', () => {
     it('should return null if no checkpoint is found', async () => {

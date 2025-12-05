@@ -124,9 +124,23 @@ export async function handleUserCommand(
         return '!reset';
     }
 
+    if (message.startsWith('!check')) {
+        await whatsappService.sendMessage(subscriber.connections.phone, "Checking the last response... 🕵️");
+        const result = await languageBuddyAgent.checkLastResponse(subscriber);
+        
+        let finalMessage = result;
+        // If a mistake was found (indicated by the warning emoji/text from checkLastResponse), add the clear hint
+        if (result.includes("⚠️") || result.includes("Mistake")) {
+            finalMessage += "\n\n(If I keep making mistakes or hallucinations continue, you can use !clear to reset the conversation context.)";
+        }
+        
+        await whatsappService.sendMessage(subscriber.connections.phone, finalMessage);
+        return '!check';
+    }
+
     if (message.startsWith('!help') || message.startsWith('help') || message.startsWith('!commands')) {
       logger.info(`User ${subscriber.connections.phone} requested help`);
-      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "!digest": Create a learning digest from current conversation\n- "!night": Manually trigger nightly tasks (digest + reset + new conversation)\n- "ping": Test connectivity');
+      await whatsappService.sendMessage(subscriber.connections.phone, 'Commands you can use:\n- "!help" or "!commands": Show this help menu\n- "!me": Show your current profile info\n- "!profile": Update your profile\n- "!languages": List or update your languages\n- "!feedback": Send feedback\n- "!schedule": Set or view your practice schedule\n- "!reset": Reset your conversation and profile\n- "!clear": Clear the current chat history\n- "!check": Check the last AI response for mistakes\n- "!digest": Create a learning digest from current conversation\n- "!night": Manually trigger nightly tasks (digest + reset + new conversation)\n- "ping": Test connectivity');
       return '!help';
     }
 

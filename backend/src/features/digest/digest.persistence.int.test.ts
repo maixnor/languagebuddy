@@ -5,6 +5,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { Checkpoint } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { Subscriber } from '../subscriber/subscriber.types';
+import { SubscriberService } from '../subscriber/subscriber.service';
 
 describe('Conversation Persistence & Clearance Bug', () => {
   let redis: Redis;
@@ -34,6 +35,8 @@ describe('Conversation Persistence & Clearance Bug', () => {
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
     });
+    // Initialize SubscriberService
+    SubscriberService.getInstance(redis);
   });
 
   afterAll(async () => {
