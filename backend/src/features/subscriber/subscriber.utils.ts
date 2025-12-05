@@ -31,7 +31,7 @@ export const ensureValidTimezone = (timezone: string | number | undefined | null
     }
 
     // 3. If still invalid, log warning and default to UTC
-    logger.warn({ invalidTimezone: timezone }, "Invalid timezone provided, defaulting to UTC");
+    logger.debug({ invalidTimezone: timezone }, "Invalid timezone provided, defaulting to UTC");
     return 'UTC';
 };
 
