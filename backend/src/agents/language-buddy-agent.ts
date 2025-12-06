@@ -52,14 +52,25 @@ export class LanguageBuddyAgent {
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
       setContextVariable('phone', subscriber.connections.phone);
 
+      const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+      const hour = currentLocalTime.hour;
+      const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
+
+      // Pre-empt LLM response if it's night time for the user AND a new conversation day.
+      // This specifically handles the case where the agent might "wake up" to send a digest or scheduled message
+      // and it's late for the user, preventing inappropriate "Good morning" messages.
+      if ((hour >= 22 || hour < 6) && (timeSinceLastMessageMinutes !== null && timeSinceLastMessageMinutes >= 6 * 60)) {
+        logger.info(`🌙 (${subscriber.connections.phone.slice(-4)}) Pre-empting conversation: Night time for user.`);
+        return `It's getting late for you (${currentLocalTime.toFormat('hh:mm a')}), ${subscriber.profile.name}. Perhaps we should continue our English practice tomorrow? Have a good night!`;
+      }
+
       let systemPrompt: string;
 
       if (systemPromptOverride) {
         systemPrompt = systemPromptOverride;
       } else {
         const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
-        const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
-        const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+        // timeSinceLastMessageMinutes is already calculated above
 
         systemPrompt = generateSystemPrompt({
           subscriber,
