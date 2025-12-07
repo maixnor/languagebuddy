@@ -376,8 +376,8 @@ describe('Trial Period Transitions (Integration)', () => {
       expect(canStart1).toBe(false);
 
       // Simulate next day by deleting today's count
-      const today = DateTime.now().toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
+      const currentDayKey = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      const key = `conversation_count:${testPhone}:${currentDayKey}`;
       await redis.del(key);
 
       // Next day, conversation count resets

@@ -7,7 +7,7 @@ import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages
 
 jest.mock('../persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
-jest.mock('../util/system-prompts');
+jest.mock('../features/subscriber/subscriber.prompts');
 
 describe('LanguageBuddyAgent - checkLastResponse', () => {
   let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;

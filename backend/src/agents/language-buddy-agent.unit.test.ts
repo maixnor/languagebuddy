@@ -3,18 +3,16 @@ import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { DateTime } from 'luxon';
-import { generateSystemPrompt } from '../util/system-prompts';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 
-
 jest.mock('../persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
-jest.mock('../util/system-prompts'); // Mock generateSystemPrompt
-jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
-
+jest.mock('../features/subscriber/subscriber.prompts'); // Mock generateSystemPrompt
+import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts'; // For type referencing
 const mockGenerateSystemPrompt = generateSystemPrompt as jest.Mock;
+jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
 
 describe('LanguageBuddyAgent', () => {
   let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
@@ -215,7 +213,10 @@ describe('LanguageBuddyAgent', () => {
       );
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
-        { configurable: { thread_id: mockSubscriber.connections.phone }}
+        { 
+          configurable: { thread_id: mockSubscriber.connections.phone },
+          metadata: {} 
+        }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
       expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
@@ -241,7 +242,10 @@ describe('LanguageBuddyAgent', () => {
       expect(mockGenerateSystemPrompt).not.toHaveBeenCalled();
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
-        { configurable: { thread_id: mockSubscriber.connections.phone }}
+        { 
+          configurable: { thread_id: mockSubscriber.connections.phone },
+          metadata: {} 
+        }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
       expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
@@ -274,7 +278,10 @@ describe('LanguageBuddyAgent', () => {
       );
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
-        { configurable: { thread_id: mockSubscriber.connections.phone }}
+        { 
+          configurable: { thread_id: mockSubscriber.connections.phone },
+          metadata: {} 
+        }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
       expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);

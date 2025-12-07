@@ -1,5 +1,5 @@
 import { logger } from '../../../config';
-import { markdownToWhatsApp, splitMessageBySeparator } from '../../../util/message-formatters';
+import { markdownToWhatsApp, processMarkdownForWhatsApp, splitMessageBySeparator } from './whatsapp.message-formatters';
 import { WhatsAppMessagePayload } from './whatsapp.types';
 
 export class WhatsAppService {

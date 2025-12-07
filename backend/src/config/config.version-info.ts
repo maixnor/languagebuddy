@@ -1,7 +1,7 @@
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import path from 'path';
-import { logger } from '../config';
+import { logger } from './index'; // Corrected path to config's logger
 
 let commitHash: string | null = null;
 let packageVersion: string | null = null;

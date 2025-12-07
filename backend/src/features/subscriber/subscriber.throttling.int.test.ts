@@ -156,7 +156,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       expect(canStart).toBe(false);
 
       // Manually expire the key (simulate 24h passing)
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       await redis.del(key);
 
@@ -169,7 +170,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       // BUG POTENTIAL: DateTime.now().toISODate() uses local timezone
       // If user is in different timezone, this could cause issues
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       
       await subscriberService.incrementConversationCount(testPhone);
@@ -180,11 +182,13 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     });
 
     it('should use different keys for different dates', async () => {
-      const today = DateTime.now().toISODate();
-      const yesterday = DateTime.now().minus({ days: 1 }).toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      
+      const yesterdayDate = DateTime.fromISO(today).minus({ days: 1 }).toISODate(); // Calculate yesterday based on today
+      const yesterdayKey = `conversation_count:${testPhone}:${yesterdayDate}`;
       
       // Set yesterday's count manually
-      const yesterdayKey = `conversation_count:${testPhone}:${yesterday}`;
       await redis.set(yesterdayKey, '1', 'EX', 86400);
       
       // Should still allow conversation today (different key)
@@ -209,7 +213,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     it('should set count to 1 on first increment', async () => {
       await subscriberService.incrementConversationCount(testPhone);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
@@ -220,7 +225,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       await subscriberService.incrementConversationCount(testPhone);
       await subscriberService.incrementConversationCount(testPhone);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
@@ -230,7 +236,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     it('should set TTL on first increment', async () => {
       await subscriberService.incrementConversationCount(testPhone);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       const ttl = await redis.ttl(key);
       
@@ -269,7 +276,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
         subscriberService.incrementConversationCount(testPhone),
       ]);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
@@ -494,10 +502,12 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
 
   describe('Timezone and date boundary issues', () => {
     it('should handle date rollover at midnight', async () => {
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const beforeMidnight = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+
       // Increment count just before midnight
       await subscriberService.incrementConversationCount(testPhone);
       
-      const beforeMidnight = DateTime.now().toISODate();
       const keyBefore = `conversation_count:${testPhone}:${beforeMidnight}`;
       
       // Verify count exists
@@ -505,8 +515,8 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       expect(countBefore).toBe('1');
       
       // After midnight (simulated with different date), should be new key
-      const afterMidnight = DateTime.now().plus({ days: 1 }).toISODate();
-      const keyAfter = `conversation_count:${testPhone}:${afterMidnight}`;
+      const afterMidnightDate = DateTime.fromISO(beforeMidnight).plus({ days: 1 }).toISODate();
+      const keyAfter = `conversation_count:${testPhone}:${afterMidnightDate}`;
       
       const countAfter = await redis.get(keyAfter);
       expect(countAfter).toBeNull();

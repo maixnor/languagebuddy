@@ -97,6 +97,18 @@ export class SubscriptionService {
     return this.stripe.webhooks.constructEvent(payload, signature, secret);
   }
 
+
+  async retrieveCustomer(customerId: string): Promise<Stripe.Customer> {
+    if (!this.stripe) {
+      throw new Error("Stripe is not initialized. Cannot retrieve customer.");
+    }
+    const customer = await this.stripe.customers.retrieve(customerId);
+    if (customer.deleted) {
+      throw new Error(`Stripe customer ${customerId} is deleted.`);
+    }
+    return customer as Stripe.Customer;
+  }
+
   /**
    * Returns the Stripe payment link for subscription.
    * This can be static or generated per user if needed.
@@ -106,3 +118,4 @@ export class SubscriptionService {
     return "https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01";
   }
 }
+

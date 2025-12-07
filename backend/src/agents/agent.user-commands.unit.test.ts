@@ -1,6 +1,6 @@
-import { handleUserCommand } from './user-commands';
+import { handleUserCommand } from './agent.user-commands';
 import { WhatsAppService } from '../core/messaging/whatsapp';
-import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
+import { LanguageBuddyAgent } from './language-buddy-agent';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { RedisClientType } from 'redis';
 import { logger } from '../config';

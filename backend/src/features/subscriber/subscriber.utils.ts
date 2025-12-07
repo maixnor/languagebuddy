@@ -91,3 +91,65 @@ export const selectDeficienciesToPractice = (
     // Return top N deficiencies
     return sortedDeficiencies.slice(0, maxCount);
 };
+
+/**
+ * Returns the next missing field for the subscriber, or null if complete
+ */
+export function getNextMissingField(subscriber: Subscriber): string | null {
+  const missing = getMissingProfileFieldsReflective(subscriber.profile);
+  return missing.length > 0 ? missing[0] : null;
+}
+
+/**
+ * Returns a prompt for the next missing field
+ */
+// TODO change to use reflection of the field and provide a good prompt to find out the info of the user
+// should also work with enums such that the llm can target specifically those values
+export function getPromptForField(field: string): string {
+  switch (field) {
+    case 'name':
+      return "What's your name?";
+    case 'speakingLanguages':
+      return "Which languages do you speak fluently?";
+    case 'learningLanguages':
+      return "Which language(s) are you learning?";
+    case 'timezone':
+      return "What is your timezone or where are you located?";
+    default:
+      if (field.endsWith('level')) return `What is your level in ${field.replace(' level', '')}?`;
+      return `Please provide: ${field}`;
+  }
+}
+
+// Returns a list of missing (undefined, null, or empty string/array) fields in the profile object, including any new fields added to the type.
+export function getMissingProfileFieldsReflective(profile: Record<string, any>): string[] {
+  const missing: string[] = [];
+  for (const key of Object.keys(profile)) {
+    const value = profile[key];
+    if (
+      value === undefined ||
+      value === null ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
+      missing.push(key);
+    }
+    // Optionally, check for nested objects (e.g. language levels)
+    if (Array.isArray(value)) {
+      value.forEach((item: any) => {
+        if (item && typeof item === 'object') {
+          for (const subKey of Object.keys(item)) {
+            if (
+              item[subKey] === undefined ||
+              item[subKey] === null ||
+              (typeof item[subKey] === 'string' && item[subKey].trim() === '')
+            ) {
+              missing.push(`${key}.${subKey}`);
+            }
+          }
+        }
+      });
+    }
+  }
+  return missing;
+}

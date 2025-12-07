@@ -1,4 +1,4 @@
-import { generateSystemPrompt } from "./system-prompts";
+import { generateSystemPrompt } from "../features/subscriber/subscriber.prompts";
 import { Subscriber } from "../features/subscriber/subscriber.types";
 import { DateTime } from "luxon";
 

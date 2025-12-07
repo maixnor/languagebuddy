@@ -22,6 +22,7 @@ const mockLanguageBuddyAgent = {
   clearConversation: jest.fn(),
   currentlyInActiveConversation: jest.fn(),
   oneShotMessage: jest.fn(),
+  isOnboardingConversation: jest.fn(),
 };
 
 const mockWhatsappService = {
@@ -50,6 +51,7 @@ const mockServiceContainer: ServiceContainer = {
   schedulingService: {} as any, // Not used in this test
   feedbackService: {} as any, // Not used in this test
   subscriptionService: {} as any, // Not used in this test
+  stripeWebhookService: {} as any,
 };
 
 describe('WebhookService', () => {
@@ -57,7 +59,7 @@ describe('WebhookService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    webhookService = new WebhookService(mockServiceContainer);
+    webhookService = new WebhookService(mockServiceContainer as any);
   });
 
   describe('processTextMessage', () => {
@@ -69,16 +71,16 @@ describe('WebhookService', () => {
       type: 'text',
     };
 
-    it('should start new user onboarding if subscriber does not exist and not in onboarding', async () => {
+    it('should start new user onboarding if subscriber does not exist and not in active conversation', async () => {
       mockSubscriberService.getSubscriber.mockResolvedValue(null);
-      mockOnboardingService.isInOnboarding.mockResolvedValue(false);
+      mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(false);
       mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Welcome message');
 
       const expectedSystemPrompt = generateOnboardingSystemPrompt();
 
       await (webhookService as any).processTextMessage(mockMessage);
 
-      expect(mockOnboardingService.startOnboarding).toHaveBeenCalledWith(mockMessage.from);
+      // expect(mockOnboardingService.startOnboarding).toHaveBeenCalledWith(mockMessage.from); // REMOVED
       // Expect the call to include the profile structure to avoid crashes in the agent
       expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -86,14 +88,15 @@ describe('WebhookService', () => {
           profile: expect.any(Object)
         }),
         mockMessage.text!.body,
-        expectedSystemPrompt
+        expectedSystemPrompt,
+        { type: 'onboarding' } // Expect metadata
       );
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Welcome message');
     });
 
-    it('should continue onboarding if subscriber does not exist but is in onboarding', async () => {
+    it('should continue onboarding if subscriber does not exist but is in active conversation', async () => {
       mockSubscriberService.getSubscriber.mockResolvedValue(null);
-      mockOnboardingService.isInOnboarding.mockResolvedValue(true);
+      mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(true);
       mockLanguageBuddyAgent.processUserMessage.mockResolvedValue('Next onboarding step');
       const expectedSystemPrompt = generateOnboardingSystemPrompt();
 
@@ -111,20 +114,20 @@ describe('WebhookService', () => {
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Next onboarding step');
     });
 
-    it('should complete onboarding and initiate new conversation if subscriber exists and is in onboarding', async () => {
+    it('should complete onboarding and initiate new conversation if subscriber exists and is tagged as onboarding conversation', async () => {
       const mockSubscriber = { 
         connections: { phone: mockMessage.from }, 
         profile: { timezone: 'UTC' },
         metadata: {} 
       };
       mockSubscriberService.getSubscriber.mockResolvedValue(mockSubscriber);
-      mockOnboardingService.isInOnboarding.mockResolvedValue(true);
+      mockLanguageBuddyAgent.isOnboardingConversation.mockResolvedValue(true);
       
       mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Hello! Ready to chat?');
 
       await (webhookService as any).processTextMessage(mockMessage);
 
-      expect(mockOnboardingService.completeOnboarding).toHaveBeenCalledWith(mockMessage.from);
+      // expect(mockOnboardingService.completeOnboarding).toHaveBeenCalledWith(mockMessage.from); // REMOVED
       expect(mockLanguageBuddyAgent.clearConversation).toHaveBeenCalledWith(mockMessage.from);
       
       // 1. Confirmation message
@@ -137,7 +140,8 @@ describe('WebhookService', () => {
       expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
         mockSubscriber,
         'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
-        expect.stringContaining('TASK: INITIATE NEW DAY CONVERSATION') // Partial match for the system prompt
+        expect.stringContaining('TASK: INITIATE NEW DAY CONVERSATION'), // Partial match for the system prompt
+        { type: 'regular' } // Expect metadata
       );
 
       // 3. Sending the new conversation message

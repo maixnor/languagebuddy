@@ -1,5 +1,14 @@
+export interface FeedbackEntry {
+  timestamp: string;
+  originalMessage: string;
+  userFeedback: string;
+  userPhone: string;
+  sentiment: "positive" | "negative" | "neutral";
+  actionItems: string[];
+  category: "content" | "technical" | "suggestion" | "other";
+}
+
 import Redis from 'ioredis';
-import { FeedbackEntry } from './feedback.types';
 import { logger } from '@/config';
 
 export class FeedbackService {

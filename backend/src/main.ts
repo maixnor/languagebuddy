@@ -15,7 +15,7 @@ import "whatsapp-cloud-api-express";
 import { ServiceContainer } from './services/service-container';
 import { setupRoutes } from './routes';
 import { logger, config } from './config';
-import { loadVersionInfo } from './util/version-info';
+import { loadVersionInfo } from './config/config.version-info';
 
 async function main() {
   try {

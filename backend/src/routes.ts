@@ -3,7 +3,7 @@ import { ServiceContainer } from './services/service-container';
 import { WebhookService } from './services/webhook-service';
 import { StripeWebhookService } from './features/subscription/subscription-webhook.service';
 import { logger, config } from './config';
-import { getCommitHash, getPackageVersion } from './util/version-info';
+import { getCommitHash, getPackageVersion } from './config/config.version-info';
 
 export function setupRoutes(app: express.Application, services: ServiceContainer): void {
   const webhookService = new WebhookService(services);

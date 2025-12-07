@@ -8,7 +8,8 @@ import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
 import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
 import { DateTime } from "luxon";
-import { generateSystemPrompt } from "../util/system-prompts";
+import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
+import { handleUserCommand } from './agent.user-commands';
 // import {tools} from "../tools"; // Original tools import - will need re-evaluation
 
 // Manually import the individual tools for now, until a better tool registration strategy is in place
@@ -44,7 +45,7 @@ export class LanguageBuddyAgent {
       checkpointer: checkpointer,
     })
   }
-  async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<string> {
+  async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string, metadata?: Record<string, any>): Promise<string> {
     try {
       // Ensure subscriber is hydrated (Dates are Dates, not strings)
       SubscriberService.getInstance().hydrateSubscriber(subscriber);
@@ -83,7 +84,10 @@ export class LanguageBuddyAgent {
 
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
-        { configurable: { thread_id: subscriber.connections.phone }}
+        { 
+          configurable: { thread_id: subscriber.connections.phone },
+          metadata: metadata || {}
+        }
       );
 
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${result.messages[result.messages.length - 1].content}`);
@@ -129,9 +133,16 @@ export class LanguageBuddyAgent {
       });
     }
 
+    // Retrieve existing metadata to ensure it persists
+    const existingCheckpoint = await this.checkpointer.getCheckpoint(subscriber.connections.phone);
+    const existingMetadata = existingCheckpoint?.metadata || {};
+
     const response = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)] },
-        { configurable: { thread_id: subscriber.connections.phone } }
+        { 
+          configurable: { thread_id: subscriber.connections.phone },
+          metadata: existingMetadata
+        }
     );
 
     logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].content}`);
@@ -260,6 +271,12 @@ Check for:
       checkpointTuple.parentConfig
     );
     logger.info({ phone, correction }, "Injected system correction into conversation");
+  }
+
+  async isOnboardingConversation(phone: string): Promise<boolean> {
+    const checkpointTuple = await this.checkpointer.getCheckpoint(phone);
+    if (!checkpointTuple) return false;
+    return (checkpointTuple.metadata as any)?.type === 'onboarding';
   }
 
   async currentlyInActiveConversation(userPhone: string) {

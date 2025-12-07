@@ -1,4 +1,4 @@
-import { markdownToWhatsApp, splitMessageBySeparator, processMarkdownForWhatsApp } from './message-formatters';
+import { markdownToWhatsApp, splitMessageBySeparator, processMarkdownForWhatsApp } from './whatsapp.message-formatters';
 
 describe('Message Formatters', () => {
   describe('markdownToWhatsApp', () => {

@@ -34,7 +34,7 @@ export function markdownToWhatsApp(markdown: string): string {
   
   // Clean up markdown artifacts
   text = text.replace(/^\s*>\s+(.+)$/gm, '$1');
-  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  text = text.replace(/.*\[([^\n\]]+)\]\([^)]+\)/g, '$1');
   text = text.replace(/\n{3,}/g, '\n\n');
 
   // Restore quiz placeholders

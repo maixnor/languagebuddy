@@ -1,9 +1,9 @@
 import Redis from 'ioredis';
 import { Subscriber } from './subscriber.types';
 import { logger } from '../../config'; // Will be updated
-import { getMissingProfileFieldsReflective } from '../../util/profile-reflection'; // Will be updated
+import { getMissingProfileFieldsReflective } from './subscriber.utils';
 import { DateTime } from 'luxon';
-import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from '../../util/system-prompts';
+import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';
 import { ensureValidTimezone } from './subscriber.utils';
 
 export class SubscriberService {

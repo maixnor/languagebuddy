@@ -3,7 +3,7 @@
 **Goal:** Refactor the backend to use structured Redis data types (RedisJSON or Hashes) instead of storing opaque JSON strings.
 
 **Context:**
-Currently, services like `SubscriberService`, `OnboardingService`, and `RedisCheckpointSaver` serialize entire objects using `JSON.stringify` and store them as simple string values in Redis. This approach has several downsides:
+Currently, services like `SubscriberService` and `RedisCheckpointSaver` serialize entire objects using `JSON.stringify` and store them as simple string values in Redis. This approach has several downsides:
 *   **Inefficiency:** Reading or updating a single field requires fetching, parsing, modifying, and re-serializing the entire object.
 *   **Opaqueness:** Debugging is harder because you can't inspect individual fields easily in the Redis CLI.
 *   **Race Conditions:** Full-object updates are more prone to race conditions than atomic field updates (though we have some optimistic locking, granular updates are safer).
@@ -27,10 +27,6 @@ Currently, services like `SubscriberService`, `OnboardingService`, and `RedisChe
     *   Update retrieval logic (`getSubscriber`) to parse the response appropriately.
     *   Update partial updates (e.g., updating just `timezone` or `status`) to use atomic commands (`JSON.SET key $.profile.timezone value` or `HSET key profile.timezone value`).
 
-3.  **Refactor `OnboardingService`:**
-    *   Migrate `onboarding:${phone}` state storage to structured data.
-    *   This state is often flat, making it a good candidate for standard Redis Hashes if RedisJSON is unavailable.
-
 4.  **Refactor `RedisCheckpointSaver`:**
     *   **Current:** `redis.set(checkpointKey, JSON.stringify(checkpoint))`
     *   **New:** Store the LangGraph checkpoint object structurally.
@@ -40,7 +36,7 @@ Currently, services like `SubscriberService`, `OnboardingService`, and `RedisChe
     *   Investigate if `feedback:all` (currently a List of strings) can leverage RedisJSON to store an array of objects, or if it should remain a List of serialized strings (Lists are efficient, so this might be lower priority unless querying by field is needed).
 
 **Migration Strategy:**
-*   **Dual Read/Write (Optional but Recommended):** For a safe transition, consider a brief period where code can read both formats (try JSON/Hash first, fall back to String) or run a migration script to convert existing keys.
+*   **Dual Read/One Write (Optional but Recommended):** For a safe transition, consider a brief period where code can read both formats (try JSON/Hash first, fall back to String) or run a migration script to convert existing keys.
 *   **Prefixing:** You might want to use new key prefixes (e.g., `subscriber:v2:...`) to avoid conflicts during development/testing.
 
 **Expected Impact:**

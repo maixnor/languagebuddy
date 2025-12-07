@@ -56,15 +56,15 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
 
   describe('Race condition: SET vs INCR', () => {
     it('should handle concurrent increments safely (Atomic INCR)', async () => {
-      // With atomic Lua script, this should always result in 2
-      
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      const key = `conversation_count:${testPhone}:${today}`;
+
       const results = await Promise.all([
         subscriberService.incrementConversationCount(testPhone),
         subscriberService.incrementConversationCount(testPhone),
       ]);
       
-      const today = DateTime.now().toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
       console.log('Concurrent INCR test - Count:', count);
@@ -123,7 +123,8 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
     it('should expire key after 24 hours', async () => {
       await subscriberService.incrementConversationCount(testPhone);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       
       // Manually set TTL to 1 second for testing
@@ -144,7 +145,8 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       // If key exists without TTL (e.g. created by raw INCR),
       // our logic should detect it and set TTL
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       
       // Simulate race: manually INCR before our code runs
@@ -176,7 +178,9 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       await subscriberService.incrementConversationCount(testPhone);
       
-      const serverKey = `conversation_count:${testPhone}:${serverNow.toISODate()}`;
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const serverKeyToday = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      const serverKey = `conversation_count:${testPhone}:${serverKeyToday}`;
       const serverCount = await redis.get(serverKey);
       
       expect(serverCount).toBe('1');
@@ -185,24 +189,24 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
     });
 
     it('should handle date rollover at midnight', async () => {
-      // Set count for "yesterday"
-      const yesterday = DateTime.now().minus({ days: 1 }).toISODate();
-      const yesterdayKey = `conversation_count:${testPhone}:${yesterday}`;
-      await redis.set(yesterdayKey, '5', 'EX', 86400);
+      const pastDate = DateTime.now().minus({ days: 1 }).toISODate(); // Simulate a past day
+      const pastKey = `conversation_count:${testPhone}:${pastDate}`;
+      await redis.set(pastKey, '5', 'EX', 86400); // Set count for past day to 5
 
       // Increment today
       await subscriberService.incrementConversationCount(testPhone);
 
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber); // Get current "today"
       const todayKey = `conversation_count:${testPhone}:${today}`;
       const todayCount = await redis.get(todayKey);
       
-      // Should be 1 (new day), not 6
+      // Should be 1 (new day)
       expect(todayCount).toBe('1');
       
-      // Yesterday's count should still exist
-      const yesterdayCount = await redis.get(yesterdayKey);
-      expect(yesterdayCount).toBe('5');
+      // Past day's count should still exist
+      const pastCount = await redis.get(pastKey);
+      expect(pastCount).toBe('5');
     });
 
     it('should handle user near midnight in their timezone', async () => {
@@ -266,7 +270,8 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       const successCount = (result1 ? 1 : 0) + (result2 ? 1 : 0);
       expect(successCount).toBe(1);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${testPhone}:${today}`;
       const count = await redis.get(key);
       
@@ -307,9 +312,13 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       await subscriberService.incrementConversationCount(phone1);
       await subscriberService.incrementConversationCount(phone2);
       
-      const today = DateTime.now().toISODate();
-      const key1 = `conversation_count:${phone1}:${today}`;
-      const key2 = `conversation_count:${phone2}:${today}`;
+      const subscriber1 = await subscriberService.getSubscriber(phone1);
+      const today1 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber1);
+      const key1 = `conversation_count:${phone1}:${today1}`;
+
+      const subscriber2 = await subscriberService.getSubscriber(phone2);
+      const today2 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber2);
+      const key2 = `conversation_count:${phone2}:${today2}`;
       
       const count1 = await redis.get(key1);
       const count2 = await redis.get(key2);
@@ -323,7 +332,8 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       await subscriberService.incrementConversationCount(phoneWithSpecial);
       
-      const today = DateTime.now().toISODate();
+      const subscriber = await subscriberService.getSubscriber(phoneWithSpecial);
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
       const key = `conversation_count:${phoneWithSpecial}:${today}`;
       const count = await redis.get(key);
       

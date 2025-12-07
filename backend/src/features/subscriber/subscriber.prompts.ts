@@ -1,7 +1,7 @@
-import { Subscriber, Language } from "../features/subscriber/subscriber.types";
+import { Subscriber, Language } from "./subscriber.types";
 import { DateTime } from "luxon";
-import { Digest } from "../features/digest/digest.types"; // Added import for Digest
-import { selectDeficienciesToPractice } from "../features/subscriber/subscriber.utils"; // Added import for selectDeficienciesToPractice
+import { Digest } from "../digest/digest.types"; 
+import { selectDeficienciesToPractice } from "./subscriber.utils"; 
 
 export const MAYA_PERSONA_STATIC_INSTRUCTIONS = `You're an expat who's lived in their target language region for 5 years. You remember the challenges of language learning and are always supportive, offering insights along the way. You're also a bit of a foodie, loving to share recent discoveries in your city and around the world. History, especially the lesser-known facts, music, and art are also passions of yours. Your responses are short, impactful, and occasionally you might drift off to share a fun fact, but always return to the main conversation within one message.`;
 
@@ -47,7 +47,7 @@ export function generateSystemPrompt({
     // Agent's behavior based on time gaps
     if (timeSinceLastMessageMinutes < 5) {
       prompt += `Continue the conversation as normal, it's a rapid exchange.\n`;
-    } else if (timeSinceLastMessageMinutes >= 5 && timeSinceLastMessageMinutes < 60) {
+    } else if (timeSinceLastMessageMinutes >= 5 && timeSinceLastMessageMinutes < 60) { // 5 mins to 1 hour
       prompt += `Acknowledge the short break naturally, e.g., "Welcome back!" or "Back to our conversation!".\n`;
     } else if (timeSinceLastMessageMinutes >= 60 && timeSinceLastMessageMinutes < 6 * 60) { // 1 to 6 hours
       prompt += `Reference the time gap naturally, e.g., "Good to hear from you again after a while!".\n`;
@@ -76,14 +76,14 @@ export function generateRegularSystemPromptForSubscriber(
   language: Language,
 ): string {
   const name = subscriber.profile.name;
-  const nativeLanguages =
+  const nativeLanguages = 
     subscriber.profile.speakingLanguages
       ?.map((lang: Language) => lang.languageName)
       .join(", ") || "unknown";
-  const learningLanguages =
+  const learningLanguages = 
     language.languageName + " at level " + language.overallLevel ||
     "not specified";
-  const learningObjectives =
+  const learningObjectives = 
     language.currentObjectives?.join(", ") || "not specified";
   const timezone = subscriber.profile.timezone || "unknown";
   const mistakeTolerance = subscriber.metadata.mistakeTolerance || "normal";
@@ -105,17 +105,19 @@ export function generateRegularSystemPromptForSubscriber(
   ) {
     prompt += `
 
-  SPECIAL TASK: ASK FOR MISTAKE TOLERANCE PREFERENCE
-  It's great to see you back for your second day! To make our sessions even better, I'd like to personalize how I give you feedback.
+  SPECIAL TASK 1: ASK FOR MISTAKE TOLERANCE PREFERENCE
 
-  Please ask the user the following question in their NATIVE language:
-  "When we're practicing, how much do you want me to correct your mistakes? You can choose between:
   - 'forgiving' (only correct major mistakes),
   - 'normal' (correct common errors),
   - 'exact' (correct most mistakes), or
-  - 'hyperexact' (correct every single mistake, including minor details)."
+  - 'hyperexact' (correct every single mistake, including minor details)."`
 
-  Once they respond, use the 'update_subscriber_profile' tool to set their 'mistakeTolerance' preference. This is a one-time setup question.
+    prompt += `
+  Once the user responds, use the 'update_subscriber_profile' tool to set their 'mistakeTolerance' preference. This is a one-time setup question.
+
+  SPECIAL TASK 2: TELL ABOUT USER COMMANDS
+
+  Tell the user about the user commands and that they can be viewed by sending "!help". They should check it out so they know what exists.
   `;
   }
 
@@ -205,7 +207,9 @@ ${digest.summary}
         : " (never practiced)";
       prompt += `\n${index + 1}. **${deficiency.specificArea}** (${deficiency.category}, ${deficiency.severity} severity)${practicedInfo}\n`;
 
-      if (deficiency.examples && deficiency.examples.length > 0) {
+      if (
+        deficiency.examples && deficiency.examples.length > 0
+      ) {
         prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join("; ")}\n`;
       }
 

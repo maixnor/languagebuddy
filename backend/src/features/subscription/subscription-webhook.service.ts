@@ -48,7 +48,14 @@ export class StripeWebhookService {
 
   private async handleSubscriptionChange(event: Stripe.Event): Promise<void> {
     const subscription = event.data.object as Stripe.Subscription;
-    const customer = subscription.customer as Stripe.Customer; // Customer ID might be string or object
+    let customer: Stripe.Customer;
+
+    if (typeof subscription.customer === 'string') {
+      customer = await this.stripeService.retrieveCustomer(subscription.customer);
+    } else {
+      customer = subscription.customer as Stripe.Customer;
+    }
+
     const phoneNumber = customer.phone; // Assuming phone number is stored on customer metadata or directly
     // Normalize the phone number to ensure it has exactly one leading '+'
     // Remove all leading '+' and then add a single '+'

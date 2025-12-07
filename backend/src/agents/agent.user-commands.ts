@@ -1,7 +1,7 @@
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { logger } from '../config';
 import { WhatsAppService } from '../core/messaging/whatsapp';
-import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
+import { LanguageBuddyAgent } from './language-buddy-agent';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
 

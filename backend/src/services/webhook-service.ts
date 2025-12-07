@@ -2,9 +2,9 @@ import { ServiceContainer } from './service-container';
 import { logger, trackEvent, trackMetric, config } from '../config';
 import { WebhookMessage } from '../types';
 import { Subscriber } from '../features/subscriber/subscriber.types';
-import { handleUserCommand } from '../util/user-commands';
-import { getNextMissingField, getPromptForField } from '../util/info-gathering';
-import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
+import { handleUserCommand } from '../agents/agent.user-commands';
+import { getNextMissingField, getPromptForField } from '../features/subscriber/subscriber.utils';
+import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../features/subscriber/subscriber.prompts';
 import { generateOnboardingSystemPrompt } from '../features/onboarding/onboarding.prompts';
 import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
 import { DateTime } from "luxon";
@@ -111,21 +111,24 @@ export class WebhookService {
   private async processTextMessage(message: WebhookMessage): Promise<void> {
     const phone = message.from;
     let existingSubscriber = await this.services.subscriberService.getSubscriber(phone);
-    const isInOnboarding = await this.services.onboardingService.isInOnboarding(phone);
 
-    // Handle new users and onboarding flow
-    if (!existingSubscriber && !isInOnboarding) {
-      await this.startNewUserOnboarding(phone, message.text!.body);
+    // 1. Handle New/Onboarding Users (No Subscriber Profile)
+    if (!existingSubscriber) {
+      const hasActiveConversation = await this.services.languageBuddyAgent.currentlyInActiveConversation(phone);
+      
+      if (!hasActiveConversation) {
+         // Start Onboarding
+         await this.startNewUserOnboarding(phone, message.text!.body);
+      } else {
+         // Continue Onboarding
+         await this.continueOnboarding(phone, message.text!.body);
+      }
       return;
     }
 
-    if (!existingSubscriber && isInOnboarding) {
-      await this.continueOnboarding(phone, message.text!.body);
-      return;
-    }
-
-    if (existingSubscriber && isInOnboarding) {
-      await this.services.onboardingService.completeOnboarding(phone);
+    // 2. Handle Transition from Onboarding to Regular Subscriber
+    // If a subscriber exists but the conversation is still tagged as 'onboarding', we need to reset.
+    if (await this.services.languageBuddyAgent.isOnboardingConversation(phone)) {
       await this.services.languageBuddyAgent.clearConversation(existingSubscriber.connections.phone);
 
       // 1. Send profile created confirmation message
@@ -158,6 +161,7 @@ export class WebhookService {
         existingSubscriber,
         'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
         systemPromptForNewConversation, // The prompt was in the wrong order. This is a fix.
+        { type: 'regular' }
       );
 
       if (initialConversationMessage) {
@@ -170,12 +174,8 @@ export class WebhookService {
       return;
     }
 
-    const subscriber = existingSubscriber ?? await this.services.subscriberService.getSubscriber(phone);
-    if (!subscriber) {
-      logger.error({ phone }, "Subscriber should exist at this point but doesn't");
-      return;
-    }
-
+    const subscriber = existingSubscriber;
+    
     // Handle user commands
     if (await handleUserCommand(
       subscriber, 
@@ -214,13 +214,13 @@ export class WebhookService {
   }
 
   private async startNewUserOnboarding(phone: string, messageBody: string): Promise<void> {
-    await this.services.onboardingService.startOnboarding(phone);
     const subscriberForPrompt = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
     const systemPrompt = generateOnboardingSystemPrompt();
     const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
       subscriberForPrompt,
       messageBody, // User's actual message
-      systemPrompt // Actual system prompt
+      systemPrompt, // Actual system prompt
+      { type: 'onboarding' }
     );
     await this.services.whatsappService.sendMessage(phone, welcomeMessage);
   }
