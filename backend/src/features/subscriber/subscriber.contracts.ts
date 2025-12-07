@@ -33,3 +33,13 @@ export const SetLanguageContract = z.object({
 
 export type SubscriberUpdateContract = z.infer<typeof SubscriberUpdateContract>;
 
+export const SubscriberProfileSchema = z.object({
+  name: z.string(),
+  speakingLanguages: z.array(LanguageContract),
+  learningLanguages: z.array(LanguageContract),
+  timezone: z.string(),
+  messagingPreferences: MessagingPreferencesContract.optional(),
+});
+
+export type SubscriberProfile = z.infer<typeof SubscriberProfileSchema>;
+

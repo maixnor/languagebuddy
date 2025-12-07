@@ -1,3 +1,4 @@
+import { SubscriberProfileSchema } from "./subscriber.contracts";
 import { Language, LanguageDeficiency, Subscriber } from "./subscriber.types"; // Adjusted import
 import { DateTime } from 'luxon';
 import { logger } from '../../config';
@@ -149,20 +150,21 @@ export function getPromptForField(field: string): string {
   }
 }
 
-// Fields that the agent should proactively ask for if missing
-export const REQUIRED_PROFILE_FIELDS = [
-  'name',
-  'speakingLanguages',
-  'learningLanguages',
-  'timezone'
-];
-
 // Returns a list of missing (undefined, null, or empty string/array) fields in the profile object.
-// Checks against the REQUIRED_PROFILE_FIELDS list.
+// Checks against required fields defined in SubscriberProfileSchema.
 export function getMissingProfileFieldsReflective(profile: Record<string, any>): string[] {
   const missing: string[] = [];
+  const shape = SubscriberProfileSchema.shape;
   
-  for (const key of REQUIRED_PROFILE_FIELDS) {
+  for (const key of Object.keys(shape)) {
+    const fieldSchema = shape[key as keyof typeof shape];
+    
+    // Check if the field is optional in the Zod schema
+    // Note: Zod's .isOptional() returns true for z.optional() wrapped types
+    if (fieldSchema.isOptional()) {
+        continue;
+    }
+
     const value = profile[key];
     if (
       value === undefined ||
@@ -172,7 +174,6 @@ export function getMissingProfileFieldsReflective(profile: Record<string, any>):
     ) {
       missing.push(key);
     }
-    // Nested checks (e.g. if we ever add specific required sub-fields) can go here
   }
   return missing;
 }
