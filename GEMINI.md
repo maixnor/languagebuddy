@@ -53,13 +53,13 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 
 ### ⚠️ Testing Mandate ⚠️
 **Every new feature or bug fix MUST include tests.**
+-   **Red-Green-Refactor for Bugs**: When fixing a bug, **you MUST first write a failing unit test** that specifically reproduces the issue. Do not touch the implementation code until you have a red (failing) test. Once the test fails as expected, implement the fix to turn it green. This proves the bug existed and is now resolved.
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
 -   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 5s npm run start` as these commands run in watch mode and do not exit automatically).
 -   **Build Stability**: A task is considered truly complete only when `npm run build:full` passes without errors.
 
 ### Bug Fix Tests
--   **Bug Fixes**: When fixing a bug, first write a *failing* unit test that precisely reproduces the bug. Only after the test fails, implement the fix, ensuring the test now passes. This guarantees the bug is addressed and prevents regressions.
 -   **Test First**: Always when presented with a bug or error (e.g. a prompt of a stack trace) proceed by exploring the tests and writing a failing unit test. If that is not possible for you to do so without looking at the code first have a look at the implementation without changing it. When you then created a failing unit test fix the implementation.
 -   **Granularity**: Try to run as few test files as possible and e2e tests only when necessary. Only when you finished your task(s) and are confident everything works run the entire test suite to verify your changes.
 
@@ -89,8 +89,10 @@ We are implementing a system to summarize conversations, update user profiles, a
 
 ### Logic Requirements
 1.  **Timezone Awareness**:
-    -   Use `subscriber.profile.timezone` to calculate local time.
-    -   Scheduler should run hourly/daily and check who is at "3 AM".
+    -   **Strict Validation**: User timezones are validated against IANA standards.
+    -   **Proactive Collection**: If a user's timezone is invalid or missing, it is stored as `undefined`. The system prompt detects this missing field and instructs the Agent to proactively ask the user for it.
+    -   **Common Mappings**: Common city names (e.g., "Lima", "London") are automatically mapped to IANA codes.
+    -   **Scheduling**: Scheduler runs hourly and checks `subscriber.profile.timezone` to determine local time.
 2.  **Digest Creation**:
     -   Condition: Active conversation (>5 messages).
     -   Action: Call `DigestService` to analyze chat.
@@ -113,3 +115,4 @@ We are implementing a system to summarize conversations, update user profiles, a
 -   **Output**: Use `markdownToWhatsApp` formatter.
 -   **Tools**: Always define schemas with Zod in `*.contracts.ts`.
 -   **Logs**: Use structured logging (Pino).
+-   **Profile Data**: Use `SubscriberProfileSchema` in `subscriber.contracts.ts` as the single source of truth for required profile fields. The `getMissingProfileFieldsReflective` utility uses this schema to automatically drive the Agent's information collection behavior.
