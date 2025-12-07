@@ -38,9 +38,37 @@ async function main() {
     
     // Start server
     const port = Number(config.server.port) || 3000;
-    app.listen(port, () => {
+    const server = app.listen(port, () => {
       logger.info(`Server running on port ${port}`);
     });
+
+    const gracefulShutdown = (signal: string) => {
+      logger.info(`${signal} signal received: closing HTTP server`);
+      server.close(async () => {
+        logger.info('HTTP server closed');
+        
+        try {
+          if (services.redisClient) {
+            logger.info('Closing Redis connection...');
+            await services.redisClient.quit();
+            logger.info('Redis connection closed');
+          }
+        } catch (err) {
+          logger.error({ err }, 'Error closing Redis connection');
+        }
+
+        process.exit(0);
+      });
+
+      // Force close after 10 seconds
+      setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     
     return {
       languageBuddyAgent: services.languageBuddyAgent,
