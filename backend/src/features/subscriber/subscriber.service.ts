@@ -1,10 +1,10 @@
 import Redis from 'ioredis';
 import { Subscriber } from './subscriber.types';
 import { logger } from '../../config'; // Will be updated
-import { getMissingProfileFieldsReflective } from './subscriber.utils';
+import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone } from './subscriber.utils';
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';
-import { ensureValidTimezone } from './subscriber.utils';
+
 
 export class SubscriberService {
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
@@ -245,7 +245,8 @@ export class SubscriberService {
 
     // Validate timezone in initialData if present
     if (subscriber.profile.timezone) {
-      subscriber.profile.timezone = ensureValidTimezone(subscriber.profile.timezone);
+      const validatedTz = validateTimezone(subscriber.profile.timezone);
+      subscriber.profile.timezone = validatedTz || undefined;
     }
 
     // Check if profile is missing required fields (reflection-based)
@@ -268,7 +269,8 @@ export class SubscriberService {
 
       // Validate timezone if it's being updated
       if (updates.profile && updates.profile.timezone) {
-        updates.profile.timezone = ensureValidTimezone(updates.profile.timezone);
+        const validatedTz = validateTimezone(updates.profile.timezone);
+        updates.profile.timezone = validatedTz || undefined;
       }
 
       Object.assign(subscriber, updates);

@@ -181,3 +181,66 @@ describe('selectDeficienciesToPractice', () => {
     expect(result[1].specificArea).toBe('def2');
   });
 });
+
+import { validateTimezone, ensureValidTimezone, getMissingProfileFieldsReflective } from './subscriber.utils';
+
+describe('Timezone Validation', () => {
+    it('should map common city names (Lima) to IANA timezones', () => {
+        expect(validateTimezone('Lima')).toBe('America/Lima');
+        expect(validateTimezone('London')).toBe('Europe/London');
+    });
+
+    it('should return null for completely invalid timezones', () => {
+        expect(validateTimezone('Mars/Crater')).toBeNull();
+        expect(validateTimezone('')).toBeNull();
+        expect(validateTimezone(null)).toBeNull();
+    });
+
+    it('should validate correct IANA timezones', () => {
+        expect(validateTimezone('America/New_York')).toBe('America/New_York');
+    });
+
+    it('should validate numeric offsets', () => {
+        expect(validateTimezone('-5')).toBe('UTC-5');
+    });
+});
+
+describe('getMissingProfileFieldsReflective', () => {
+    it('should identify required fields that are completely missing from the object', () => {
+        // user profile missing 'timezone' key entirely
+        const partialProfile = {
+            name: 'Test',
+            speakingLanguages: ['en'],
+            learningLanguages: ['es']
+        };
+        
+        const missing = getMissingProfileFieldsReflective(partialProfile);
+        expect(missing).toContain('timezone');
+    });
+
+    it('should identify fields that are present but empty', () => {
+        const partialProfile = {
+            name: '', // Empty string
+            speakingLanguages: [], // Empty array
+            learningLanguages: ['es'],
+            timezone: 'UTC'
+        };
+        
+        const missing = getMissingProfileFieldsReflective(partialProfile);
+        expect(missing).toContain('name');
+        expect(missing).toContain('speakingLanguages');
+        expect(missing).not.toContain('timezone');
+    });
+});
+
+describe('ensureValidTimezone (Runtime Safety)', () => {
+    it('should default to UTC for invalid inputs', () => {
+        expect(ensureValidTimezone('Mars/Crater')).toBe('UTC');
+        expect(ensureValidTimezone(null)).toBe('UTC');
+    });
+
+    it('should preserve valid inputs', () => {
+        expect(ensureValidTimezone('America/Lima')).toBe('America/Lima');
+    });
+});
+

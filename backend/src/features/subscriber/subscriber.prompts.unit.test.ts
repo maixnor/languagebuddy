@@ -1,5 +1,5 @@
-import { generateSystemPrompt } from "../features/subscriber/subscriber.prompts";
-import { Subscriber } from "../features/subscriber/subscriber.types";
+import { generateSystemPrompt } from "./subscriber.prompts";
+import { Subscriber } from "./subscriber.types";
 import { DateTime } from "luxon";
 
 describe("generateSystemPrompt", () => {
@@ -76,6 +76,29 @@ describe("generateSystemPrompt", () => {
     expect(prompt).toContain("Native language(s): English");
     expect(prompt).toContain("Learning language(s): German at level B1");
     expect(prompt).toContain("Mistake tolerance: normal");
+  });
+
+  it("should instruct the agent to ask for missing profile fields (timezone)", () => {
+    const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
+    // Create subscriber with missing timezone
+    const incompleteSubscriber = {
+        ...mockSubscriber,
+        profile: {
+            ...mockSubscriber.profile,
+            timezone: undefined // Simulate missing/invalid timezone
+        }
+    };
+    
+    const context = {
+        ...createPromptContext(now),
+        subscriber: incompleteSubscriber
+    };
+
+    const prompt = generateSystemPrompt(context);
+    
+    expect(prompt).toContain("SPECIAL TASK: COLLECT MISSING INFORMATION");
+    expect(prompt).toContain("timezone");
+    expect(prompt).toContain("PROACTIVELY ask the user for this information");
   });
 
   it("should include conversation duration when provided", () => {

@@ -22,7 +22,7 @@ export const updateSubscriberTool: DynamicStructuredTool =
   new DynamicStructuredTool({
     name: "update_subscriber_profile",
     description:
-      "Update subscriber profile information, preferences, and notification settings when they share personal details",
+      "Update subscriber profile information (name, languages, timezone) and preferences. Timezone updates require a valid IANA timezone or major city. If invalid, the timezone will not be updated.",
     schema: SubscriberUpdateContract,
     func: async (input: SubscriberUpdateContractType) => {
       const updates = input;
@@ -86,6 +86,15 @@ export const updateSubscriberTool: DynamicStructuredTool =
           phoneNumber,
           updatedSubscriber,
         );
+        
+        // Verify if timezone update was successful (if attempted)
+        if (updates.profile?.timezone) {
+            const reFetchedSubscriber = await subscriberService.getSubscriber(phoneNumber);
+            if (!reFetchedSubscriber?.profile.timezone) {
+                 return "Subscriber profile updated, BUT the timezone provided was invalid. Please ask the user for their timezone again (e.g., 'What is your closest major city?').";
+            }
+        }
+        
         return "Subscriber profile updated successfully!";
       } catch (error) {
         logger.error(
@@ -101,14 +110,14 @@ export const createSubscriberTool: DynamicStructuredTool =
   new DynamicStructuredTool({
     name: "create_subscriber",
     description:
-      "Create a new subscriber after completing the onboarding process with all collected information",
+      "Create a new subscriber after completing the onboarding process. Requires a valid IANA timezone (e.g., 'America/New_York') or a known major city. If the timezone is not recognized, the profile will be created without it, and you should ask the user again.",
     schema: z.object({
       name: z.string().describe("The user's name"),
       nativeLanguage: z.string().describe("Language the user speaks natively"),
       targetLanguage: z
         .string()
         .describe("The language the user wants to learn"),
-      timezone: z.string().describe("The user's timezone"),
+      timezone: z.string().describe("The user's timezone (e.g., 'America/New_York', 'London', 'UTC-5')"),
       assessedLevel: z
         .enum(["A1", "A2", "B1", "B2", "C1", "C2"])
         .describe("The assessed language level from the conversation"),
@@ -233,6 +242,11 @@ export const createSubscriberTool: DynamicStructuredTool =
           },
           "New subscriber created from onboarding",
         );
+
+        // Check if timezone was successfully set (it might be undefined if validation failed)
+        if (!newSubscriber.profile.timezone) {
+            return `Successfully created subscriber profile for ${input.name}, BUT the timezone '${input.timezone}' was invalid or unknown. Please ask the user specifically for their timezone again (e.g., "Could you tell me your closest major city?").`;
+        }
 
         return `Successfully created subscriber profile for ${input.name}! They're ready to start learning ${input.targetLanguage} at ${input.assessedLevel} level.`;
       } catch (error) {

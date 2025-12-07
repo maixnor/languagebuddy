@@ -2,15 +2,28 @@ import { Language, LanguageDeficiency, Subscriber } from "./subscriber.types"; /
 import { DateTime } from 'luxon';
 import { logger } from '../../config';
 
+const COMMON_TIMEZONE_MAPPINGS: Record<string, string> = {
+    'lima': 'America/Lima',
+    'london': 'Europe/London',
+    'paris': 'Europe/Paris',
+    'berlin': 'Europe/Berlin',
+    'tokyo': 'Asia/Tokyo',
+    'new york': 'America/New_York',
+    'los angeles': 'America/Los_Angeles',
+    'chicago': 'America/Chicago',
+    'madrid': 'Europe/Madrid',
+    'rome': 'Europe/Rome',
+};
+
 /**
- * Ensures that the provided timezone string is a valid Luxon timezone.
+ * Validates that the provided timezone string is a valid Luxon timezone.
  * Supports IANA zone names (e.g., "America/Lima") and UTC offsets (e.g., "UTC-5").
  * Also attempts to correct simple numeric offsets (e.g., "-5" -> "UTC-5").
- * defaults to 'UTC' if invalid.
+ * Returns null if invalid.
  */
-export const ensureValidTimezone = (timezone: string | number | undefined | null): string => {
+export const validateTimezone = (timezone: string | number | undefined | null): string | null => {
     if (timezone === undefined || timezone === null || timezone === '') {
-        return 'UTC';
+        return null;
     }
 
     let tzStr = String(timezone).trim();
@@ -18,6 +31,12 @@ export const ensureValidTimezone = (timezone: string | number | undefined | null
     // 1. Check if it's already valid
     if (DateTime.local().setZone(tzStr).isValid) {
         return tzStr;
+    }
+
+    // 1.5 Check common mappings (case-insensitive)
+    const lowerTz = tzStr.toLowerCase();
+    if (COMMON_TIMEZONE_MAPPINGS[lowerTz]) {
+        return COMMON_TIMEZONE_MAPPINGS[lowerTz];
     }
 
     // 2. Try to interpret as numeric offset (e.g., "-5", "5", "+5")
@@ -30,9 +49,18 @@ export const ensureValidTimezone = (timezone: string | number | undefined | null
         }
     }
 
-    // 3. If still invalid, log warning and default to UTC
-    logger.debug({ invalidTimezone: timezone }, "Invalid timezone provided, defaulting to UTC");
-    return 'UTC';
+    // 3. If still invalid, return null
+    logger.debug({ invalidTimezone: timezone }, "Invalid timezone provided");
+    return null;
+};
+
+/**
+ * Ensures that the provided timezone string is a valid Luxon timezone.
+ * Defaults to 'UTC' if invalid.
+ * Use this for runtime logic where a valid timezone is strictly required.
+ */
+export const ensureValidTimezone = (timezone: string | number | undefined | null): string => {
+    return validateTimezone(timezone) || 'UTC';
 };
 
 export const getFirstLearningLanguage = (subscriber: Subscriber): Language => {
@@ -121,10 +149,20 @@ export function getPromptForField(field: string): string {
   }
 }
 
-// Returns a list of missing (undefined, null, or empty string/array) fields in the profile object, including any new fields added to the type.
+// Fields that the agent should proactively ask for if missing
+export const REQUIRED_PROFILE_FIELDS = [
+  'name',
+  'speakingLanguages',
+  'learningLanguages',
+  'timezone'
+];
+
+// Returns a list of missing (undefined, null, or empty string/array) fields in the profile object.
+// Checks against the REQUIRED_PROFILE_FIELDS list.
 export function getMissingProfileFieldsReflective(profile: Record<string, any>): string[] {
   const missing: string[] = [];
-  for (const key of Object.keys(profile)) {
+  
+  for (const key of REQUIRED_PROFILE_FIELDS) {
     const value = profile[key];
     if (
       value === undefined ||
@@ -134,22 +172,7 @@ export function getMissingProfileFieldsReflective(profile: Record<string, any>):
     ) {
       missing.push(key);
     }
-    // Optionally, check for nested objects (e.g. language levels)
-    if (Array.isArray(value)) {
-      value.forEach((item: any) => {
-        if (item && typeof item === 'object') {
-          for (const subKey of Object.keys(item)) {
-            if (
-              item[subKey] === undefined ||
-              item[subKey] === null ||
-              (typeof item[subKey] === 'string' && item[subKey].trim() === '')
-            ) {
-              missing.push(`${key}.${subKey}`);
-            }
-          }
-        }
-      });
-    }
+    // Nested checks (e.g. if we ever add specific required sub-fields) can go here
   }
   return missing;
 }
