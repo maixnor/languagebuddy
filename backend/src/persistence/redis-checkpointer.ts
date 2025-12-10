@@ -88,6 +88,15 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
         });
       }
 
+      if ((checkpoint as any).channel_values && Array.isArray((checkpoint as any).channel_values.messages)) {
+        (checkpoint as any).channel_values.messages = (checkpoint as any).channel_values.messages.map((message: any) => {
+          if (!message.timestamp) {
+            return { ...message, timestamp: new Date().toISOString() };
+          }
+          return message;
+        });
+      }
+
       // Set conversationStartedAt if not already present in the metadata
       if (!(metadata as any).conversationStartedAt) {
         (metadata as any).conversationStartedAt = new Date().toISOString();

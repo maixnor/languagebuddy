@@ -163,11 +163,14 @@ export class LanguageBuddyAgent {
     const phone = subscriber.connections.phone;
     const checkpoint = await this.checkpointer.getCheckpoint(phone);
 
-    if (!checkpoint || !checkpoint.checkpoint || !(checkpoint.checkpoint as any).values?.messages?.length) {
+    const messages = (checkpoint?.checkpoint as any)?.values?.messages || 
+                     (checkpoint?.checkpoint as any)?.channel_values?.messages;
+
+    if (!checkpoint || !checkpoint.checkpoint || !messages?.length) {
       return "I can't check anything yet because the conversation is empty.";
     }
 
-    const history = (checkpoint.checkpoint as any).values.messages;
+    const history = messages;
     
     // Use a temporary thread ID for the check to avoid polluting main history
     const tempThreadId = `check-${phone}-${Date.now()}`;
@@ -250,18 +253,34 @@ Check for:
     const checkpointTuple = await this.checkpointer.getCheckpoint(phone);
     if (!checkpointTuple) return;
 
+    const checkpoint = checkpointTuple.checkpoint as any;
+    const values = checkpoint.values || checkpoint.channel_values;
+
+    if (!values || !values.messages) {
+      logger.warn({ phone }, "Could not find messages in checkpoint to inject system correction");
+      return;
+    }
+
     const newMessages = [
-      ...((checkpointTuple.checkpoint as any).values as any).messages,
+      ...values.messages,
       new SystemMessage(`[SYSTEM CORRECTION from !check]: ${correction}`)
     ];
 
     const newCheckpoint = {
-      ...checkpointTuple.checkpoint,
-      values: {
-        ...(checkpointTuple.checkpoint as any).values,
-        messages: newMessages
-      }
+      ...checkpoint,
     };
+
+    if (checkpoint.values) {
+        newCheckpoint.values = {
+            ...checkpoint.values,
+            messages: newMessages
+        };
+    } else {
+        newCheckpoint.channel_values = {
+            ...checkpoint.channel_values,
+            messages: newMessages
+        };
+    }
     
     // We need to update the checkpoint. 
     await this.checkpointer.putTuple(
@@ -327,8 +346,13 @@ Check for:
   async getTimeSinceLastMessage(phone: string): Promise<number | null> {
     try {
       const checkpoint = await this.checkpointer.getCheckpoint(phone);
-      if (checkpoint && (checkpoint.checkpoint as any).values && Array.isArray((checkpoint.checkpoint as any).values.messages) && (checkpoint.checkpoint as any).values.messages.length > 0) {
-        const lastMessage = (checkpoint.checkpoint as any).values.messages[(checkpoint.checkpoint as any).values.messages.length - 1];
+      if (!checkpoint) return null;
+
+      const messages = (checkpoint.checkpoint as any).values?.messages || 
+                       (checkpoint.checkpoint as any).channel_values?.messages;
+
+      if (messages && Array.isArray(messages) && messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
         if (lastMessage.timestamp) {
           const lastMessageTime = DateTime.fromISO(lastMessage.timestamp);
           const now = DateTime.now();
