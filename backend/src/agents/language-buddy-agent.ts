@@ -1,6 +1,6 @@
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { ChatOpenAI, OpenAI, OpenAIClient } from "@langchain/openai";
-import { Subscriber } from '../features/subscriber/subscriber.types'; // Updated import
+import { ChatOpenAI } from "@langchain/openai";
+import { Subscriber } from '../features/subscriber/subscriber.types';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { logger } from '../config';
 // @ts-ignore
@@ -9,45 +9,48 @@ import {setContextVariable} from "@langchain/core/context";
 import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
-import { handleUserCommand } from './agent.user-commands';
-// import {tools} from "../tools"; // Original tools import - will need re-evaluation
+import { z } from "zod";
 
-// Manually import the individual tools for now, until a better tool registration strategy is in place
 import {
   updateSubscriberTool,
   createSubscriberTool,
   addLanguageDeficiencyTool,
   proposeMistakeToleranceChangeTool,
-  initializeSubscriberTools // Also needed if the agent directly calls this
 } from "../features/subscriber/subscriber.tools";
-import { feedbackTools } from "../tools/feedback-tools"; // Keep original feedback tools for now
+import { feedbackTools } from "../tools/feedback-tools";
+
+const AuditResultSchema = z.object({
+  status: z.enum(["OK", "ERROR"]).describe("The result of the audit. 'OK' if the last assistant message is correct, 'ERROR' if a mistake was found."),
+  user_response: z.string().describe("The message to send to the user in the language of the conversation. If OK, confirm the specific topic is correct (e.g. 'Yes, the use of past tense here is perfect!'). If ERROR, explain the mistake."),
+  system_correction: z.string().optional().describe("Short instruction for the system to avoid this error in the future (if ERROR)."),
+});
 
 export class LanguageBuddyAgent {
   private checkpointer: RedisCheckpointSaver;
   private agent: any;
+  private llm: ChatOpenAI;
 
   constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI) {
     this.checkpointer = checkpointer;
+    this.llm = llm;
 
-    // Combine all tools, including the newly moved subscriber tools
     const allTools = [
       updateSubscriberTool,
       createSubscriberTool,
       addLanguageDeficiencyTool,
       proposeMistakeToleranceChangeTool,
-      ...feedbackTools, // Existing feedback tools
-      // ... any other tools that will be migrated later
+      ...feedbackTools,
     ];
 
     this.agent = createReactAgent({
       llm: llm,
-      tools: allTools, // Use the combined tools
+      tools: allTools,
       checkpointer: checkpointer,
     })
   }
+
   async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string, metadata?: Record<string, any>): Promise<string> {
     try {
-      // Ensure subscriber is hydrated (Dates are Dates, not strings)
       SubscriberService.getInstance().hydrateSubscriber(subscriber);
 
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Initiating conversation with subscriber`);
@@ -57,9 +60,6 @@ export class LanguageBuddyAgent {
       const hour = currentLocalTime.hour;
       const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
 
-      // Pre-empt LLM response if it's night time for the user AND a new conversation day.
-      // This specifically handles the case where the agent might "wake up" to send a digest or scheduled message
-      // and it's late for the user, preventing inappropriate "Good morning" messages.
       if ((hour >= 22 || hour < 6) && (timeSinceLastMessageMinutes !== null && timeSinceLastMessageMinutes >= 6 * 60)) {
         logger.info(`🌙 (${subscriber.connections.phone.slice(-4)}) Pre-empting conversation: Night time for user.`);
         return `It's getting late for you (${currentLocalTime.toFormat('hh:mm a')}), ${subscriber.profile.name}. Perhaps we should continue our English practice tomorrow? Have a good night!`;
@@ -71,14 +71,12 @@ export class LanguageBuddyAgent {
         systemPrompt = systemPromptOverride;
       } else {
         const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
-        // timeSinceLastMessageMinutes is already calculated above
-
         systemPrompt = generateSystemPrompt({
           subscriber,
           conversationDurationMinutes,
           timeSinceLastMessageMinutes,
           currentLocalTime,
-          lastDigestTopic: null, // TODO: Implement fetching last digest topic
+          lastDigestTopic: null,
         });
       }
 
@@ -108,7 +106,6 @@ export class LanguageBuddyAgent {
         throw new Error("Invalid message provided");
     }
 
-    // Ensure subscriber is hydrated
     SubscriberService.getInstance().hydrateSubscriber(subscriber);
 
     logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) Processing user message: ${humanMessage}`);
@@ -129,11 +126,10 @@ export class LanguageBuddyAgent {
         conversationDurationMinutes,
         timeSinceLastMessageMinutes,
         currentLocalTime,
-        lastDigestTopic: null, // TODO: Implement fetching last digest topic
+        lastDigestTopic: null,
       });
     }
 
-    // Retrieve existing metadata to ensure it persists
     const existingCheckpoint = await this.checkpointer.getCheckpoint(subscriber.connections.phone);
     const existingMetadata = existingCheckpoint?.metadata || {};
 
@@ -171,74 +167,45 @@ export class LanguageBuddyAgent {
     }
 
     const history = messages;
-    
-    // Use a temporary thread ID for the check to avoid polluting main history
-    const tempThreadId = `check-${phone}-${Date.now()}`;
-    
+
     const checkSystemPrompt = `You are a strict Quality Assurance auditor for an AI Language Tutor.
-Your goal is to find mistakes in the *last* message sent by the 'assistant' in the conversation history.
+Your goal is to find mistakes in the *last* messages sent by the 'assistant' in the conversation history.
 
 Check for:
-1.  **Hallucinations**: Did the assistant invent facts, places, or events that don't exist? (e.g. "There is a famous Eiffel Tower in Berlin").
+1.  **Hallucinations**: Did the assistant invent facts, places, or events that don't exist?
 2.  **Language Errors**: Did the assistant teach incorrect grammar or vocabulary?
 3.  **Consistency**: Does the response contradict previous facts established in the chat?
 
 **Instructions**:
 - Analyze the conversation history provided.
-- If the last assistant message is correct and helpful, respond with JSON: {"status": "OK"}
-- If you find a mistake, respond with JSON: 
-  {
-    "status": "ERROR", 
-    "explanation": "Brief explanation for the user about what was wrong.", 
-    "system_correction": "Short instruction for the system to avoid this error in the future."
-  }
+- If the last assistant message is correct and helpful:
+  - Set 'status' to "OK".
+  - Set 'user_response' to a friendly confirmation in the language of the conversation (e.g., "The conditionals look correct, good job!").
+- If you find a mistake:
+  - Set 'status' to "ERROR".
+  - Set 'user_response' to an explanation of the error in the language of the conversation.
+  - Set 'system_correction' to a short instruction for the system.
 - Be strict about facts and grammar. Be lenient about style.
 - IGNORE mistakes made by the 'user' (Human). Only check the 'assistant'.
-- Output ONLY the JSON object.
 `;
 
     try {
-      // Construct the message payload
-      const messages = [
+      const messagesWithPrompt = [
         new SystemMessage(checkSystemPrompt),
         ...history,
-        new HumanMessage("!check_audit_request: Perform the audit on the last assistant response now. Output JSON only.")
+        new HumanMessage("Perform the audit on the last assistant response now.")
       ];
 
-      const result = await this.agent.invoke(
-        { messages },
-        { configurable: { thread_id: tempThreadId } }
-      );
-      
-      // Cleanup temp thread
-      await this.checkpointer.deleteCheckpoint(tempThreadId);
-      
-      const responseText = result.messages[result.messages.length - 1].content;
-      
-      // Attempt to parse JSON
-      let resultJson: any;
-      try {
-        // extract json if surrounded by text
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          resultJson = JSON.parse(jsonMatch[0]);
-        } else {
-          logger.warn({ responseText }, "Could not parse JSON from check response");
-          return "I couldn't verify the last message automatically. Please try asking me to explain if you are unsure!";
-        }
-      } catch (e) {
-        logger.error({ err: e, responseText }, "JSON parse error in checkLastResponse");
-        return "I encountered an error while checking. Please try again.";
-      }
+      const structuredLlm = (this.llm as any).withStructuredOutput(AuditResultSchema);
+      const result = await structuredLlm.invoke(messagesWithPrompt);
 
-      if (resultJson.status === "OK") {
-        return "I've checked the last message and it looks correct to me! ✅";
-      } else if (resultJson.status === "ERROR") {
-        // Apply system correction to main thread
-        if (resultJson.system_correction) {
-          await this.injectSystemCorrection(phone, resultJson.system_correction);
+      if (result.status === "OK") {
+        return `${result.user_response} ✅`;
+      } else if (result.status === "ERROR") {
+        if (result.system_correction) {
+          await this.injectSystemCorrection(phone, result.system_correction);
         }
-        return `⚠️ Potential mistake found:\n\n${resultJson.explanation}`;
+        return `⚠️ ${result.user_response}`;
       } else {
         return "I completed the check but the result was inconclusive.";
       }
@@ -282,7 +249,6 @@ Check for:
         };
     }
     
-    // We need to update the checkpoint. 
     await this.checkpointer.putTuple(
       checkpointTuple.config,
       newCheckpoint,
@@ -312,9 +278,7 @@ Check for:
     }
   }
 
-  // TODO don't save oneShotMessages to the normal conversational thread
   async oneShotMessage(systemPrompt: string, language: string, phone: string): Promise<string> {
-    // Compose a system prompt that instructs the LLM to respond in the target language
     const prompt = `${systemPrompt}\nONLY RESPOND IN THE LANGUAGE ${language}.`;
     try {
       const result = await this.agent.invoke(

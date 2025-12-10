@@ -12,6 +12,7 @@ jest.mock('../features/subscriber/subscriber.prompts');
 describe('LanguageBuddyAgent - checkLastResponse', () => {
   let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
   let mockLlm: jest.Mocked<ChatOpenAI>;
+  let mockStructuredLlm: { invoke: jest.Mock };
   let agent: LanguageBuddyAgent;
   let mockAgentInvoke: jest.Mock;
 
@@ -33,10 +34,15 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
   beforeEach(() => {
     mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
     mockAgentInvoke = jest.fn();
-    mockLlm = {} as any;
+    
+    // Mock Structured LLM
+    mockStructuredLlm = { invoke: jest.fn() };
+    mockLlm = {
+        withStructuredOutput: jest.fn().mockReturnValue(mockStructuredLlm)
+    } as any;
 
     agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm);
-    (agent as any).agent = { invoke: mockAgentInvoke };
+    // (agent as any).agent = { invoke: mockAgentInvoke }; // Not used for checkLastResponse anymore, but might be needed if constructor calls it? No.
     
     // Default empty checkpoint
     mockCheckpointer.getCheckpoint.mockResolvedValue(undefined);
@@ -62,16 +68,17 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
       config: {}, checkpoint, metadata: {}, parentConfig: {}
     });
 
-    // Mock agent response (OK)
-    mockAgentInvoke.mockResolvedValue({
-      messages: [new AIMessage('{"status": "OK"}')]
+    // Mock structured response (OK)
+    mockStructuredLlm.invoke.mockResolvedValue({
+      status: "OK",
+      user_response: "Los saludos son correctos. ¡Buen trabajo!"
     });
 
     const result = await agent.checkLastResponse(mockSubscriber);
     
-    expect(result).toContain("looks correct to me");
+    expect(result).toContain("Los saludos son correctos");
+    expect(result).toContain("✅");
     expect(mockCheckpointer.putTuple).not.toHaveBeenCalled(); // No correction injected
-    expect(mockCheckpointer.deleteCheckpoint).toHaveBeenCalled(); // Cleanup
   });
 
   it('should identify mistake and inject correction', async () => {
@@ -85,20 +92,17 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
       config: {}, checkpoint, metadata: {}, parentConfig: {}
     });
 
-    // Mock agent response (ERROR)
-    const agentResponse = JSON.stringify({
+    // Mock structured response (ERROR)
+    mockStructuredLlm.invoke.mockResolvedValue({
       status: "ERROR",
-      explanation: "The Eiffel Tower is in Paris, not Berlin.",
+      user_response: "Actually, the Eiffel Tower is in Paris, not Berlin.",
       system_correction: "The Eiffel Tower is in Paris. Never say it is in Berlin."
-    });
-    mockAgentInvoke.mockResolvedValue({
-      messages: [new AIMessage(agentResponse)]
     });
 
     const result = await agent.checkLastResponse(mockSubscriber);
     
-    expect(result).toContain("Potential mistake found");
-    expect(result).toContain("Paris"); // Explanation
+    expect(result).toContain("Actually, the Eiffel Tower is in Paris");
+    expect(result).toContain("⚠️");
     
     // Verify injection
     expect(mockCheckpointer.putTuple).toHaveBeenCalledWith(
@@ -117,26 +121,6 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
     );
   });
 
-  it('should handle JSON parse errors', async () => {
-    // Setup history
-    const history = [new HumanMessage("Hi"), new AIMessage("Hi")];
-    const checkpoint: Checkpoint = {
-        id: '1', ts: '1', channel_versions: {}, versions_seen: {},
-        values: { messages: history }
-    };
-    mockCheckpointer.getCheckpoint.mockResolvedValue({
-        config: {}, checkpoint, metadata: {}, parentConfig: {}
-    });
-
-    // Mock invalid JSON
-    mockAgentInvoke.mockResolvedValue({
-      messages: [new AIMessage('This is not JSON')]
-    });
-
-    const result = await agent.checkLastResponse(mockSubscriber);
-    expect(result).toContain("couldn't verify");
-  });
-
   it('should handle agent execution errors', async () => {
      // Setup history
      const history = [new HumanMessage("Hi"), new AIMessage("Hi")];
@@ -149,7 +133,7 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
      });
  
      // Mock error
-     mockAgentInvoke.mockRejectedValue(new Error("OpenAI error"));
+     mockStructuredLlm.invoke.mockRejectedValue(new Error("OpenAI error"));
  
      const result = await agent.checkLastResponse(mockSubscriber);
      expect(result).toContain("error occurred while performing the check");
