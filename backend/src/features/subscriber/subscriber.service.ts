@@ -123,19 +123,21 @@ export class SubscriberService {
   }
 
   /**
-   * Returns true if the user should see a subscription warning (days 3-6, not premium).
+   * Returns true if the user should see a subscription warning (days 6-7, not premium).
+   * Note: "Day 6 and 7" corresponds to indices 5 and 6 (since day 1 is index 0).
    */
   public shouldShowSubscriptionWarning(subscriber: Subscriber): boolean {
     const days = this.getDaysSinceSignup(subscriber);
-    return !subscriber.isPremium && days >= 3 && days < 7;
+    return !subscriber.isPremium && days >= 5 && days < 7;
   }
 
   /**
    * Returns true if the user should be throttled (after day 7, not premium).
+   * Note: "After 7 days" corresponds to index 7 and above.
    */
   public shouldThrottle(subscriber: Subscriber): boolean {
     const days = this.getDaysSinceSignup(subscriber);
-    return !subscriber.isPremium && days > 7;
+    return !subscriber.isPremium && days >= 7;
   }
 
   /**
@@ -143,7 +145,7 @@ export class SubscriberService {
    */
   public shouldPromptForSubscription(subscriber: Subscriber): boolean {
     const days = this.getDaysSinceSignup(subscriber);
-    return !subscriber.isPremium && days > 7;
+    return !subscriber.isPremium && days >= 7;
   }
 
   private constructor(redis: Redis) {

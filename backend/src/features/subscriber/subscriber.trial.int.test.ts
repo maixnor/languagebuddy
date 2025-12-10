@@ -1,8 +1,8 @@
 /**
  * Integration tests for trial period transitions
  * Tests with REAL Redis to catch bugs in:
- * - Day 3-6 warning messages
- * - Day 7 hard cutoff
+ * - Day 5-6 warning messages (New Logic)
+ * - Day 7 hard cutoff (New Logic)
  * - Premium upgrade during trial
  * - getDaysSinceSignup() edge cases
  * - Behavior changes across trial boundaries
@@ -100,10 +100,10 @@ describe('Trial Period Transitions (Integration)', () => {
   });
 
   describe('Trial period state transitions', () => {
-    it('should transition correctly from day 2 to day 3 (warning starts)', async () => {
-      // Day 2: No warning
+    it('should transition correctly from day 4 to day 5 (warning starts)', async () => {
+      // Day 4: No warning
       const subscriber = await subscriberService.createSubscriber(testPhone, {
-        signedUpAt: DateTime.now().minus({ days: 2 }).toISO(),
+        signedUpAt: DateTime.now().minus({ days: 4 }).toISO(),
         isPremium: false,
       });
 
@@ -111,8 +111,8 @@ describe('Trial Period Transitions (Integration)', () => {
       expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
       expect(subscriberService.shouldPromptForSubscription(subscriber)).toBe(false);
 
-      // Update to day 3: Warning starts
-      subscriber.signedUpAt = DateTime.now().minus({ days: 3 }).toISO();
+      // Update to day 5: Warning starts
+      subscriber.signedUpAt = DateTime.now().minus({ days: 5 }).toISO();
       await subscriberService.updateSubscriber(testPhone, subscriber);
 
       const updated = await subscriberService.getSubscriber(testPhone);
@@ -121,8 +121,8 @@ describe('Trial Period Transitions (Integration)', () => {
       expect(subscriberService.shouldPromptForSubscription(updated!)).toBe(false);
     });
 
-    it('should transition correctly from day 6 to day 7 (warning ends)', async () => {
-      // Day 6: Still warning
+    it('should transition correctly from day 6 to day 7 (warning ends, throttling starts)', async () => {
+      // Day 6: Warning active
       const subscriber = await subscriberService.createSubscriber(testPhone, {
         signedUpAt: DateTime.now().minus({ days: 6 }).toISO(),
         isPremium: false,
@@ -131,65 +131,34 @@ describe('Trial Period Transitions (Integration)', () => {
       expect(subscriberService.shouldShowSubscriptionWarning(subscriber)).toBe(true);
       expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
 
-      // Update to day 7: Warning ends, still no throttle
+      // Update to day 7: Warning ends, Throttling starts
       subscriber.signedUpAt = DateTime.now().minus({ days: 7 }).toISO();
       await subscriberService.updateSubscriber(testPhone, subscriber);
 
       const updated = await subscriberService.getSubscriber(testPhone);
       expect(subscriberService.shouldShowSubscriptionWarning(updated!)).toBe(false);
-      expect(subscriberService.shouldThrottle(updated!)).toBe(false);
-    });
-
-    it('should transition correctly from day 7 to day 8 (throttling starts)', async () => {
-      // Day 7: Last day of trial
-      const subscriber = await subscriberService.createSubscriber(testPhone, {
-        signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
-        isPremium: false,
-      });
-
-      expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
-      expect(subscriberService.shouldPromptForSubscription(subscriber)).toBe(false);
-
-      // Update to day 8: Throttling starts
-      subscriber.signedUpAt = DateTime.now().minus({ days: 8 }).toISO();
-      await subscriberService.updateSubscriber(testPhone, subscriber);
-
-      const updated = await subscriberService.getSubscriber(testPhone);
-      
-      // BUG CHECK: This is the critical transition!
       expect(subscriberService.shouldThrottle(updated!)).toBe(true);
       expect(subscriberService.shouldPromptForSubscription(updated!)).toBe(true);
     });
 
-    it('should correctly throttle from day 8 onwards (days > 7)', async () => {
-      // Current implementation: days > 7
-      // This means day 8 onwards is throttled
+    it('should correctly throttle from day 7 onwards', async () => {
+      // Current implementation: days >= 7
+      
+      const day6 = await subscriberService.createSubscriber(`${testPhone}_6`, {
+        signedUpAt: DateTime.now().minus({ days: 6 }).toISO(),
+        isPremium: false,
+      });
       
       const day7 = await subscriberService.createSubscriber(`${testPhone}_7`, {
         signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
         isPremium: false,
       });
-      
-      const day8 = await subscriberService.createSubscriber(`${testPhone}_8`, {
-        signedUpAt: DateTime.now().minus({ days: 8 }).toISO(),
-        isPremium: false,
-      });
 
-      // Day 7: days = 7, 7 > 7 = false ✓
-      expect(subscriberService.shouldThrottle(day7)).toBe(false);
+      // Day 6: days = 6, 6 >= 7 = false
+      expect(subscriberService.shouldThrottle(day6)).toBe(false);
       
-      // Day 8: days = 8, 8 > 7 = true ✓
-      expect(subscriberService.shouldThrottle(day8)).toBe(true);
-
-      // BUG?: What about day 7.5 (7 days + 12 hours)?
-      const day7_5 = await subscriberService.createSubscriber(`${testPhone}_7_5`, {
-        signedUpAt: DateTime.now().minus({ days: 7, hours: 12 }).toISO(),
-        isPremium: false,
-      });
-      
-      const days7_5 = subscriberService.getDaysSinceSignup(day7_5);
-      expect(days7_5).toBe(7); // Floor to 7
-      expect(subscriberService.shouldThrottle(day7_5)).toBe(false);
+      // Day 7: days = 7, 7 >= 7 = true
+      expect(subscriberService.shouldThrottle(day7)).toBe(true);
     });
   });
 
@@ -235,31 +204,26 @@ describe('Trial Period Transitions (Integration)', () => {
       await subscriberService.incrementConversationCount(testPhone);
       await subscriberService.incrementConversationCount(testPhone);
 
-      // Premium users aren't throttled by conversation count
-      // (Note: canStartConversationToday doesn't check isPremium!)
-      // BUG?: Should premium users bypass conversation count?
       const canStart = await subscriberService.canStartConversationToday(testPhone);
       
-      // Currently returns false because count > 1
-      // But premium users should be exempt?
-      expect(canStart).toBe(true);
+      // Expected: Premium users should bypass conversation count limit
+      // Currently the code logic (canStartConversationToday) allows premium users
+      expect(canStart).toBe(true); 
     });
   });
 
   describe('Off-by-one errors in trial logic', () => {
-    it('should verify exact boundaries for warnings (days 3-6)', async () => {
+    it('should verify exact boundaries for warnings (days 5-6)', async () => {
       const testCases = [
-        { days: 2, shouldWarn: false, label: 'day 2' },
-        { days: 3, shouldWarn: true, label: 'day 3 (start)' },
-        { days: 4, shouldWarn: true, label: 'day 4' },
-        { days: 5, shouldWarn: true, label: 'day 5' },
+        { days: 4, shouldWarn: false, label: 'day 4' },
+        { days: 5, shouldWarn: true, label: 'day 5 (start)' },
         { days: 6, shouldWarn: true, label: 'day 6 (end)' },
         { days: 7, shouldWarn: false, label: 'day 7' },
       ];
 
       for (const testCase of testCases) {
         const subscriber = await subscriberService.createSubscriber(
-          `${testPhone}_${testCase.days}`,
+          `${testPhone}_warn_${testCase.days}`,
           {
             signedUpAt: DateTime.now().minus({ days: testCase.days }).toISO(),
             isPremium: false,
@@ -271,18 +235,17 @@ describe('Trial Period Transitions (Integration)', () => {
       }
     });
 
-    it('should verify exact boundaries for throttling (day 8+)', async () => {
+    it('should verify exact boundaries for throttling (day 7+)', async () => {
       const testCases = [
         { days: 6, shouldThrottle: false },
-        { days: 7, shouldThrottle: false },
+        { days: 7, shouldThrottle: true },
         { days: 8, shouldThrottle: true },
-        { days: 9, shouldThrottle: true },
         { days: 30, shouldThrottle: true },
       ];
 
       for (const testCase of testCases) {
         const subscriber = await subscriberService.createSubscriber(
-          `${testPhone}_${testCase.days}`,
+          `${testPhone}_throttle_${testCase.days}`,
           {
             signedUpAt: DateTime.now().minus({ days: testCase.days }).toISO(),
             isPremium: false,
@@ -294,17 +257,16 @@ describe('Trial Period Transitions (Integration)', () => {
       }
     });
 
-    it('should verify exact boundaries for subscription prompts (day 8+)', async () => {
+    it('should verify exact boundaries for subscription prompts (day 7+)', async () => {
       const testCases = [
         { days: 6, shouldPrompt: false },
-        { days: 7, shouldPrompt: false },
+        { days: 7, shouldPrompt: true },
         { days: 8, shouldPrompt: true },
-        { days: 9, shouldPrompt: true },
       ];
 
       for (const testCase of testCases) {
         const subscriber = await subscriberService.createSubscriber(
-          `${testPhone}_${testCase.days}`,
+          `${testPhone}_prompt_${testCase.days}`,
           {
             signedUpAt: DateTime.now().minus({ days: testCase.days }).toISO(),
             isPremium: false,
@@ -327,7 +289,9 @@ describe('Trial Period Transitions (Integration)', () => {
       // User is past trial
       expect(subscriberService.shouldThrottle(subscriber)).toBe(true);
 
-      // First conversation of the day should be allowed
+      // First conversation of the day should be allowed (IF not blocked by logic)
+      // Note: In new flow, blocked users are blocked regardless of count
+      // But canStartConversationToday is a lower level check
       const canStart1 = await subscriberService.canStartConversationToday(testPhone);
       expect(canStart1).toBe(true);
 
@@ -351,14 +315,11 @@ describe('Trial Period Transitions (Integration)', () => {
       // Increment conversation count
       await subscriberService.incrementConversationCount(testPhone);
 
-      // BUG: canStartConversationToday doesn't check isPremium!
       const canStart = await subscriberService.canStartConversationToday(testPhone);
       
-      // Premium users are still limited by conversation count
-      expect(canStart).toBe(true); // Premium users should bypass conversation count limit
-      
-      // Expected: Premium users should bypass conversation count limit
-      // Fix: canStartConversationToday should check subscriber.isPremium
+      // Premium users are still limited by conversation count logic in this test,
+      // but in SubscriberService logic for canStartConversationToday, premium users ARE allowed.
+      expect(canStart).toBe(true); 
     });
 
     it('should reset conversation count daily but throttle flag persists', async () => {

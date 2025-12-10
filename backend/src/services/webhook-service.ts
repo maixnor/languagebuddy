@@ -187,14 +187,34 @@ export class WebhookService {
       return;
     }
 
-    // Check throttling
+    // Check rate limiting (spam protection)
     if (await this.services.whatsappDeduplicationService.isThrottled(phone)) {
-      logger.info({ phone }, 'User is throttled, message ignored.');
+      logger.info({ phone }, 'User is throttled (rate limit), message ignored.');
       await this.services.whatsappService.sendMessage(
         phone, 
         "You are sending messages too quickly. Please wait a few seconds between messages."
       );
       return;
+    }
+
+    // Check throttling and subscription limits
+    if (this.services.subscriberService.shouldThrottle(subscriber)) {
+      const hasPaid = await this.services.subscriptionService.checkSubscription(phone);
+      if (hasPaid) {
+        if (!subscriber.isPremium) {
+          await this.services.subscriberService.updateSubscriber(phone, { isPremium: true });
+          subscriber.isPremium = true;
+          logger.info({ phone }, "User upgraded to premium via Stripe check.");
+        }
+      } else {
+        logger.info({ phone }, "User throttled and has not paid. Blocking.");
+        const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
+        await this.services.whatsappService.sendMessage(
+          phone, 
+          `⏳ Your 7-day trial has ended. To continue your language journey with unlimited conversations, please subscribe here: ${paymentLink}`
+        );
+        return;
+      }
     }
 
     // Handle missing profile information
@@ -274,25 +294,48 @@ export class WebhookService {
     const startTime = Date.now();
     let response: string;
 
-    if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
-      logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
+    // Check if we need to inject a subscription warning
+    let systemPromptOverride: string | undefined;
+    if (this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
+      const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
+      
       const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);
       const lastDigestTopic = subscriber.metadata?.digests?.[0]?.topic || null;
+      
+      // Fetch context for prompt generation
+      const conversationDurationMinutes = await this.services.languageBuddyAgent.getConversationDuration(phone);
+      const timeSinceLastMessageMinutes = await this.services.languageBuddyAgent.getTimeSinceLastMessage(phone);
 
-      const systemPrompt = generateSystemPrompt({
+      const basePrompt = generateSystemPrompt({
         subscriber,
-        conversationDurationMinutes: null, // This info is not readily available here.
-        timeSinceLastMessageMinutes: null, // This info is not readily available here.
+        conversationDurationMinutes,
+        timeSinceLastMessageMinutes,
         currentLocalTime,
         lastDigestTopic,
       });
+
+      systemPromptOverride = basePrompt + `\n\nIMPORTANT SYSTEM INSTRUCTION:
+The user's free trial is ending soon (Day 6 or 7).
+At the end of your response, you MUST explain in the user's target language that their trial is ending soon and they should subscribe to keep using the service.
+Payment Link: ${paymentLink}
+Make it sound natural, encouraging, and helpful. Do not be aggressive.`;
+    }
+
+    if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
+      logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
+      
+      // Fix: Correct argument order (subscriber, humanMessage, systemPromptOverride)
       response = await this.services.languageBuddyAgent.initiateConversation(
         subscriber, 
-        systemPrompt, 
-        message.text!.body
+        message.text!.body, 
+        systemPromptOverride
       );
     } else {
-      response = await this.services.languageBuddyAgent.processUserMessage(subscriber, message.text!.body);
+      response = await this.services.languageBuddyAgent.processUserMessage(
+        subscriber, 
+        message.text!.body,
+        systemPromptOverride
+      );
     }
 
     const processingTime = Date.now() - startTime;

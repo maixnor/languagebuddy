@@ -201,15 +201,13 @@ export class SchedulerService {
         
         if (!shouldSendMessage) continue;
 
-        if (this.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
-          await this.whatsappService.sendMessage(subscriber.connections.phone, "⚠️ You have reached the maximum number of messages allowed for your plan. Please upgrade to continue chatting right now or come back tomorrow :)");
-          // Set next push to tomorrow to prevent spam
-          await this.subscriberService.updateSubscriber(subscriber.connections.phone, { 
-            nextPushMessageAt: nowUtc.plus({ hours: 24 }).toJSDate()
-          });
+        // If the user is throttled (trial expired), do not send regular re-engagement messages.
+        if (this.subscriberService.shouldThrottle(subscriber)) {
+          // Optionally, we could schedule a "please come back" message here in the future,
+          // but for now, we just silence the bot for unpaid users.
           continue;
         }
-        
+
         // Calculate next push time BEFORE sending to prevent multiple sends
         const nextTime = this.calculateNextPushTime(subscriber);
         if (!nextTime) {
