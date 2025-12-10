@@ -145,6 +145,7 @@ export const createSubscriberTool: DynamicStructuredTool =
           }),
         )
         .optional()
+        .nullable()
         .describe("Detailed skill assessments from the conversation"),
       deficiencies: z
         .array(
@@ -163,6 +164,7 @@ export const createSubscriberTool: DynamicStructuredTool =
           }),
         )
         .optional()
+        .nullable()
         .describe("Identified areas needing improvement"),
     }),
     func: async (input) => {
@@ -289,10 +291,12 @@ export const addLanguageDeficiencyTool: DynamicStructuredTool =
       examples: z
         .array(z.string())
         .optional()
+        .nullable()
         .describe("Examples from user messages demonstrating this deficiency"),
       improvementSuggestions: z
         .array(z.string())
         .optional()
+        .nullable()
         .describe("Suggestions for how to improve this area"),
     }),
     func: async (input) => {

@@ -1,20 +1,17 @@
-import { LanguageBuddyAgent } from './language-buddy-agent';
+import { checkLastResponse } from './agent.check';
 import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { Subscriber } from '../features/subscriber/subscriber.types';
-import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 jest.mock('../persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
-jest.mock('../features/subscriber/subscriber.prompts');
 
-describe('LanguageBuddyAgent - checkLastResponse', () => {
+describe('checkLastResponse (standalone)', () => {
   let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
   let mockLlm: jest.Mocked<ChatOpenAI>;
   let mockStructuredLlm: { invoke: jest.Mock };
-  let agent: LanguageBuddyAgent;
-  let mockAgentInvoke: jest.Mock;
 
   const mockSubscriber: Subscriber = {
     profile: {
@@ -33,16 +30,12 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
 
   beforeEach(() => {
     mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
-    mockAgentInvoke = jest.fn();
     
     // Mock Structured LLM
     mockStructuredLlm = { invoke: jest.fn() };
     mockLlm = {
         withStructuredOutput: jest.fn().mockReturnValue(mockStructuredLlm)
     } as any;
-
-    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm);
-    // (agent as any).agent = { invoke: mockAgentInvoke }; // Not used for checkLastResponse anymore, but might be needed if constructor calls it? No.
     
     // Default empty checkpoint
     mockCheckpointer.getCheckpoint.mockResolvedValue(undefined);
@@ -53,7 +46,7 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
   });
 
   it('should return message if no history found', async () => {
-    const result = await agent.checkLastResponse(mockSubscriber);
+    const result = await checkLastResponse(mockSubscriber, mockLlm, mockCheckpointer);
     expect(result).toContain("can't check anything yet");
   });
 
@@ -74,7 +67,7 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
       user_response: "Los saludos son correctos. ¡Buen trabajo!"
     });
 
-    const result = await agent.checkLastResponse(mockSubscriber);
+    const result = await checkLastResponse(mockSubscriber, mockLlm, mockCheckpointer);
     
     expect(result).toContain("Los saludos son correctos");
     expect(result).toContain("✅");
@@ -99,7 +92,7 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
       system_correction: "The Eiffel Tower is in Paris. Never say it is in Berlin."
     });
 
-    const result = await agent.checkLastResponse(mockSubscriber);
+    const result = await checkLastResponse(mockSubscriber, mockLlm, mockCheckpointer);
     
     expect(result).toContain("Actually, the Eiffel Tower is in Paris");
     expect(result).toContain("⚠️");
@@ -135,7 +128,7 @@ describe('LanguageBuddyAgent - checkLastResponse', () => {
      // Mock error
      mockStructuredLlm.invoke.mockRejectedValue(new Error("OpenAI error"));
  
-     const result = await agent.checkLastResponse(mockSubscriber);
+     const result = await checkLastResponse(mockSubscriber, mockLlm, mockCheckpointer);
      expect(result).toContain("error occurred while performing the check");
   });
 });

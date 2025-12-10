@@ -1,2 +1,0 @@
-- [ ] Update imports to point to new feature modules (digest, subscriber, etc.) once they are migrated.
-- [ ] Rename language-buddy-agent.ts to language-buddy.ts (optional, per convention).
