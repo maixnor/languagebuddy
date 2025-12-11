@@ -2,8 +2,8 @@ import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Digest } from './digest.types';
 import { Subscriber } from '../subscriber/subscriber.types';
-import { logger } from '../../config';
-import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
+import { logger } from '../../core/config';
+import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { DigestAnalysisSchema } from './digest.contracts';
 

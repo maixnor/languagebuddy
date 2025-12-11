@@ -2,7 +2,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { Subscriber } from "./subscriber.types"; // Adjusted import
 import { SubscriberService } from "./subscriber.service"; // Adjusted import
-import { logger } from "../../config"; // Adjusted import (assuming config moves to core)
+import { logger } from "../../core/config";
 import { z } from "zod";
 import { getContextVariable } from "@langchain/core/context";
 import Redis from "ioredis";

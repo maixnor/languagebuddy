@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 import { Subscriber } from './subscriber.types';
-import { logger } from '../../config'; // Will be updated
+import { logger } from '../../core/config';
 import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone } from './subscriber.utils';
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';

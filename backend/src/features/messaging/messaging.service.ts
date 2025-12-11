@@ -1,15 +1,15 @@
-import { ServiceContainer } from './service-container';
-import { logger, trackEvent, trackMetric, config } from '../config';
-import { WebhookMessage } from '../types';
-import { Subscriber } from '../features/subscriber/subscriber.types';
-import { handleUserCommand } from '../agents/agent.user-commands';
-import { getNextMissingField, getPromptForField } from '../features/subscriber/subscriber.utils';
-import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../features/subscriber/subscriber.prompts';
-import { generateOnboardingSystemPrompt } from '../features/onboarding/onboarding.prompts';
-import { getFirstLearningLanguage } from "../features/subscriber/subscriber.utils";
+import { ServiceContainer } from '../../core/container';
+import { logger, trackEvent, trackMetric, config } from '../../core/config';
+import { WebhookMessage } from './messaging.types';
+import { Subscriber } from '../subscriber/subscriber.types';
+import { handleUserCommand } from '../../agents/agent.user-commands';
+import { getNextMissingField, getPromptForField } from '../subscriber/subscriber.utils';
+import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../subscriber/subscriber.prompts';
+import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
+import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
 import { DateTime } from "luxon";
 
-export class WebhookService {
+export class MessagingService {
   constructor(private services: ServiceContainer) {}
 
   async handleInitiateRequest(body: any, res: any): Promise<void> {

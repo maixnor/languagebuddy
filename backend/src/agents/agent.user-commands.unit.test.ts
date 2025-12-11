@@ -3,10 +3,10 @@ import { WhatsAppService } from '../core/messaging/whatsapp';
 import { LanguageBuddyAgent } from './language-buddy-agent';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { RedisClientType } from 'redis';
-import { logger } from '../config';
+import { logger } from '../core/config';
 
 // Mock the logger to prevent actual logging during tests
-jest.mock('../config', () => ({
+jest.mock('../core/config', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),

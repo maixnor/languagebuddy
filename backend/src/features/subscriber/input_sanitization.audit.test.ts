@@ -1,6 +1,6 @@
 import { WebhookService } from '../../services/webhook-service';
 import { SubscriberService } from './subscriber.service';
-import { ServiceContainer } from '../../services/service-container';
+import { ServiceContainer } from '../../core/container';
 import { Redis } from 'ioredis';
 
 describe('Input Sanitization Audit', () => {

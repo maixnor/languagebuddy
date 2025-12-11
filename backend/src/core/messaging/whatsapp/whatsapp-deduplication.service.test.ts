@@ -3,7 +3,7 @@ import { WhatsappDeduplicationService } from './whatsapp-deduplication.service';
 import { mockDeep, DeepMockProxy } from 'jest-mock-extended';
 
 // Mock logger to avoid cluttering test output
-jest.mock('../../../config', () => ({
+jest.mock('../../core/config', () => ({
   logger: {
     trace: jest.fn(),
     error: jest.fn(),

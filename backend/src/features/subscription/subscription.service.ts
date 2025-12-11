@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { Subscriber } from "../subscriber/subscriber.types";
-import { logger } from "../../config";
+import { logger } from "../../core/config";
 
 export class SubscriptionService {
   private static instance: SubscriptionService;

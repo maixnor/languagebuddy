@@ -1,8 +1,8 @@
-import { WebhookService } from './webhook-service';
-import { ServiceContainer } from './service-container';
+import { MessagingService } from './messaging.service';
+import { ServiceContainer } from '../../core/container';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
-import { generateOnboardingSystemPrompt } from '../features/onboarding/onboarding.prompts';
+import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
 
 // Mock the ServiceContainer and its services
 const mockOnboardingService = {
@@ -54,12 +54,12 @@ const mockServiceContainer: ServiceContainer = {
   stripeWebhookService: {} as any,
 };
 
-describe('WebhookService', () => {
-  let webhookService: WebhookService;
+describe('MessagingService', () => {
+  let messagingService: MessagingService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    webhookService = new WebhookService(mockServiceContainer as any);
+    messagingService = new MessagingService(mockServiceContainer as any);
   });
 
   describe('processTextMessage', () => {
@@ -78,7 +78,7 @@ describe('WebhookService', () => {
 
       const expectedSystemPrompt = generateOnboardingSystemPrompt();
 
-      await (webhookService as any).processTextMessage(mockMessage);
+      await (messagingService as any).processTextMessage(mockMessage);
 
       // expect(mockOnboardingService.startOnboarding).toHaveBeenCalledWith(mockMessage.from); // REMOVED
       // Expect the call to include the profile structure to avoid crashes in the agent
@@ -100,7 +100,7 @@ describe('WebhookService', () => {
       mockLanguageBuddyAgent.processUserMessage.mockResolvedValue('Next onboarding step');
       const expectedSystemPrompt = generateOnboardingSystemPrompt();
 
-      await (webhookService as any).processTextMessage(mockMessage);
+      await (messagingService as any).processTextMessage(mockMessage);
 
       // Expect the call to include the profile structure to avoid crashes in the agent
       expect(mockLanguageBuddyAgent.processUserMessage).toHaveBeenCalledWith(
@@ -125,7 +125,7 @@ describe('WebhookService', () => {
       
       mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Hello! Ready to chat?');
 
-      await (webhookService as any).processTextMessage(mockMessage);
+      await (messagingService as any).processTextMessage(mockMessage);
 
       // expect(mockOnboardingService.completeOnboarding).toHaveBeenCalledWith(mockMessage.from); // REMOVED
       expect(mockLanguageBuddyAgent.clearConversation).toHaveBeenCalledWith(mockMessage.from);

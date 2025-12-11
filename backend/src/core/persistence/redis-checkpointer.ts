@@ -1,7 +1,7 @@
 import { BaseCheckpointSaver } from "@langchain/langgraph";
 import { Checkpoint, CheckpointMetadata, CheckpointTuple } from "@langchain/langgraph";
 import { Redis } from 'ioredis';
-import { logger } from '../config';
+import { logger } from '../../core/config';
 
 export class RedisCheckpointSaver extends BaseCheckpointSaver {
   private redis: Redis;

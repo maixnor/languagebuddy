@@ -1,2 +1,0 @@
-- [ ] Migrate backend/src/services/webhook-service.ts to webhook.service.ts
-- [ ] Extract WebhookMessage and other types from backend/src/types/index.ts to messaging.types.ts

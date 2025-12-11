@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { SubscriberService } from '../subscriber/subscriber.service';
-import { logger } from '../../config';
+import { logger } from '../../core/config';
 import { SubscriptionService } from './subscription.service';
 
 export class StripeWebhookService {

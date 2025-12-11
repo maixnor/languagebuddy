@@ -9,7 +9,7 @@ export interface FeedbackEntry {
 }
 
 import Redis from 'ioredis';
-import { logger } from '@/config';
+import { logger } from '../../core/config';
 
 export class FeedbackService {
   private static instance: FeedbackService;

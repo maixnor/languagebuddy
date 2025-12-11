@@ -5,14 +5,35 @@ import { SubscriberService } from '../subscriber/subscriber.service';
 import { WhatsAppService } from '../../core/messaging/whatsapp';
 import { DigestService } from '../digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
-import { logger, config } from '../../config';
+import { logger, config } from '../../core/config';
 import { Subscriber } from '../subscriber/subscriber.types';
 
 // 1. Define Mocks
 jest.mock('node-cron');
-jest.mock('../subscriber/subscriber.service');
+
 jest.mock('../../core/messaging/whatsapp');
-jest.mock('../../config');
+jest.mock('../../core/config', () => ({
+  logger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    warn: jest.fn(),
+    trace: jest.fn(),
+    debug: jest.fn(),
+  },
+  config: {
+    features: {
+        dailyMessages: {
+            enabled: true,
+            fuzzinessMinutes: 15,
+            defaultWindows: {
+                morning: { start: '08:00', end: '10:00' },
+                midday: { start: '12:00', end: '14:00' },
+                evening: { start: '18:00', end: '20:00' }
+            }
+        }
+    }
+  }
+}));
 jest.mock('../digest/digest.service');
 jest.mock('../../agents/language-buddy-agent');
 
@@ -46,7 +67,7 @@ describe('SchedulerService', () => {
         mistakeTolerance: 'normal' 
     },
     isPremium: false,
-    signedUpAt: '',
+    signedUpAt: DateTime.now().minus({ days: 1 }).toISO(), // Set a valid date
     lastActiveAt: new Date(),
     nextPushMessageAt: undefined,
   };
@@ -71,7 +92,9 @@ describe('SchedulerService', () => {
         getDailySystemPrompt: jest.fn().mockReturnValue("Daily Prompt"),
         updateSubscriber: jest.fn().mockResolvedValue(undefined),
         shouldShowSubscriptionWarning: jest.fn().mockReturnValue(false),
+        shouldThrottle: jest.fn().mockReturnValue(false),
     } as unknown as jest.Mocked<SubscriberService>;
+    jest.spyOn(SubscriberService, 'getInstance').mockReturnValue(mockSubscriberService);
 
     mockWhatsappService = {
         sendMessage: jest.fn().mockResolvedValue({ failed: 0 }),
@@ -288,11 +311,11 @@ describe('SchedulerService', () => {
 
         const dueSubscriber = {
             ...mockSubscriber,
-            nextPushMessageAt: now.minus({ minutes: 1 }).toISO(), // Due 1 min ago
-            profile: { ...mockSubscriber.profile, timezone: 'UTC' }
+            nextPushMessageAt: now.minus({ minutes: 1 }).toJSDate(), // Due 1 min ago
         };
-
-        mockSubscriberService.getAllSubscribers.mockResolvedValue([dueSubscriber]);
+        mockSubscriberService.getAllSubscribers.mockImplementation(() => {
+            return Promise.resolve([dueSubscriber]);
+        });
         
         // Mock calculateNextPushTime to return tomorrow
         const tomorrow = now.plus({ days: 1 }).toUTC();
@@ -331,10 +354,12 @@ describe('SchedulerService', () => {
 
         const dueSubscriber = {
             ...mockSubscriber,
-            nextPushMessageAt: now.minus({ minutes: 1 }).toISO(),
+            nextPushMessageAt: now.minus({ minutes: 1 }).toJSDate(),
         };
 
-        mockSubscriberService.getAllSubscribers.mockResolvedValue([dueSubscriber]);
+        mockSubscriberService.getAllSubscribers.mockImplementation(() => {
+            return Promise.resolve([dueSubscriber]);
+        });
         jest.spyOn(scheduler, 'calculateNextPushTime').mockReturnValue(now.plus({ days: 1 }));
         jest.spyOn(scheduler, 'shouldSendReengagementMessage').mockReturnValue(true);
 

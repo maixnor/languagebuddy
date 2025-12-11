@@ -1,6 +1,6 @@
 //@ts-nocheck
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { logger } from '../config';
+import { logger } from '../core/config';
 import { FeedbackEntry } from '../types';
 import { FeedbackService } from '../features/feedback/feedback.service';
 import { getContextVariable } from "@langchain/core/context";

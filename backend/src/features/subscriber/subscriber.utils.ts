@@ -1,7 +1,7 @@
 import { SubscriberProfileSchema } from "./subscriber.contracts";
 import { Language, LanguageDeficiency, Subscriber } from "./subscriber.types"; // Adjusted import
 import { DateTime } from 'luxon';
-import { logger } from '../../config';
+import { logger } from '../../core/config';
 
 const COMMON_TIMEZONE_MAPPINGS: Record<string, string> = {
     'lima': 'America/Lima',

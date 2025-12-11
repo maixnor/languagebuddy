@@ -1,17 +1,17 @@
 import express from "express";
-import { ServiceContainer } from './services/service-container';
-import { WebhookService } from './services/webhook-service';
+import { ServiceContainer } from './core/container';
+import { MessagingService } from './features/messaging/messaging.service';
 import { StripeWebhookService } from './features/subscription/subscription-webhook.service';
-import { logger, config } from './config';
-import { getCommitHash, getPackageVersion } from './config/config.version-info';
+import { logger, config } from './core/config';
+import { getCommitHash, getPackageVersion } from './core/config/config.version-info';
 
 export function setupRoutes(app: express.Application, services: ServiceContainer): void {
-  const webhookService = new WebhookService(services);
+  const messagingService = new MessagingService(services);
 
   // Legacy initiate endpoint (kept for backward compatibility)
   app.post("/initiate", async (req: any, res: any) => {
     try {
-      await webhookService.handleInitiateRequest(req.body, res);
+      await messagingService.handleInitiateRequest(req.body, res);
     } catch (error) {
       logger.error({ err: error }, "Error in /initiate endpoint");
       res.status(500).send("Internal server error while processing prompts.");
@@ -21,7 +21,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
   // Main webhook endpoint (WhatsApp)
   app.post("/webhook", async (req: any, res: any) => {
     try {
-      await webhookService.handleWebhookMessage(req.body, res);
+      await messagingService.handleWebhookMessage(req.body, res);
     } catch (error) {
       logger.error({ err: error }, "Error in /webhook endpoint");
       res.status(500).send("Internal server error while processing webhook.");

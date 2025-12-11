@@ -2,11 +2,11 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
-import { logger } from '../config';
+import { logger } from '../core/config';
 // @ts-ignore
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
-import { RedisCheckpointSaver } from "../persistence/redis-checkpointer";
+import { RedisCheckpointSaver } from "../core/persistence/redis-checkpointer";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
 import { z } from "zod";

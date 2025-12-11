@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
+import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { ChatOpenAI } from "@langchain/openai";
 import { Checkpoint } from "@langchain/langgraph";

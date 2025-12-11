@@ -1,4 +1,0 @@
-- [ ] Move backend/src/persistence/ to backend/src/core/persistence/
-- [ ] Move backend/src/observability/ to backend/src/core/observability/
-- [ ] Move backend/src/config/ to backend/src/core/config/
-- [ ] Migrate backend/src/services/service-container.ts to backend/src/core/container.ts

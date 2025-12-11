@@ -1,5 +1,5 @@
 import * as cron from 'node-cron';
-import { logger, config } from '../../config';
+import { logger, config } from '../../core/config';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { ensureValidTimezone } from '../subscriber/subscriber.utils';
 import { WhatsAppService } from '../../core/messaging/whatsapp';
@@ -241,6 +241,7 @@ export class SchedulerService {
           await this.whatsappService.sendMessage(subscriber.connections.phone, reengagementMessage);
           logger.info({ phoneNumber: subscriber.connections.phone }, "Re-engagement message sent.");
         }
+
       }
     } catch (error) {
       logger.error({ err: error }, "Error during regular push message processing");

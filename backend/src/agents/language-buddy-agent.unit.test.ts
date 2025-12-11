@@ -1,5 +1,5 @@
 import { LanguageBuddyAgent } from './language-buddy-agent';
-import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
+import { RedisCheckpointSaver } from '../core/persistence/redis-checkpointer';
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { DateTime } from 'luxon';
@@ -7,7 +7,7 @@ import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 
-jest.mock('../persistence/redis-checkpointer');
+jest.mock('../core/persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
 jest.mock('../features/subscriber/subscriber.prompts'); // Mock generateSystemPrompt
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts'; // For type referencing

@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { logger } from '../../config';
+import { logger } from '../../core/config';
 import { OnboardingState } from './onboarding.types';
 
 /**

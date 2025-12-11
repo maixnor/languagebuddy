@@ -5,17 +5,17 @@ import path from 'path';
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 // Initialize tracing BEFORE any other imports (critical for auto-instrumentation)
-import { initializeTracing } from './observability/tracing';
+import { initializeTracing } from './core/observability/tracing';
 initializeTracing();
 
 import express from "express";
 import serveStatic from "serve-static";
 import "whatsapp-cloud-api-express";
 
-import { ServiceContainer } from './services/service-container';
+import { ServiceContainer } from './core/container';
 import { setupRoutes } from './routes';
-import { logger, config } from './config';
-import { loadVersionInfo } from './config/config.version-info';
+import { logger, config } from './core/config';
+import { loadVersionInfo } from './core/config/config.version-info';
 
 async function main() {
   try {

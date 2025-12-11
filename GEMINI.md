@@ -1,7 +1,7 @@
  LanguageBuddy Project Context for Gemini
 
 ## 0. Git
-- **NEVER TOUCH GIT UNLESS PROMPTED TO OTHERWISE. NEVER!**
+- **NEVER TOUCH GIT. NEVER!**
 
 ## 1. Project Overview
 **LanguageBuddy** is a WhatsApp-based language learning service. It uses:

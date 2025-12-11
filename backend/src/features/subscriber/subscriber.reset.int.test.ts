@@ -7,7 +7,7 @@ import { mock } from 'jest-mock-extended';
 import { Subscriber } from '../../types';
 import { SubscriberService } from './subscriber.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
-import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
+import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { SchedulerService } from '../scheduling/scheduler.service';
 import { WhatsAppService } from '../../core/messaging/whatsapp/whatsapp.service';
 import { DigestService } from '../digest/digest.service';

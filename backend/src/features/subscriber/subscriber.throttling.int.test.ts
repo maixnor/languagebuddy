@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
 import { Subscriber } from './subscriber.types';
-import { logger } from '../../config';
+import { logger } from '../../core/config';
 
 describe('SubscriberService - Throttling Logic (Integration)', () => {
   let redis: Redis;

@@ -12,7 +12,7 @@ import { Digest } from '../../features/digest/digest.types';
 import Redis from 'ioredis';
 import { ChatOpenAI } from '@langchain/openai';
 import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
-import { config } from '../../config';
+import { config } from '../../core/config';
 import { initializeSubscriberTools } from '../subscriber/subscriber.tools';
 import { initializeFeedbackTools } from '../../tools/feedback-tools';
 

@@ -1,7 +1,7 @@
 import express from "express";
 import serveStatic from "serve-static";
-import { logger, config } from './config';
-import { ServiceContainer } from './services/service-container';
+import { logger, config } from './core/config';
+import { ServiceContainer } from './core/container';
 import { setupRoutes } from './routes';
 
 export class Application {

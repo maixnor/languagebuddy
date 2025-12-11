@@ -14,7 +14,7 @@ import { SubscriberService } from '../subscriber/subscriber.service';
 import { StripeWebhookService } from './subscription-webhook.service';
 import Stripe from 'stripe';
 import Redis from 'ioredis';
-import { config } from '../../config';
+import { config } from '../../core/config';
 
 // Mock Stripe
 jest.mock('stripe');

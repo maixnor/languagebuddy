@@ -2,12 +2,12 @@ import { DateTime } from 'luxon';
 import { SchedulerService } from './scheduler.service';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
-import { config } from '../../config';
+import { config } from '../../core/config';
 
 // Mock dependencies
 jest.mock('../subscriber/subscriber.service');
 jest.mock('../../core/messaging/whatsapp');
-jest.mock('../../config');
+jest.mock('../../core/config');
 jest.mock('../digest/digest.service');
 jest.mock('../../agents/language-buddy-agent');
 

@@ -1,8 +1,8 @@
 import { WhatsAppService } from './whatsapp.service';
-import { logger } from '../../../config';
+import { logger } from '../../core/config';
 
 // Mock logger
-jest.mock('../../../config', () => ({
+jest.mock('../../core/config', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),

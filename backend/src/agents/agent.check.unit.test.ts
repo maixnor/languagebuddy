@@ -1,11 +1,11 @@
 import { checkLastResponse } from './agent.check';
-import { RedisCheckpointSaver } from '../persistence/redis-checkpointer';
+import { RedisCheckpointSaver } from '../core/persistence/redis-checkpointer';
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
-jest.mock('../persistence/redis-checkpointer');
+jest.mock('../core/persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
 
 describe('checkLastResponse (standalone)', () => {
