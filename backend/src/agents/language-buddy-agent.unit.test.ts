@@ -6,6 +6,8 @@ import { DateTime } from 'luxon';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { SubscriberService } from '../features/subscriber/subscriber.service';
+import { DigestService } from '../features/digest/digest.service';
+import { Digest } from '../features/digest/digest.types';
 
 jest.mock('../core/persistence/redis-checkpointer');
 jest.mock('@langchain/openai');
@@ -13,12 +15,14 @@ jest.mock('../features/subscriber/subscriber.prompts'); // Mock generateSystemPr
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts'; // For type referencing
 const mockGenerateSystemPrompt = generateSystemPrompt as jest.Mock;
 jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
+jest.mock('../features/digest/digest.service'); // Mock DigestService
 
 describe('LanguageBuddyAgent', () => {
   let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
   let mockLlm: jest.Mocked<ChatOpenAI>;
   let agent: LanguageBuddyAgent;
   let mockAgentInvoke: jest.Mock;
+  let mockDigestService: jest.Mocked<DigestService>;
 
   const mockSubscriber: Subscriber = {
     profile: {
@@ -74,32 +78,23 @@ describe('LanguageBuddyAgent', () => {
 
   beforeEach(() => {
     mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
-    // Mock the internal agent directly
+    mockLlm = {} as any; 
     mockAgentInvoke = jest.fn().mockResolvedValue({
       messages: [{ content: 'AI Response' }]
     });
-    mockLlm = {
-      // Mock the createReactAgent config directly if needed, or rely on its internal invoke for tests
-      // For createReactAgent, the important part is its .invoke method
-      // The constructor of LanguageBuddyAgent creates the agent, so we'll need to mock its .invoke
-    } as any; // Cast to any to bypass strict type checking for the mock
 
-    // Mock SubscriberService.getInstance()
     (SubscriberService.getInstance as jest.Mock).mockReturnValue({
       hydrateSubscriber: jest.fn(),
     });
+    mockDigestService = new DigestService(null as any, null as any, null as any) as jest.Mocked<DigestService>;
+    mockDigestService.getRecentDigests.mockResolvedValue([]); // Default to no digests
 
-    // When LanguageBuddyAgent is instantiated, createReactAgent is called.
-    // We need to ensure the 'agent' property in LanguageBuddyAgent is a mock
-    // that has an 'invoke' method.
-    // A simple way to do this for unit testing `LanguageBuddyAgent` methods
-    // that call `this.agent.invoke` is to dynamically replace the agent property.
-    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm);
-    (agent as any).agent = { invoke: mockAgentInvoke }; // Override the agent property
+    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm, mockDigestService);
+    (agent as any).agent = { invoke: mockAgentInvoke }; 
 
-    jest.useFakeTimers(); // Control time for consistent test results
+    jest.useFakeTimers(); 
     mockGenerateSystemPrompt.mockReturnValue('Generated System Prompt');
-    mockCheckpointer.getCheckpoint.mockResolvedValue(undefined); // Default no checkpoint
+    mockCheckpointer.getCheckpoint.mockResolvedValue(undefined); 
   });
 
   afterEach(() => {
@@ -223,6 +218,46 @@ describe('LanguageBuddyAgent', () => {
       expect(invokeArgs[0].content).toEqual('Generated System Prompt');
       expect(invokeArgs[1]).toBeInstanceOf(HumanMessage);
       expect(invokeArgs[1].content).toEqual(humanMessage);
+    });
+
+    it('should pass the last digest topic to generateSystemPrompt if available', async () => {
+      const humanMessage = 'Hi there!';
+      const mockDigest: Digest = {
+        timestamp: new Date().toISOString(),
+        topic: 'Conditional Sentences',
+        summary: 'Discussed conditional sentences and hypothetical situations.',
+        keyBreakthroughs: [],
+        areasOfStruggle: [],
+        vocabulary: { newWords: [], reviewedWords: [], struggledWith: [], mastered: [] },
+        phrases: { newPhrases: [], idioms: [] },
+        grammar: { conceptsCovered: [], mistakesMade: [], patternsPracticed: [] },
+        conversationMetrics: {
+          messagesExchanged: 10, averageResponseTime: 0, topicsDiscussed: [], userInitiatedTopics: 0,
+          averageMessageLength: 0, sentenceComplexity: 0, punctuationAccuracy: 0, capitalizationAccuracy: 0,
+          textCoherenceScore: 0, emojiUsage: 0, abbreviationUsage: []
+        },
+        userMemos: []
+      };
+      
+      mockDigestService.getRecentDigests.mockResolvedValueOnce([mockDigest]);
+      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
+        config: {}, checkpoint: {
+            id: "1",
+            ts: "2023-01-01T00:00:00Z",
+            channel_values: {},
+            versions_seen: {},
+            channel_versions: {}
+        }, metadata: {}, parentConfig: {}
+      });
+
+      await agent.initiateConversation(mockSubscriber, humanMessage);
+
+      expect(mockGenerateSystemPrompt).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subscriber: mockSubscriber,
+          lastDigestTopic: mockDigest.topic,
+        })
+      );
     });
 
     it('should return AI response', async () => {

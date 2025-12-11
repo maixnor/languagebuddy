@@ -433,6 +433,7 @@ Extract actionable learning insights that will help personalize future conversat
           emojiUsage: 0,
           abbreviationUsage: []
         },
+        assistantMistakes: analysisData.assistantMistakes,
         userMemos: analysisData.userMemos
       };
 
@@ -452,6 +453,7 @@ Extract actionable learning insights that will help personalize future conversat
         grammarMistakesCount: digest.grammar.mistakesMade.length,
         breakthroughsCount: digest.keyBreakthroughs.length,
         strugglesCount: digest.areasOfStruggle.length,
+        assistantMistakesCount: digest.assistantMistakes?.length || 0,
         userMemosCount: digest.userMemos.length
       }, "Digest structure created from LLM structured output");
 
@@ -502,6 +504,12 @@ ANALYSIS GUIDELINES:
 5. Extract phrases and expressions that were taught or practiced
 6. Identify conversation topics and user interests
 7. Note any cultural context or background information shared
+
+QUALITY ASSURANCE AUDIT (CRITICAL):
+- You act as a Quality Assurance Auditor for the 'Assistant'.
+- Review ALL 'Assistant' messages for mistakes (Hallucinations, Grammar errors in the target language, Factually incorrect statements).
+- If the Assistant gave WRONG advice or made a mistake, you MUST list it in 'assistantMistakes'.
+- Be strict. This helps build trust with the user by correcting our own mistakes.
 
 Be thorough but concise. Extract only meaningful learning insights.`;
   }

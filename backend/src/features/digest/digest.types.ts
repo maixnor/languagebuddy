@@ -42,5 +42,11 @@ export interface Digest {
     abbreviationUsage: string[]; // common abbreviations used
   };
 
+  assistantMistakes?: {
+    originalText: string;
+    correction: string;
+    reason: string;
+  }[];
+
   userMemos?: string[]; // Personal memos about the user for better context in future conversations
 }

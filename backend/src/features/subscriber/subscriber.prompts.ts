@@ -200,6 +200,14 @@ ${digest.summary}
       if (digest.userMemos && digest.userMemos.length > 0) {
         prompt += `📌 Important notes: ${digest.userMemos.join(" • ")}\n`;
       }
+
+      if (digest.assistantMistakes && digest.assistantMistakes.length > 0) {
+        prompt += `\n🚨 YOUR PREVIOUS MISTAKES (AUDIT): \n`;
+        digest.assistantMistakes.forEach(mistake => {
+           prompt += `- You said: "${mistake.originalText}"\n  Correction: "${mistake.correction}"\n  Reason: ${mistake.reason}\n`;
+        });
+        prompt += `ACTION REQUIRED: At the start of this conversation, apologize for these specific mistakes and provide the correct information to the user to build trust.\n`;
+      }
     });
   }
 

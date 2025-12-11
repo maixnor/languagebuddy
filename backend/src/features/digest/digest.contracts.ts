@@ -22,6 +22,11 @@ export const DigestAnalysisSchema = z.object({
     mistakesMade: z.array(z.string()).default([]).describe("Specific grammar mistakes the user made"),
     patternsPracticed: z.array(z.string()).default([]).describe("Grammar patterns the user practiced")
   }),
+  assistantMistakes: z.array(z.object({
+    originalText: z.string().describe("The incorrect text segment from the assistant"),
+    correction: z.string().describe("The corrected version"),
+    reason: z.string().describe("Why it was incorrect (e.g., 'Hallucination', 'Grammar', 'Factually incorrect')")
+  })).default([]).describe("Mistakes made by the AI assistant during the conversation that need to be corrected for the user"),
   userMemos: z.array(z.string()).default([]).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)")
 });
 

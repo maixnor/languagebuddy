@@ -6,12 +6,14 @@ import { Checkpoint } from "@langchain/langgraph";
 import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages";
 import { Subscriber } from '../subscriber/subscriber.types';
 import { SubscriberService } from '../subscriber/subscriber.service';
+import { DigestService } from './digest.service';
 
 describe('Conversation Persistence & Clearance Bug', () => {
   let redis: Redis;
   let checkpointer: RedisCheckpointSaver;
   let agent: LanguageBuddyAgent;
   let mockLlm: any;
+  let mockDigestService: DigestService;
   const testPhone = 'bug-repro-phone';
 
   const mockSubscriber = {
@@ -66,7 +68,11 @@ describe('Conversation Persistence & Clearance Bug', () => {
       lc_namespace: ['langchain', 'chat_models', 'openai'],
     };
 
-    agent = new LanguageBuddyAgent(checkpointer, mockLlm as unknown as ChatOpenAI);
+    mockDigestService = {
+      getRecentDigests: jest.fn().mockResolvedValue([]),
+    } as unknown as DigestService;
+
+    agent = new LanguageBuddyAgent(checkpointer, mockLlm as unknown as ChatOpenAI, mockDigestService);
   });
 
   it('should fully clear conversation and start fresh without "resurrection"', async () => {

@@ -10,6 +10,7 @@ import { RedisCheckpointSaver } from "../core/persistence/redis-checkpointer";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
 import { z } from "zod";
+import { DigestService } from '../features/digest/digest.service';
 
 import {
   updateSubscriberTool,
@@ -24,10 +25,12 @@ export class LanguageBuddyAgent {
   private checkpointer: RedisCheckpointSaver;
   private agent: any;
   private llm: ChatOpenAI;
+  private digestService: DigestService;
 
-  constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI) {
+  constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI, digestService: DigestService) {
     this.checkpointer = checkpointer;
     this.llm = llm;
+    this.digestService = digestService;
 
     const allTools = [
       updateSubscriberTool,
@@ -66,12 +69,15 @@ export class LanguageBuddyAgent {
         systemPrompt = systemPromptOverride;
       } else {
         const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
+        const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
+        const lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
+
         systemPrompt = generateSystemPrompt({
           subscriber,
           conversationDurationMinutes,
           timeSinceLastMessageMinutes,
           currentLocalTime,
-          lastDigestTopic: null,
+          lastDigestTopic,
         });
       }
 
@@ -115,13 +121,15 @@ export class LanguageBuddyAgent {
       const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
       const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
       const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+      const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
+      const lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
 
       systemPrompt = generateSystemPrompt({
         subscriber,
         conversationDurationMinutes,
         timeSinceLastMessageMinutes,
         currentLocalTime,
-        lastDigestTopic: null,
+        lastDigestTopic,
       });
     }
 

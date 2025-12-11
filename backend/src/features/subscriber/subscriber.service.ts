@@ -369,6 +369,7 @@ export class SubscriberService {
     - This is a fresh start after a nightly reset.
     - Initiate a conversation naturally.
     - If there's a topic from the last digest, you might reference it or start something new.
+    - CRITICAL: Check the "RECENT CONVERSATION HISTORY" section for "YOUR PREVIOUS MISTAKES". If any are listed, you MUST apologize for them and correct them in your first message.
     - Don't ask "Do you want to practice?". Just start talking.
     - Disguise your conversation starters as trying to find out more information about the user if appropriate.
     `;
