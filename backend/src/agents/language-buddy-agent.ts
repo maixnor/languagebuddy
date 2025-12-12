@@ -11,6 +11,7 @@ import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
 import { z } from "zod";
 import { DigestService } from '../features/digest/digest.service';
+import { setSpanAttributes } from '../core/observability/tracing';
 
 import {
   updateSubscriberTool,
@@ -69,8 +70,18 @@ export class LanguageBuddyAgent {
         systemPrompt = systemPromptOverride;
       } else {
         const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
-        const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
-        const lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
+        
+        let lastDigestTopic = null;
+        if (this.digestService) {
+          try {
+            const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
+            lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
+          } catch (error) {
+            logger.error({ err: error, phone: subscriber.connections.phone }, "Error fetching recent digests in initiateConversation");
+          }
+        } else {
+            logger.error("DigestService is missing in initiateConversation. Skipping digest retrieval.");
+        }
 
         systemPrompt = generateSystemPrompt({
           subscriber,
@@ -81,11 +92,27 @@ export class LanguageBuddyAgent {
         });
       }
 
+      // Session ID Logic for Tracing
+      const dateString = currentLocalTime.toISODate(); // YYYY-MM-DD in user's timezone
+      const sessionId = `${subscriber.connections.phone}_${dateString}`;
+      
+      const newMetadata = { 
+        ...(metadata || {}), 
+        sessionId 
+      };
+
+      // Set Trace Attributes
+      setSpanAttributes({
+        'user.id': subscriber.connections.phone,
+        'conversation.id': sessionId,
+        'user.timezone': subscriber.profile.timezone || 'unknown'
+      });
+
       const result = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
         { 
           configurable: { thread_id: subscriber.connections.phone },
-          metadata: metadata || {}
+          metadata: newMetadata
         }
       );
 
@@ -121,8 +148,18 @@ export class LanguageBuddyAgent {
       const conversationDurationMinutes = await this.getConversationDuration(subscriber.connections.phone);
       const timeSinceLastMessageMinutes = await this.getTimeSinceLastMessage(subscriber.connections.phone);
       const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
-      const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
-      const lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
+      
+      let lastDigestTopic = null;
+      if (this.digestService) {
+        try {
+          const latestDigest = await this.digestService.getRecentDigests(subscriber.connections.phone, 1);
+          lastDigestTopic = latestDigest.length > 0 ? latestDigest[0].topic : null;
+        } catch (error) {
+          logger.error({ err: error, phone: subscriber.connections.phone }, "Error fetching recent digests in processUserMessage");
+        }
+      } else {
+          logger.error("DigestService is missing in processUserMessage. Skipping digest retrieval.");
+      }
 
       systemPrompt = generateSystemPrompt({
         subscriber,
@@ -136,11 +173,32 @@ export class LanguageBuddyAgent {
     const existingCheckpoint = await this.checkpointer.getCheckpoint(subscriber.connections.phone);
     const existingMetadata = existingCheckpoint?.metadata || {};
 
+    // Session ID Logic for Tracing
+    let sessionId = (existingMetadata as any)?.sessionId;
+
+    if (!sessionId) {
+      const currentLocalTime = DateTime.now().setZone(subscriber.profile.timezone || 'UTC');
+      const dateString = currentLocalTime.toISODate();
+      sessionId = `${subscriber.connections.phone}_${dateString}`;
+    }
+
+    const newMetadata = {
+      ...existingMetadata,
+      sessionId
+    };
+
+    // Set Trace Attributes
+    setSpanAttributes({
+      'user.id': subscriber.connections.phone,
+      'conversation.id': sessionId,
+      'user.timezone': subscriber.profile.timezone || 'unknown'
+    });
+
     const response = await this.agent.invoke(
         { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)] },
         { 
           configurable: { thread_id: subscriber.connections.phone },
-          metadata: existingMetadata
+          metadata: newMetadata
         }
     );
 
