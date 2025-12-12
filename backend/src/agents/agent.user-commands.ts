@@ -4,6 +4,7 @@ import { WhatsAppService } from '../core/messaging/whatsapp';
 import { LanguageBuddyAgent } from './language-buddy-agent';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
+import { recordFailedCheck } from '../core/observability/metrics';
 
 export async function handleUserCommand(
     subscriber: Subscriber, 
@@ -131,6 +132,7 @@ export async function handleUserCommand(
         let finalMessage = result;
         // If a mistake was found (indicated by the warning emoji/text from checkLastResponse), add the clear hint
         if (result.includes("⚠️") || result.includes("Mistake")) {
+            recordFailedCheck('user_command');
             finalMessage += "\n\n(If I keep making mistakes or hallucinations continue, you can use !clear to reset the conversation context.)";
         }
         

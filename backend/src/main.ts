@@ -21,6 +21,7 @@ async function main() {
     const { setupRoutes } = await import('./routes');
     const { config } = await import('./core/config');
     const { loadVersionInfo } = await import('./core/config/config.version-info');
+    const { MetricsService } = await import('./features/metrics/metrics.service');
 
     // Load version info on startup
     loadVersionInfo();
@@ -32,6 +33,10 @@ async function main() {
     // Initialize services
     const services = new ServiceContainer();
     await services.initialize();
+
+    // Start Metrics Scheduler (polls Redis for stats)
+    const metricsService = MetricsService.getInstance(services);
+    metricsService.startScheduler(60000); // Poll every minute
     
     // Setup routes
     setupRoutes(app, services);
@@ -47,6 +52,7 @@ async function main() {
 
     const gracefulShutdown = (signal: string) => {
       logger.info(`${signal} signal received: closing HTTP server`);
+      metricsService.stopScheduler(); // Stop metrics polling
       server.close(async () => {
         logger.info('HTTP server closed');
         
@@ -76,6 +82,7 @@ async function main() {
     return {
       languageBuddyAgent: services.languageBuddyAgent,
       whatsappService: services.whatsappService,
+      metricsService,
       app: app
     };
     

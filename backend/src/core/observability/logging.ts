@@ -1,5 +1,6 @@
 import pino from 'pino';
 import { getTraceContext } from './tracing';
+import { recordError } from './metrics';
 
 // Pino mixin to automatically inject trace context into all logs
 const traceMixin = () => {
@@ -13,6 +14,20 @@ const createLogger = () => {
     level: process.env.LOG_LEVEL || 'info',
     // Add trace context to every log automatically
     mixin: traceMixin,
+    hooks: {
+      logMethod(inputArgs: any[], method: any, level: number) {
+        // Level 50 is ERROR, 60 is FATAL
+        if (level >= 50) {
+          // Record error metric without blocking logging
+          try {
+             recordError('log_error', 'application');
+          } catch (e) {
+             // Ignore metric errors to avoid crash loop
+          }
+        }
+        return method.apply(this, inputArgs);
+      }
+    }
   };
 
   // Conditionally add error serializer to suppress stack traces

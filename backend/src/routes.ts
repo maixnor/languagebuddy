@@ -4,9 +4,20 @@ import { MessagingService } from './features/messaging/messaging.service';
 import { StripeWebhookService } from './features/subscription/subscription-webhook.service';
 import { logger, config } from './core/config';
 import { getCommitHash, getPackageVersion } from './core/config/config.version-info';
+import { metricsRegistry } from './core/observability/metrics';
 
 export function setupRoutes(app: express.Application, services: ServiceContainer): void {
   const messagingService = new MessagingService(services);
+
+  // Prometheus Metrics Endpoint
+  app.get("/metrics", async (req: any, res: any) => {
+    try {
+      res.set('Content-Type', metricsRegistry.contentType);
+      res.end(await metricsRegistry.metrics());
+    } catch (err) {
+      res.status(500).end(err);
+    }
+  });
 
   // Legacy initiate endpoint (kept for backward compatibility)
   app.post("/initiate", async (req: any, res: any) => {
