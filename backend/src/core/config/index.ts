@@ -78,6 +78,10 @@ export const getConfig = () => ({
     secretKey: process.env.STRIPE_SECRET_KEY!,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
   },
+  test: {
+    phoneNumbers: process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [],
+    skipStripeCheck: process.env.SKIP_STRIPE_CHECK === 'true',
+  },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),

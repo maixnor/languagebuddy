@@ -177,3 +177,13 @@ export function getMissingProfileFieldsReflective(profile: Record<string, any>):
   }
   return missing;
 }
+
+/**
+ * Checks if a given phone number is a test phone number.
+ * Test phone numbers start with '+69'.
+ * @param phoneNumber The phone number to check.
+ * @returns True if the phone number is a test number, false otherwise.
+ */
+export function isTestPhoneNumber(phoneNumber: string): boolean {
+    return phoneNumber.startsWith('+69') || phoneNumber.startsWith('69');
+}

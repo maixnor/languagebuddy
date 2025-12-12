@@ -1,13 +1,12 @@
 import Redis from 'ioredis';
 import { Subscriber } from './subscriber.types';
-import { logger } from '../../core/config';
-import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone } from './subscriber.utils';
+import { logger, config } from '../../core/config';
+import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber } from './subscriber.utils';
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';
 
 
-export class SubscriberService {
-  private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
+export class SubscriberService {  private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
     const timezone = ensureValidTimezone(subscriber?.profile.timezone);
     return DateTime.now().setZone(timezone).toISODate();
   }
@@ -19,6 +18,12 @@ export class SubscriberService {
    * @deprecated Use attemptToStartConversation for atomic check-and-act
    */
   public async canStartConversationToday(phoneNumber: string): Promise<boolean> {
+    // Bypass throttle if global skip is enabled or if it's a whitelisted test number
+    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
+      logger.debug({ phoneNumber }, "Bypassing conversation throttle due to test configuration.");
+      return true;
+    }
+    
     const subscriber = await this.getSubscriber(phoneNumber);
     if (subscriber && subscriber.isPremium) {
       return true; // Premium users can always start a conversation
@@ -36,6 +41,17 @@ export class SubscriberService {
    * Returns true if conversation is allowed (and count was incremented).
    */
   public async attemptToStartConversation(phoneNumber: string): Promise<boolean> {
+    // Bypass throttle and always allow if global skip is enabled or if it's a whitelisted test number
+    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
+      logger.debug({ phoneNumber }, "Bypassing conversation throttle due to test configuration.");
+      // For test users, we still want to increment conversation count if it's a test phone number (non-premium)
+      // but not if skipStripeCheck is true, as that implies no real usage.
+      if (isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
+        await this.incrementConversationCount(phoneNumber);
+      }
+      return true;
+    }
+    
     const subscriber = await this.getSubscriber(phoneNumber);
     
     // Always allow premium users, but we still might want to track their usage.
@@ -127,6 +143,10 @@ export class SubscriberService {
    * Note: "Day 6 and 7" corresponds to indices 5 and 6 (since day 1 is index 0).
    */
   public shouldShowSubscriptionWarning(subscriber: Subscriber): boolean {
+    // If stripe check is skipped or it's a test phone number, never show warning
+    if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
+        return false;
+    }
     const days = this.getDaysSinceSignup(subscriber);
     return !subscriber.isPremium && days >= 5 && days < 7;
   }
@@ -136,6 +156,10 @@ export class SubscriberService {
    * Note: "After 7 days" corresponds to index 7 and above.
    */
   public shouldThrottle(subscriber: Subscriber): boolean {
+    // If stripe check is skipped or it's a test phone number, never throttle
+    if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
+        return false;
+    }
     const days = this.getDaysSinceSignup(subscriber);
     return !subscriber.isPremium && days >= 7;
   }
@@ -144,6 +168,10 @@ export class SubscriberService {
    * Returns true if the user should be prompted to subscribe (after day 7, not premium).
    */
   public shouldPromptForSubscription(subscriber: Subscriber): boolean {
+    // If stripe check is skipped or it's a test phone number, never prompt for subscription
+    if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
+        return false;
+    }
     const days = this.getDaysSinceSignup(subscriber);
     return !subscriber.isPremium && days >= 7;
   }
@@ -244,6 +272,12 @@ export class SubscriberService {
       nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
       ...initialData
     };
+
+    // Set isPremium to true if conditions are met
+    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
+      subscriber.isPremium = true;
+      logger.info({ phoneNumber }, "Subscriber created as premium due to test configuration.");
+    }
 
     // Validate timezone in initialData if present
     if (subscriber.profile.timezone) {

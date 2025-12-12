@@ -244,3 +244,18 @@ describe('ensureValidTimezone (Runtime Safety)', () => {
     });
 });
 
+describe('isTestPhoneNumber', () => {
+    it('should return true for phone numbers starting with +69', () => {
+        expect(isTestPhoneNumber('+69123456789')).toBe(true);
+        expect(isTestPhoneNumber('+69000000000')).toBe(true);
+    });
+
+    it('should return false for phone numbers not starting with +69', () => {
+        expect(isTestPhoneNumber('+11234567890')).toBe(false);
+        expect(isTestPhoneNumber('+447890123456')).toBe(false);
+        expect(isTestPhoneNumber('69123456789')).toBe(false);
+        expect(isTestPhoneNumber('')).toBe(false);
+        expect(isTestPhoneNumber('+')).toBe(false);
+    });
+});
+

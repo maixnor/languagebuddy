@@ -2,12 +2,38 @@ import { DateTime } from 'luxon';
 import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
 import { Subscriber } from './subscriber.types';
-import { logger } from '../../core/config';
+import * as configModule from '../../core/config'; // Import as module to mock
+import * as subscriberUtils from './subscriber.utils'; // Import as module to mock
+
+
+// Mock the config module
+jest.mock('../../core/config', () => ({
+  ...jest.requireActual('../../core/config'), // Keep original logger, etc.
+  config: {
+    ...jest.requireActual('../../core/config').config, // Use actual config for other properties
+    test: {
+      phoneNumbers: [],
+      skipStripeCheck: false,
+    },
+  },
+  logger: jest.requireActual('../../core/config').logger, // Ensure logger is not mocked
+}));
+
+// Mock isTestPhoneNumber
+jest.mock('./subscriber.utils', () => ({
+  ...jest.requireActual('./subscriber.utils'),
+  isTestPhoneNumber: jest.fn(),
+}));
+
+const mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
+const mockedIsTestPhoneNumber = subscriberUtils.isTestPhoneNumber as jest.Mock;
 
 describe('SubscriberService - Throttling Logic (Integration)', () => {
   let redis: Redis;
   let subscriberService: SubscriberService;
   const testPhone = '+1234567890';
+  const testPhone69 = '+69123456789';
+  const whitelistedPhone = '+19998887777';
 
   beforeAll(() => {
     redis = new Redis({
@@ -27,10 +53,24 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     if (keys.length > 0) {
       await redis.del(...keys);
     }
+    const keys69 = await redis.keys(`*${testPhone69}*`);
+    if (keys69.length > 0) {
+      await redis.del(...keys69);
+    }
+    const keysWhitelisted = await redis.keys(`*${whitelistedPhone}*`);
+    if (keysWhitelisted.length > 0) {
+      await redis.del(...keysWhitelisted);
+    }
     
     // Reset singleton instance for fresh state
     (SubscriberService as any).instance = null;
     subscriberService = SubscriberService.getInstance(redis);
+
+    // Reset mocks
+    mockedConfig.test.skipStripeCheck = false;
+    mockedConfig.test.phoneNumbers = [];
+    mockedIsTestPhoneNumber.mockClear();
+    mockedIsTestPhoneNumber.mockImplementation((phoneNumber: string) => phoneNumber.startsWith('+69') || phoneNumber.startsWith('69'));
 
     // Ensure test subscriber has a default timezone for consistent key generation
     await subscriberService.createSubscriber(testPhone, {
@@ -45,6 +85,14 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
     const keys = await redis.keys(`*${testPhone}*`);
     if (keys.length > 0) {
       await redis.del(...keys);
+    }
+    const keys69 = await redis.keys(`*${testPhone69}*`);
+    if (keys69.length > 0) {
+      await redis.del(...keys69);
+    }
+    const keysWhitelisted = await redis.keys(`*${whitelistedPhone}*`);
+    if (keysWhitelisted.length > 0) {
+      await redis.del(...keysWhitelisted);
     }
   });
 
@@ -236,6 +284,201 @@ describe('SubscriberService - Throttling Logic (Integration)', () => {
       // Should no longer show warning or throttle
       expect(subscriberService.shouldShowSubscriptionWarning(updatedSubscriber!)).toBe(false);
       expect(subscriberService.shouldThrottle(updatedSubscriber!)).toBe(false);
+    });
+  });
+  describe('Stripe Bypass Logic', () => {
+    // These tests verify the `SKIP_STRIPE_CHECK`, `isTestPhoneNumber`, and `TEST_PHONE_NUMBERS` logic
+
+    describe('createSubscriber and isPremium', () => {
+      it('should set subscriber as premium if SKIP_STRIPE_CHECK is true', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        const subscriber = await subscriberService.createSubscriber(testPhone);
+        expect(subscriber.isPremium).toBe(true);
+      });
+
+      it('should set subscriber as premium if phone number starts with +69', async () => {
+        mockedConfig.test.skipStripeCheck = false; // Ensure global bypass is off
+        const subscriber = await subscriberService.createSubscriber(testPhone69);
+        expect(subscriber.isPremium).toBe(true);
+      });
+
+      it('should set subscriber as premium if phone number is in TEST_PHONE_NUMBERS list', async () => {
+        mockedConfig.test.skipStripeCheck = false; // Ensure global bypass is off
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        const subscriber = await subscriberService.createSubscriber(whitelistedPhone);
+        expect(subscriber.isPremium).toBe(true);
+      });
+
+      it('should not set subscriber as premium if none of the bypass conditions are met', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [];
+        const subscriber = await subscriberService.createSubscriber(testPhone);
+        expect(subscriber.isPremium).toBe(false);
+      });
+    });
+
+    describe('shouldThrottle() with bypass conditions', () => {
+      it('should NOT throttle if SKIP_STRIPE_CHECK is true', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        const subscriber = await subscriberService.createSubscriber(testPhone, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
+      });
+
+      it('should NOT throttle if phone number starts with +69', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        const subscriber = await subscriberService.createSubscriber(testPhone69, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
+      });
+
+      it('should NOT throttle if phone number is in TEST_PHONE_NUMBERS list', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        const subscriber = await subscriberService.createSubscriber(whitelistedPhone, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
+      });
+
+      it('should NOT throttle if phone number starts with "69" (without +)', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        const phoneWithoutPlus = '69123132'; // The reported problematic number
+        const subscriber = await subscriberService.createSubscriber(phoneWithoutPlus, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldThrottle(subscriber)).toBe(false); // This is expected to fail initially
+      });
+    });
+
+    describe('shouldShowSubscriptionWarning() with bypass conditions', () => {
+      it('should NOT show warning if SKIP_STRIPE_CHECK is true', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        const subscriber = await subscriberService.createSubscriber(testPhone, {
+          signedUpAt: DateTime.now().minus({ days: 5 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldShowSubscriptionWarning(subscriber)).toBe(false);
+      });
+
+      it('should NOT show warning if phone number starts with +69', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        const subscriber = await subscriberService.createSubscriber(testPhone69, {
+          signedUpAt: DateTime.now().minus({ days: 5 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldShowSubscriptionWarning(subscriber)).toBe(false);
+      });
+
+      it('should NOT show warning if phone number is in TEST_PHONE_NUMBERS list', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        const subscriber = await subscriberService.createSubscriber(whitelistedPhone, {
+          signedUpAt: DateTime.now().minus({ days: 5 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldShowSubscriptionWarning(subscriber)).toBe(false);
+      });
+    });
+
+    describe('shouldPromptForSubscription() with bypass conditions', () => {
+      it('should NOT prompt if SKIP_STRIPE_CHECK is true', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        const subscriber = await subscriberService.createSubscriber(testPhone, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldPromptForSubscription(subscriber)).toBe(false);
+      });
+
+      it('should NOT prompt if phone number starts with +69', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        const subscriber = await subscriberService.createSubscriber(testPhone69, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldPromptForSubscription(subscriber)).toBe(false);
+      });
+
+      it('should NOT prompt if phone number is in TEST_PHONE_NUMBERS list', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        const subscriber = await subscriberService.createSubscriber(whitelistedPhone, {
+          signedUpAt: DateTime.now().minus({ days: 7 }).toISO(),
+          isPremium: false,
+        });
+        expect(subscriberService.shouldPromptForSubscription(subscriber)).toBe(false);
+      });
+    });
+
+    describe('canStartConversationToday() with bypass conditions', () => {
+      it('should allow conversation if SKIP_STRIPE_CHECK is true, even if throttled', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        await subscriberService.incrementConversationCount(testPhone); // Simulate being throttled
+        const canStart = await subscriberService.canStartConversationToday(testPhone);
+        expect(canStart).toBe(true);
+      });
+
+      it('should allow conversation if phone number starts with +69, even if throttled', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        await subscriberService.incrementConversationCount(testPhone69); // Simulate being throttled
+        const canStart = await subscriberService.canStartConversationToday(testPhone69);
+        expect(canStart).toBe(true);
+      });
+
+      it('should allow conversation if phone number is in TEST_PHONE_NUMBERS list, even if throttled', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        await subscriberService.incrementConversationCount(whitelistedPhone); // Simulate being throttled
+        const canStart = await subscriberService.canStartConversationToday(whitelistedPhone);
+        expect(canStart).toBe(true);
+      });
+    });
+
+    describe('attemptToStartConversation() with bypass conditions', () => {
+      it('should allow conversation and NOT increment count if SKIP_STRIPE_CHECK is true', async () => {
+        mockedConfig.test.skipStripeCheck = true;
+        await subscriberService.incrementConversationCount(testPhone); // Simulate being throttled
+        const canStart = await subscriberService.attemptToStartConversation(testPhone);
+        expect(canStart).toBe(true);
+        
+        const subscriber = await subscriberService.getSubscriber(testPhone);
+        const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+        const key = `conversation_count:${testPhone}:${today}`;
+        const count = await redis.get(key);
+        expect(parseInt(count!)).toBe(1); // Should not have incremented beyond initial increment
+      });
+
+      it('should allow conversation and increment count if phone number starts with +69', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        const canStart = await subscriberService.attemptToStartConversation(testPhone69);
+        expect(canStart).toBe(true);
+
+        const subscriber = await subscriberService.getSubscriber(testPhone69);
+        const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+        const key = `conversation_count:${testPhone69}:${today}`;
+        const count = await redis.get(key);
+        expect(parseInt(count!)).toBe(1);
+      });
+
+      it('should allow conversation and increment count if phone number is in TEST_PHONE_NUMBERS list', async () => {
+        mockedConfig.test.skipStripeCheck = false;
+        mockedConfig.test.phoneNumbers = [whitelistedPhone];
+        const canStart = await subscriberService.attemptToStartConversation(whitelistedPhone);
+        expect(canStart).toBe(true);
+
+        const subscriber = await subscriberService.getSubscriber(whitelistedPhone);
+        const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+        const key = `conversation_count:${whitelistedPhone}:${today}`;
+        const count = await redis.get(key);
+        expect(parseInt(count!)).toBe(1);
+      });
     });
   });
 });
