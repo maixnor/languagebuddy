@@ -9,12 +9,19 @@ const createLogger = () => {
     level: process.env.LOG_LEVEL || 'info',
     // Automatically inject trace context into every log
     mixin: () => getTraceContext(),
+    // Ensure levels are strings (e.g., "info", "error") for better compatibility with Grafana/Loki
+    formatters: {
+      level: (label: string) => {
+        return { level: label };
+      },
+    },
   };
 
-  // Only use pretty printing in development
+  // Only use pretty printing in development, unless explicitly disabled
   const isDevelopment = process.env.ENVIRONMENT !== 'production';
+  const forceJson = process.env.LOG_FORMAT?.toLowerCase() === 'json';
 
-  if (isDevelopment) {
+  if (isDevelopment && !forceJson) {
     _transport = pino.transport({
       target: 'pino-pretty',
       options: {
