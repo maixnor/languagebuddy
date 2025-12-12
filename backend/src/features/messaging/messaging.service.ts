@@ -8,6 +8,7 @@ import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '
 import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
 import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
 import { DateTime } from "luxon";
+import { traceConversation } from '../../core/observability/tracing';
 
 export class MessagingService {
   constructor(private services: ServiceContainer) {}
@@ -283,77 +284,80 @@ export class MessagingService {
   private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage): Promise<void> {
     const phone = subscriber.connections.phone;
 
-    await this.services.whatsappService.markMessageAsRead(message.id);
+    // Wrap the entire conversation handling in a trace span
+    await traceConversation('process_message', phone, async (span) => {
+      await this.services.whatsappService.markMessageAsRead(message.id);
 
-    trackEvent("text_message_received", {
-      userPhone: phone.slice(-4),
-      messageLength: message.text!.body.length,
-      timestamp: new Date().toISOString()
-    });
-
-    const startTime = Date.now();
-    let response: string;
-
-    // Check if we need to inject a subscription warning
-    let systemPromptOverride: string | undefined;
-    if (this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
-      const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
-      
-      const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);
-      const lastDigestTopic = subscriber.metadata?.digests?.[0]?.topic || null;
-      
-      // Fetch context for prompt generation
-      const conversationDurationMinutes = await this.services.languageBuddyAgent.getConversationDuration(phone);
-      const timeSinceLastMessageMinutes = await this.services.languageBuddyAgent.getTimeSinceLastMessage(phone);
-
-      const basePrompt = generateSystemPrompt({
-        subscriber,
-        conversationDurationMinutes,
-        timeSinceLastMessageMinutes,
-        currentLocalTime,
-        lastDigestTopic,
-      });
-
-      systemPromptOverride = basePrompt + `\n\nIMPORTANT SYSTEM INSTRUCTION:
-The user's free trial is ending soon (Day 6 or 7).
-At the end of your response, you MUST explain in the user's target language that their trial is ending soon and they should subscribe to keep using the service.
-Payment Link: ${paymentLink}
-Make it sound natural, encouraging, and helpful. Do not be aggressive.`;
-    }
-
-    if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
-      logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
-      
-      // Fix: Correct argument order (subscriber, humanMessage, systemPromptOverride)
-      response = await this.services.languageBuddyAgent.initiateConversation(
-        subscriber, 
-        message.text!.body, 
-        systemPromptOverride
-      );
-    } else {
-      response = await this.services.languageBuddyAgent.processUserMessage(
-        subscriber, 
-        message.text!.body,
-        systemPromptOverride
-      );
-    }
-
-    const processingTime = Date.now() - startTime;
-    trackMetric("message_processing_time_ms", processingTime, {
-      userPhone: phone.slice(-4),
-      responseLength: response?.length || 0
-    });
-
-    if (response && response.trim() !== "") {
-      await this.services.whatsappService.sendMessage(phone, response);
-      trackEvent("response_sent", {
+      trackEvent("text_message_received", {
         userPhone: phone.slice(-4),
-        responseLength: response.length,
-        processingTimeMs: processingTime
+        messageLength: message.text!.body.length,
+        timestamp: new Date().toISOString()
       });
-    } else {
-      logger.warn({ userPhone: phone }, "Empty response from LangGraph agent");
-      trackEvent("empty_response", { userPhone: phone.slice(-4) });
-    }
+
+      const startTime = Date.now();
+      let response: string;
+
+      // Check if we need to inject a subscription warning
+      let systemPromptOverride: string | undefined;
+      if (this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
+        const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
+        
+        const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);
+        const lastDigestTopic = subscriber.metadata?.digests?.[0]?.topic || null;
+        
+        // Fetch context for prompt generation
+        const conversationDurationMinutes = await this.services.languageBuddyAgent.getConversationDuration(phone);
+        const timeSinceLastMessageMinutes = await this.services.languageBuddyAgent.getTimeSinceLastMessage(phone);
+
+        const basePrompt = generateSystemPrompt({
+          subscriber,
+          conversationDurationMinutes,
+          timeSinceLastMessageMinutes,
+          currentLocalTime,
+          lastDigestTopic,
+        });
+
+        systemPromptOverride = basePrompt + `\n\nIMPORTANT SYSTEM INSTRUCTION:
+  The user's free trial is ending soon (Day 6 or 7).
+  At the end of your response, you MUST explain in the user's target language that their trial is ending soon and they should subscribe to keep using the service.
+  Payment Link: ${paymentLink}
+  Make it sound natural, encouraging, and helpful. Do not be aggressive.`;
+      }
+
+      if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
+        logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
+        
+        // Fix: Correct argument order (subscriber, humanMessage, systemPromptOverride)
+        response = await this.services.languageBuddyAgent.initiateConversation(
+          subscriber, 
+          message.text!.body, 
+          systemPromptOverride
+        );
+      } else {
+        response = await this.services.languageBuddyAgent.processUserMessage(
+          subscriber, 
+          message.text!.body,
+          systemPromptOverride
+        );
+      }
+
+      const processingTime = Date.now() - startTime;
+      trackMetric("message_processing_time_ms", processingTime, {
+        userPhone: phone.slice(-4),
+        responseLength: response?.length || 0
+      });
+
+      if (response && response.trim() !== "") {
+        await this.services.whatsappService.sendMessage(phone, response);
+        trackEvent("response_sent", {
+          userPhone: phone.slice(-4),
+          responseLength: response.length,
+          processingTimeMs: processingTime
+        });
+      } else {
+        logger.warn({ userPhone: phone }, "Empty response from LangGraph agent");
+        trackEvent("empty_response", { userPhone: phone.slice(-4) });
+      }
+    });
   }
 }

@@ -1,24 +1,27 @@
 import dotenv from "dotenv";
 import path from 'path';
 
-// Load environment variables first, before importing config
+// Load environment variables first
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
 // Initialize tracing BEFORE any other imports (critical for auto-instrumentation)
 import { initializeTracing } from './core/observability/tracing';
 initializeTracing();
 
-import express from "express";
-import serveStatic from "serve-static";
-import "whatsapp-cloud-api-express";
-
-import { ServiceContainer } from './core/container';
-import { setupRoutes } from './routes';
-import { logger, config } from './core/config';
-import { loadVersionInfo } from './core/config/config.version-info';
+import { logger } from './core/config';
 
 async function main() {
   try {
+    // Dynamically import modules AFTER tracing is initialized to ensure auto-instrumentation works
+    const express = (await import("express")).default;
+    const serveStatic = (await import("serve-static")).default;
+    await import("whatsapp-cloud-api-express");
+
+    const { ServiceContainer } = await import('./core/container');
+    const { setupRoutes } = await import('./routes');
+    const { config } = await import('./core/config');
+    const { loadVersionInfo } = await import('./core/config/config.version-info');
+
     // Load version info on startup
     loadVersionInfo();
     
