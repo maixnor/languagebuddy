@@ -28,10 +28,12 @@ const createLogger = () => {
     };
   }
   
-  // Only use pretty printing in development
-  const isDevelopment = process.env.ENVIRONMENT?.toLowerCase() !== 'production';
+  // Determine logging format based on environment
+  // We want structured JSON logs in 'production', 'staging', and 'test' environments for Grafana/Loki indexing.
+  const environment = process.env.ENVIRONMENT?.toLowerCase() || 'production';
+  const useStructuredLogging = ['production', 'staging', 'test'].includes(environment);
   
-  if (isDevelopment) {
+  if (!useStructuredLogging) {
     return pino({
       ...baseConfig,
       transport: {
@@ -46,7 +48,7 @@ const createLogger = () => {
       }
     });
   } else {
-    // Production: use structured JSON logging without colors
+    // Production/Test/Staging: use structured JSON logging without colors
     return pino({
       ...baseConfig,
       timestamp: pino.stdTimeFunctions.isoTime,
