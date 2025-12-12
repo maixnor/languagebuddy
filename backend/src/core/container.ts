@@ -62,7 +62,7 @@ export class ServiceContainer {
     initializeSubscriberTools(this.redisClient);
     initializeFeedbackTools(this.redisClient);
 
-    this.languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(this.redisClient), this.llm);
+    this.languageBuddyAgent = new LanguageBuddyAgent(new RedisCheckpointSaver(this.redisClient), this.llm, this.digestService);
 
     this.schedulerService = SchedulerService.getInstance(this.subscriberService, this.languageBuddyAgent);
     this.schedulerService.startSchedulers();

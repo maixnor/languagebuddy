@@ -11,7 +11,7 @@ import { Subscriber, Language } from '../../features/subscriber/subscriber.types
 import { Digest } from '../../features/digest/digest.types';
 import Redis from 'ioredis';
 import { ChatOpenAI } from '@langchain/openai';
-import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
+import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { config } from '../../core/config';
 import { initializeSubscriberTools } from '../subscriber/subscriber.tools';
 import { initializeFeedbackTools } from '../../tools/feedback-tools';
@@ -161,7 +161,7 @@ class DigestTestHelper {
     initializeFeedbackTools(redisClient);
     
     // Create agent
-    this.agent = new LanguageBuddyAgent(this.checkpointer, this.llm);
+    this.agent = new LanguageBuddyAgent(this.checkpointer, this.llm, this.digestService);
   }
 
   async createGermanLearner(name: string = 'Sarah'): Promise<Subscriber> {
