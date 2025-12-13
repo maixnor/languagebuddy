@@ -6,6 +6,7 @@ import { logger } from '../../core/config';
 import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { DigestAnalysisSchema } from './digest.contracts';
+import { digestsAttemptedTotal, digestsFailedTotal } from '../../core/observability/metrics';
 
 export class DigestService {
   private static instance: DigestService;
@@ -33,6 +34,7 @@ export class DigestService {
    * Creates a comprehensive digest of a conversation
    */
   async createConversationDigest(subscriber: Subscriber): Promise<Digest | undefined> {
+    digestsAttemptedTotal.inc();
     const startTime = Date.now();
     const operationId = `digest_${subscriber.connections.phone}_${Date.now()}`;
     
@@ -87,6 +89,7 @@ export class DigestService {
       }, "Conversation digest created successfully");
       return digest;
     } catch (error) {
+      digestsFailedTotal.inc();
       logger.error({
         operation: 'digest.create.error',
         operationId,

@@ -4,6 +4,7 @@ import { logger, config } from '../../core/config';
 import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber } from './subscriber.utils';
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';
+import { recordNewSubscriber } from '../../core/observability/metrics';
 
 
 export class SubscriberService {  private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
@@ -270,13 +271,14 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
       isPremium: false,
       lastActiveAt: new Date(),
       nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
+      isTestUser: isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber), // Set test user flag
       ...initialData
     };
 
     // Set isPremium to true if conditions are met
-    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
+    if (config.test.skipStripeCheck || subscriber.isTestUser) { // Use the new isTestUser flag
       subscriber.isPremium = true;
-      logger.info({ phoneNumber }, "Subscriber created as premium due to test configuration.");
+      logger.info({ phoneNumber }, "Subscriber created as premium due to test configuration or being a test user.");
     }
 
     // Validate timezone in initialData if present
@@ -293,6 +295,7 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
 
     await this.saveSubscriber(subscriber);
     logger.info({ phoneNumber }, "New subscriber created");
+    recordNewSubscriber();
     return subscriber;
   }
 

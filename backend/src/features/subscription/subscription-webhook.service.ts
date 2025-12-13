@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { logger } from '../../core/config';
 import { SubscriptionService } from './subscription.service';
+import { recordConversion } from '../../core/observability/metrics';
 
 export class StripeWebhookService {
   constructor(
@@ -67,6 +68,15 @@ export class StripeWebhookService {
     }
 
     const isPremium = subscription.status === 'active' || subscription.status === 'trialing';
+
+    const existingSubscriber = await this.subscriberService.getSubscriber(normalizedPhoneNumber);
+
+    // Record conversion metric if a non-premium user becomes premium
+    // and it's not a test phone number (assuming test numbers are defined in config)
+    if (existingSubscriber && !existingSubscriber.isPremium && isPremium && !existingSubscriber.isTestUser) { // Added isTestUser check
+        recordConversion();
+        logger.info({ phoneNumber: normalizedPhoneNumber }, "Recorded new premium conversion.");
+    }
 
     logger.info(
       { phoneNumber: normalizedPhoneNumber, subscriptionStatus: subscription.status, isPremium },

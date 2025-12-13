@@ -14,6 +14,9 @@ const mockOnboardingService = {
 const mockSubscriberService = {
   getSubscriber: jest.fn(),
   createSubscriber: jest.fn(),
+  getDaysSinceSignup: jest.fn().mockReturnValue(10), // Default > trialDays
+  shouldThrottle: jest.fn().mockReturnValue(false),
+  shouldShowSubscriptionWarning: jest.fn().mockReturnValue(false),
 };
 
 const mockLanguageBuddyAgent = {

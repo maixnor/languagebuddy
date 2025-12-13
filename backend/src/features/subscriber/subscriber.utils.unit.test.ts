@@ -182,7 +182,7 @@ describe('selectDeficienciesToPractice', () => {
   });
 });
 
-import { validateTimezone, ensureValidTimezone, getMissingProfileFieldsReflective } from './subscriber.utils';
+import { validateTimezone, ensureValidTimezone, getMissingProfileFieldsReflective, isTestPhoneNumber } from './subscriber.utils';
 
 describe('Timezone Validation', () => {
     it('should map common city names (Lima) to IANA timezones', () => {

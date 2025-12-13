@@ -101,6 +101,7 @@ export interface Subscriber {
     mistakeTolerance: "forgiving" | "normal" | "exact" | "hyperexact"; // how picky the buddy will be with mistakes:w
   };
   isPremium?: boolean;
+  isTestUser?: boolean;
   lastActiveAt?: Date;
   lastMessageSentAt?: Date;
   nextPushMessageAt?: Date;

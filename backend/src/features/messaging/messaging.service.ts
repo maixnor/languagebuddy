@@ -9,6 +9,7 @@ import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts
 import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
 import { DateTime } from "luxon";
 import { traceConversation } from '../../core/observability/tracing';
+import { recordThrottledMessage, recordConversationMessage } from '../../core/observability/metrics';
 
 export class MessagingService {
   constructor(private services: ServiceContainer) {}
@@ -113,6 +114,14 @@ export class MessagingService {
     const phone = message.from;
     let existingSubscriber = await this.services.subscriberService.getSubscriber(phone);
 
+    // Get subscriber type for metrics
+    // If existingSubscriber is null, assume 'free' for initial message or calculate based on potential future subscriber
+    const subscriberType = existingSubscriber?.isPremium ? 'premium' :
+                           (existingSubscriber && this.services.subscriberService.getDaysSinceSignup(existingSubscriber) < config.subscription.trialDays ? 'trial' : 'free');
+
+    // Record user message
+    recordConversationMessage('user', subscriberType);
+
     // 1. Handle New/Onboarding Users (No Subscriber Profile)
     if (!existingSubscriber) {
       const hasActiveConversation = await this.services.languageBuddyAgent.currentlyInActiveConversation(phone);
@@ -137,6 +146,7 @@ export class MessagingService {
         phone,
         "🎉 Great! Your Language Buddy profile has been successfully created."
       );
+      recordConversationMessage('ai', subscriberType); // AI response
 
       // 2. Initiate a new conversation (like a daily proactive start)
       const currentLocalTime = DateTime.local().setZone(existingSubscriber.profile.timezone || config.fallbackTimezone);
@@ -167,6 +177,7 @@ export class MessagingService {
 
       if (initialConversationMessage) {
         await this.services.whatsappService.sendMessage(phone, initialConversationMessage);
+        recordConversationMessage('ai', subscriberType); // AI response
       } else {
         logger.error({ phone }, "Failed to initiate first conversation after onboarding completion.");
       }
@@ -195,6 +206,8 @@ export class MessagingService {
         phone, 
         "You are sending messages too quickly. Please wait a few seconds between messages."
       );
+      recordThrottledMessage(); // Increment throttled message metric
+      recordConversationMessage('ai', subscriberType); // AI response (throttling message)
       return;
     }
 
@@ -214,6 +227,8 @@ export class MessagingService {
           phone, 
           `⏳ Your 7-day trial has ended. To continue your language journey with unlimited conversations, please subscribe here: ${paymentLink}`
         );
+        recordConversationMessage('ai', subscriberType); // AI response (throttling message)
+        recordThrottledMessage(); // Increment throttled message metric
         return;
       }
     }
@@ -236,6 +251,8 @@ export class MessagingService {
 
   private async startNewUserOnboarding(phone: string, messageBody: string): Promise<void> {
     const subscriberForPrompt = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
+    // Get subscriber type for metrics (for new users, assume free/trial depending on days since signup)
+    const subscriberType = 'free'; // New user starts as free/trial
     const systemPrompt = generateOnboardingSystemPrompt();
     const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
       subscriberForPrompt,
@@ -244,10 +261,13 @@ export class MessagingService {
       { type: 'onboarding' }
     );
     await this.services.whatsappService.sendMessage(phone, welcomeMessage);
+    recordConversationMessage('ai', subscriberType); // AI response
   }
 
   private async continueOnboarding(phone: string, messageBody: string): Promise<void> {
     const tempSubscriber = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
+    // Get subscriber type for metrics (for new users, assume free/trial depending on days since signup)
+    const subscriberType = 'free'; // New user continues as free/trial
     const systemPrompt = generateOnboardingSystemPrompt();
     const response = await this.services.languageBuddyAgent.processUserMessage(
       tempSubscriber,
@@ -255,12 +275,17 @@ export class MessagingService {
       systemPrompt
     );
     await this.services.whatsappService.sendMessage(phone, response);
+    recordConversationMessage('ai', subscriberType); // AI response
   }
 
   private async handleMissingProfileInfo(subscriber: Subscriber, missingField: string): Promise<void> {
     const phone = subscriber.connections.phone;
     const language = subscriber.profile.speakingLanguages[0]?.languageName || "english";
     
+    // Get subscriber type for metrics
+    const subscriberType = subscriber?.isPremium ? 'premium' :
+                           (this.services.subscriberService.getDaysSinceSignup(subscriber || {} as Subscriber) < config.subscription.trialDays ? 'trial' : 'free');
+
     logger.info({ 
       phone: phone.slice(-4), 
       missingField, 
@@ -279,6 +304,7 @@ export class MessagingService {
     
     logger.info({ response: response.slice(0, 100) + "..." }, "🔧 One-shot response generated");
     await this.services.whatsappService.sendMessage(phone, response);
+    recordConversationMessage('ai', subscriberType); // AI response
   }
 
   private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage): Promise<void> {
@@ -296,6 +322,10 @@ export class MessagingService {
 
       const startTime = Date.now();
       let response: string;
+
+      // Get subscriber type for metrics
+      const subscriberType = subscriber?.isPremium ? 'premium' :
+                             (this.services.subscriberService.getDaysSinceSignup(subscriber || {} as Subscriber) < config.subscription.trialDays ? 'trial' : 'free');
 
       // Check if we need to inject a subscription warning
       let systemPromptOverride: string | undefined;
@@ -349,6 +379,7 @@ export class MessagingService {
 
       if (response && response.trim() !== "") {
         await this.services.whatsappService.sendMessage(phone, response);
+        recordConversationMessage('ai', subscriberType); // AI response
         trackEvent("response_sent", {
           userPhone: phone.slice(-4),
           responseLength: response.length,
