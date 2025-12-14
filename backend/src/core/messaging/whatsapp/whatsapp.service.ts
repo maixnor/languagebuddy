@@ -47,10 +47,13 @@ export class WhatsAppService {
       return this.sendMessageToCliRaw(toPhone, text);
     }
 
+    // Strip leading '+' for WhatsApp API if present, as per user requirement
+    const to = toPhone.startsWith('+') ? toPhone.substring(1) : toPhone;
+
     // Regular WhatsApp API communication
     const payload: WhatsAppMessagePayload = {
       messaging_product: "whatsapp",
-      to: toPhone,
+      to: to,
       text: { body: text },
     };
 

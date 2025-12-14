@@ -12,6 +12,22 @@ import { DateTime } from 'luxon';
 import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
 import { Subscriber } from '../../types';
+import * as configModule from '../../core/config';
+
+// Mock the config module to ensure we test trial logic even if default config has skipStripeCheck=true
+jest.mock('../../core/config', () => ({
+  ...jest.requireActual('../../core/config'),
+  config: {
+    ...jest.requireActual('../../core/config').config,
+    test: {
+      phoneNumbers: [],
+      skipStripeCheck: false,
+    },
+  },
+  logger: jest.requireActual('../../core/config').logger,
+}));
+
+const mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
 
 describe('Trial Period Transitions (Integration)', () => {
   let redis: Redis;
@@ -36,6 +52,10 @@ describe('Trial Period Transitions (Integration)', () => {
       await redis.del(...keys);
     }
     
+    // Reset config for each test to ensure no leaks
+    mockedConfig.test.skipStripeCheck = false;
+    mockedConfig.test.phoneNumbers = [];
+
     (SubscriberService as any).instance = null;
     subscriberService = SubscriberService.getInstance(redis);
   });

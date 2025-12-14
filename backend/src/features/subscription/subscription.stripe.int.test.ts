@@ -25,7 +25,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
   let subscriberService: SubscriberService;
   let stripeWebhookService: StripeWebhookService;
   let mockStripe: jest.Mocked<Stripe>;
-  const testPhone = '1234567890';
+  const testPhone = '+1234567890';
   const testPhoneWithPlus = '+1234567890';
   const testWebhookSecret = 'wh_test_secret';
 

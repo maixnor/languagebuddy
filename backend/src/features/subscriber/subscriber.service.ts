@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
 import { Subscriber } from './subscriber.types';
 import { logger, config } from '../../core/config';
-import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber } from './subscriber.utils';
+import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber, sanitizePhoneNumber } from './subscriber.utils';
 import { DateTime } from 'luxon';
 import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptForSubscriber } from './subscriber.prompts';
 import { recordNewSubscriber } from '../../core/observability/metrics';
@@ -19,20 +19,21 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
    * @deprecated Use attemptToStartConversation for atomic check-and-act
    */
   public async canStartConversationToday(phoneNumber: string): Promise<boolean> {
+    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
     // Bypass throttle if global skip is enabled or if it's a whitelisted test number
-    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
-      logger.debug({ phoneNumber }, "Bypassing conversation throttle due to test configuration.");
+    if (config.test.skipStripeCheck || isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
+      logger.debug({ phoneNumber: sanitizedPhone }, "Bypassing conversation throttle due to test configuration.");
       return true;
     }
     
-    const subscriber = await this.getSubscriber(phoneNumber);
+    const subscriber = await this.getSubscriber(sanitizedPhone);
     if (subscriber && subscriber.isPremium) {
       return true; // Premium users can always start a conversation
     }
 
     const today = this._getTodayInSubscriberTimezone(subscriber); // Use helper
 
-    const key = `conversation_count:${phoneNumber}:${today}`;
+    const key = `conversation_count:${sanitizedPhone}:${today}`;
     const count = await this.redis.get(key);
     return !count || parseInt(count) < 1;
   }
@@ -42,27 +43,28 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
    * Returns true if conversation is allowed (and count was incremented).
    */
   public async attemptToStartConversation(phoneNumber: string): Promise<boolean> {
+    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
     // Bypass throttle and always allow if global skip is enabled or if it's a whitelisted test number
-    if (config.test.skipStripeCheck || isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
-      logger.debug({ phoneNumber }, "Bypassing conversation throttle due to test configuration.");
+    if (config.test.skipStripeCheck || isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
+      logger.debug({ phoneNumber: sanitizedPhone }, "Bypassing conversation throttle due to test configuration.");
       // For test users, we still want to increment conversation count if it's a test phone number (non-premium)
       // but not if skipStripeCheck is true, as that implies no real usage.
-      if (isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber)) {
-        await this.incrementConversationCount(phoneNumber);
+      if (isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
+        await this.incrementConversationCount(sanitizedPhone);
       }
       return true;
     }
     
-    const subscriber = await this.getSubscriber(phoneNumber);
+    const subscriber = await this.getSubscriber(sanitizedPhone);
     
     // Always allow premium users, but we still might want to track their usage.
     if (subscriber && subscriber.isPremium) {
-      await this.incrementConversationCount(phoneNumber);
+      await this.incrementConversationCount(sanitizedPhone);
       return true;
     }
 
     const today = this._getTodayInSubscriberTimezone(subscriber);
-    const key = `conversation_count:${phoneNumber}:${today}`;
+    const key = `conversation_count:${sanitizedPhone}:${today}`;
     const ttl = 86400;
     const limit = 1;
 
@@ -89,9 +91,10 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
    * Uses atomic Lua script to ensure TTL is set correctly.
    */
   public async incrementConversationCount(phoneNumber: string): Promise<void> {
-    const subscriber = await this.getSubscriber(phoneNumber); // Get subscriber to access timezone
+    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+    const subscriber = await this.getSubscriber(sanitizedPhone); // Get subscriber to access timezone
     const today = this._getTodayInSubscriberTimezone(subscriber); // Use helper
-    const key = `conversation_count:${phoneNumber}:${today}`;
+    const key = `conversation_count:${sanitizedPhone}:${today}`;
     const ttl = 86400;
 
     // Atomic INCR + EXPIRE using Lua
@@ -231,7 +234,40 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
 
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
-      const cachedSubscriber = await this.redis.get(`subscriber:${phoneNumber}`);
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      
+      // 1. Try fetching with sanitized key (E.164 with +)
+      let cachedSubscriber = await this.redis.get(`subscriber:${sanitizedPhone}`);
+      
+      // 2. Lazy Migration: If not found, try fetching with legacy key (without +)
+      // The user stated they saved numbers without the + previously.
+      if (!cachedSubscriber) {
+        const phoneWithoutPlus = sanitizedPhone.replace(/^\+/, '');
+        const legacyKey = `subscriber:${phoneWithoutPlus}`;
+        
+        // Only check if legacy key is actually different (it should be)
+        if (legacyKey !== `subscriber:${sanitizedPhone}`) {
+            const rawSubscriber = await this.redis.get(legacyKey);
+            
+            if (rawSubscriber) {
+              logger.info({ phoneNumber, sanitizedPhone, legacyKey }, "Lazy migration: Found subscriber with legacy key. Migrating to sanitized key.");
+              const subscriber = JSON.parse(rawSubscriber);
+              
+              // Update phone number to sanitized version
+              subscriber.connections.phone = sanitizedPhone;
+              
+              // Save to new key (sanitized)
+              await this.saveSubscriber(subscriber);
+              
+              // Delete old key
+              await this.redis.del(legacyKey);
+              
+              // Use the migrated subscriber
+              cachedSubscriber = JSON.stringify(subscriber);
+            }
+        }
+      }
+
       if (cachedSubscriber) {
         const subscriber = JSON.parse(cachedSubscriber);
         this.hydrateSubscriber(subscriber);
@@ -246,9 +282,10 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
   }
 
   async createSubscriber(phoneNumber: string, initialData?: Partial<Subscriber>): Promise<Subscriber> {
+    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
     const subscriber: Subscriber = {
       connections: {
-        phone: phoneNumber,
+        phone: sanitizedPhone,
       },
       profile: {
         name: "New User",
@@ -271,14 +308,14 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
       isPremium: false,
       lastActiveAt: new Date(),
       nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
-      isTestUser: isTestPhoneNumber(phoneNumber) || config.test.phoneNumbers.includes(phoneNumber), // Set test user flag
+      isTestUser: isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone), // Set test user flag
       ...initialData
     };
 
     // Set isPremium to true if conditions are met
     if (config.test.skipStripeCheck || subscriber.isTestUser) { // Use the new isTestUser flag
       subscriber.isPremium = true;
-      logger.info({ phoneNumber }, "Subscriber created as premium due to test configuration or being a test user.");
+      logger.info({ phoneNumber: sanitizedPhone }, "Subscriber created as premium due to test configuration or being a test user.");
     }
 
     // Validate timezone in initialData if present
@@ -290,20 +327,21 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
     // Check if profile is missing required fields (reflection-based)
     const missingFields = getMissingProfileFieldsReflective(subscriber.profile!);
     if (missingFields.length > 0) {
-      logger.info({ missingFields, phoneNumber }, "Subscriber created with missing profile fields");
+      logger.info({ missingFields, phoneNumber: sanitizedPhone }, "Subscriber created with missing profile fields");
     }
 
     await this.saveSubscriber(subscriber);
-    logger.info({ phoneNumber }, "New subscriber created");
+    logger.info({ phoneNumber: sanitizedPhone }, "New subscriber created");
     recordNewSubscriber();
     return subscriber;
   }
 
   async updateSubscriber(phoneNumber: string, updates: Partial<Subscriber>): Promise<void> {
     try {
-      let subscriber = await this.getSubscriber(phoneNumber);
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      let subscriber = await this.getSubscriber(sanitizedPhone);
       if (!subscriber) {
-        subscriber = await this.createSubscriber(phoneNumber);
+        subscriber = await this.createSubscriber(sanitizedPhone);
       }
 
       // Validate timezone if it's being updated
@@ -319,10 +357,10 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
       // Re-check missing fields after update (reflection-based)
       const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
       if (missingFields.length > 0) {
-        logger.info({ missingFields, phoneNumber }, "Subscriber updated with missing profile fields");
+        logger.info({ missingFields, phoneNumber: sanitizedPhone }, "Subscriber updated with missing profile fields");
       }
 
-      logger.trace({phoneNumber, updates}, `Updated user with this info:`)
+      logger.trace({phoneNumber: sanitizedPhone, updates}, `Updated user with this info:`)
     } catch (error) {
       logger.error({ error, phoneNumber, updates }, "Error updating subscriber");
       throw error;
@@ -356,8 +394,12 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
 
   private async saveSubscriber(subscriber: Subscriber): Promise<void> {
     try {
+      const sanitizedPhone = sanitizePhoneNumber(subscriber.connections.phone);
+      // Ensure the object itself has the sanitized phone number
+      subscriber.connections.phone = sanitizedPhone;
+      
       await this.redis.set(
-        `subscriber:${subscriber.connections.phone}`,
+        `subscriber:${sanitizedPhone}`,
         JSON.stringify(subscriber)
       );
     } catch (error) {

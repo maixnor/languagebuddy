@@ -33,7 +33,7 @@ describe('Subscriber Service Hydration', () => {
   });
 
   it('should hydrate Date objects when fetching from Redis', async () => {
-    const phone = '1234567890';
+    const phone = '+1234567890';
     const now = new Date();
     
     // 1. Create a subscriber (which saves it to Redis as JSON string)
@@ -59,7 +59,7 @@ describe('Subscriber Service Hydration', () => {
   });
 
     it('should hydrate nested Date objects in languages', async () => {
-    const phone = '1234567890';
+    const phone = '+1234567890';
     const now = new Date();
     
     const subscriber = await service.createSubscriber(phone);

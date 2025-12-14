@@ -67,7 +67,7 @@ describe('MessagingService', () => {
 
   describe('processTextMessage', () => {
     const mockMessage = {
-      from: '1234567890',
+      from: '+1234567890',
       id: 'wamid.test',
       timestamp: '123456789',
       text: { body: 'Hello' },

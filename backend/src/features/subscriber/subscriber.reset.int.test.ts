@@ -26,7 +26,7 @@ describe('Conversation Reset Integration', () => {
   let mockChatOpenAI: ChatOpenAI;
 
 
-  const mockPhoneNumber = '1234567890';
+  const mockPhoneNumber = '+1234567890';
   let mockSubscriber: Subscriber;
 
   beforeAll(() => {

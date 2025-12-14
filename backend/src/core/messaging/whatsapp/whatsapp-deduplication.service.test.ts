@@ -63,7 +63,7 @@ describe('WhatsappDeduplicationService', () => {
 
   describe('isThrottled', () => {
     it('should return true if phone throttle key exists', async () => {
-      const phone = '1234567890';
+      const phone = '+1234567890';
       mockRedis.exists.mockResolvedValue(1);
 
       const result = await service.isThrottled(phone);

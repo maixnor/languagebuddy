@@ -70,7 +70,7 @@ describe('WhatsAppService', () => {
         text: jest.fn().mockResolvedValue('success'),
       });
 
-      const result = await service.sendMessageRaw('1234567890', 'Hello World');
+      const result = await service.sendMessageRaw('+1234567890', 'Hello World');
 
       expect(result).toBe(true);
       expect(global.fetch).toHaveBeenCalledWith(
@@ -98,7 +98,7 @@ describe('WhatsAppService', () => {
         text: jest.fn().mockResolvedValue('{"error": "message"}'),
       });
 
-      const result = await service.sendMessageRaw('1234567890', 'Hello World');
+      const result = await service.sendMessageRaw('+1234567890', 'Hello World');
 
       expect(result).toBe(false);
       expect(logger.error).toHaveBeenCalled();
@@ -107,7 +107,7 @@ describe('WhatsAppService', () => {
     it('should handle network exceptions', async () => {
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network Error'));
 
-      const result = await service.sendMessageRaw('1234567890', 'Hello World');
+      const result = await service.sendMessageRaw('+1234567890', 'Hello World');
 
       expect(result).toBe(false);
       expect(logger.error).toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe('WhatsAppService', () => {
       // A message with a separator
       const complexMessage = "Part 1\n---\nPart 2";
       
-      const result = await service.sendMessage('1234567890', complexMessage);
+      const result = await service.sendMessage('+1234567890', complexMessage);
 
       expect(result.successful).toBe(2);
       expect(result.failed).toBe(0);
@@ -145,7 +145,7 @@ describe('WhatsAppService', () => {
 
       const complexMessage = "Part 1\n---\nPart 2";
       
-      const result = await service.sendMessage('1234567890', complexMessage);
+      const result = await service.sendMessage('+1234567890', complexMessage);
 
       expect(result.successful).toBe(1);
       expect(result.failed).toBe(1);

@@ -3,7 +3,7 @@ import { logger, trackEvent, trackMetric, config } from '../../core/config';
 import { WebhookMessage } from './messaging.types';
 import { Subscriber } from '../subscriber/subscriber.types';
 import { handleUserCommand } from '../../agents/agent.user-commands';
-import { getNextMissingField, getPromptForField } from '../subscriber/subscriber.utils';
+import { getNextMissingField, getPromptForField, sanitizePhoneNumber } from '../subscriber/subscriber.utils';
 import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../subscriber/subscriber.prompts';
 import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
 import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
@@ -15,7 +15,7 @@ export class MessagingService {
   constructor(private services: ServiceContainer) {}
 
   async handleInitiateRequest(body: any, res: any): Promise<void> {
-    const { phone } = body;
+    const phone = sanitizePhoneNumber(body.phone);
 
     if (!phone) {
       res.status(400).send("Missing 'phone' in request body.");
@@ -111,7 +111,7 @@ export class MessagingService {
   }
 
   private async processTextMessage(message: WebhookMessage): Promise<void> {
-    const phone = message.from;
+    const phone = sanitizePhoneNumber(message.from);
     let existingSubscriber = await this.services.subscriberService.getSubscriber(phone);
 
     // Get subscriber type for metrics

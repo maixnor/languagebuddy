@@ -21,7 +21,7 @@ describe('checkLastResponse (standalone)', () => {
       timezone: "UTC"
     } as any,
     connections: {
-      phone: "1234567890",
+      phone: "+1234567890",
     },
     metadata: {} as any,
     isPremium: false,

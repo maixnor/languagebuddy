@@ -50,7 +50,7 @@ describe('SchedulerService', () => {
   // Sample data
   const mockNow = DateTime.fromISO('2025-01-01T12:00:00Z');
   const mockSubscriber: Subscriber = {
-    connections: { phone: '1234567890' },
+    connections: { phone: '+1234567890' },
     profile: {
       name: 'Test User',
       learningLanguages: [],

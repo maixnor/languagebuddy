@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { Subscriber } from "../subscriber/subscriber.types";
 import { logger } from "../../core/config";
+import { sanitizePhoneNumber } from "../subscriber/subscriber.utils";
 
 export class SubscriptionService {
   private static instance: SubscriptionService;
@@ -35,9 +36,7 @@ export class SubscriptionService {
     }
 
     try {
-      // Normalize the phone number to ensure it has exactly one leading '+'
-      // Remove all leading '+' and then add a single '+'
-      const normalizedPhoneNumber = '+' + phoneNumber.replace(/^\++/, '');
+      const normalizedPhoneNumber = sanitizePhoneNumber(phoneNumber);
 
       const customers = await this.stripe.customers.search({
         limit: 1,

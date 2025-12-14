@@ -105,7 +105,7 @@ describe('RedisCheckpointSaver', () => {
   });
 
   it('should delete checkpoint and writes keys in deleteCheckpoint', async () => {
-    const phone = '1234567890';
+    const phone = '+1234567890';
     
     // Mock keys finding some writes
     mockRedis.exists.mockResolvedValue(1);
@@ -124,7 +124,7 @@ describe('RedisCheckpointSaver', () => {
   });
 
   it('should handle deleteCheckpoint when no writes exist', async () => {
-    const phone = '1234567890';
+    const phone = '+1234567890';
     
     mockRedis.exists.mockImplementation((key: string) => {
       if (key === `checkpoint:${phone}`) {
@@ -140,7 +140,7 @@ describe('RedisCheckpointSaver', () => {
     expect(mockRedis.del).toHaveBeenCalledWith(`checkpoint:${phone}`);
     
     // Verify NO writes deletion (del called only once for the main key variants)
-    // The implementation iterates over phoneRaw, phoneStripped, phoneWithPlus, which for '1234567890' results in 2 unique keys
+    // The implementation iterates over phoneRaw, phoneStripped, phoneWithPlus, which for '+1234567890' results in 2 unique keys
     expect(mockRedis.del).toHaveBeenCalledTimes(2);
   });
 });

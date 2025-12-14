@@ -10,6 +10,23 @@
 import { DateTime } from 'luxon';
 import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
+import { sanitizePhoneNumber } from './subscriber.utils';
+import * as configModule from '../../core/config';
+
+// Mock the config module to ensure we test race conditions even if default config has skipStripeCheck=true
+jest.mock('../../core/config', () => ({
+  ...jest.requireActual('../../core/config'),
+  config: {
+    ...jest.requireActual('../../core/config').config,
+    test: {
+      phoneNumbers: [],
+      skipStripeCheck: false,
+    },
+  },
+  logger: jest.requireActual('../../core/config').logger,
+}));
+
+const mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
 
 describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
   let redis: Redis;
@@ -28,6 +45,10 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       await redis.del(...keysToDelete);
     }
     
+    // Reset config
+    mockedConfig.test.skipStripeCheck = false;
+    mockedConfig.test.phoneNumbers = [];
+
     (SubscriberService as any).instance = null;
     subscriberService = SubscriberService.getInstance(redis);
 
@@ -306,7 +327,7 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
 
   describe('Key naming and collision', () => {
     it('should not collide with similar phone numbers', async () => {
-      const phone1 = '1234567890';
+      const phone1 = '+1234567890';
       const phone2 = '12345678901'; // One extra digit
       
       await subscriberService.incrementConversationCount(phone1);
@@ -314,11 +335,11 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       const subscriber1 = await subscriberService.getSubscriber(phone1);
       const today1 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber1);
-      const key1 = `conversation_count:${phone1}:${today1}`;
+      const key1 = `conversation_count:${sanitizePhoneNumber(phone1)}:${today1}`;
 
       const subscriber2 = await subscriberService.getSubscriber(phone2);
       const today2 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber2);
-      const key2 = `conversation_count:${phone2}:${today2}`;
+      const key2 = `conversation_count:${sanitizePhoneNumber(phone2)}:${today2}`;
       
       const count1 = await redis.get(key1);
       const count2 = await redis.get(key2);
@@ -334,7 +355,7 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       const subscriber = await subscriberService.getSubscriber(phoneWithSpecial);
       const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${phoneWithSpecial}:${today}`;
+      const key = `conversation_count:${sanitizePhoneNumber(phoneWithSpecial)}:${today}`;
       const count = await redis.get(key);
       
       expect(count).toBe('1');

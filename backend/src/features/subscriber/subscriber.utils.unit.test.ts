@@ -182,7 +182,7 @@ describe('selectDeficienciesToPractice', () => {
   });
 });
 
-import { validateTimezone, ensureValidTimezone, getMissingProfileFieldsReflective, isTestPhoneNumber } from './subscriber.utils';
+import { validateTimezone, ensureValidTimezone, getMissingProfileFieldsReflective, isTestPhoneNumber, sanitizePhoneNumber } from './subscriber.utils';
 
 describe('Timezone Validation', () => {
     it('should map common city names (Lima) to IANA timezones', () => {
@@ -256,6 +256,33 @@ describe('isTestPhoneNumber', () => {
         expect(isTestPhoneNumber('69123456789')).toBe(false);
         expect(isTestPhoneNumber('')).toBe(false);
         expect(isTestPhoneNumber('+')).toBe(false);
+    });
+});
+
+describe('sanitizePhoneNumber', () => {
+    it('should keep already sanitized numbers', () => {
+        expect(sanitizePhoneNumber('+1234567890')).toBe('+1234567890');
+    });
+
+    it('should add plus if missing', () => {
+        expect(sanitizePhoneNumber('1234567890')).toBe('+1234567890');
+    });
+
+    it('should remove spaces and special characters', () => {
+        expect(sanitizePhoneNumber('(555) 123-4567')).toBe('+5551234567');
+        expect(sanitizePhoneNumber('1 234 567')).toBe('+1234567');
+    });
+
+    it('should handle leading 00', () => {
+        expect(sanitizePhoneNumber('0049123456789')).toBe('+49123456789');
+    });
+
+    it('should handle multiple plus signs', () => {
+        expect(sanitizePhoneNumber('++123')).toBe('+123');
+    });
+    
+    it('should handle empty strings', () => {
+        expect(sanitizePhoneNumber('')).toBe('');
     });
 });
 

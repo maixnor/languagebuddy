@@ -187,3 +187,33 @@ export function getMissingProfileFieldsReflective(profile: Record<string, any>):
 export function isTestPhoneNumber(phoneNumber: string): boolean {
     return phoneNumber.startsWith('+69');
 }
+
+/**
+ * Sanitizes a phone number to E.164 format (roughly).
+ * Ensures the number starts with '+' and contains only digits.
+ * Replaces leading '00' with '+'.
+ * Removes all other non-digit characters.
+ * @param phone The input phone number string.
+ * @returns The sanitized phone number string starting with '+'.
+ */
+export function sanitizePhoneNumber(phone: string): string {
+    if (!phone) return "";
+    
+    // Remove all characters except digits and +
+    let cleaned = phone.replace(/[^\d+]/g, '');
+
+    // If it starts with '00', replace with '+'
+    if (cleaned.startsWith('00')) {
+        cleaned = '+' + cleaned.substring(2);
+    }
+
+    // Ensure it starts with +
+    if (!cleaned.startsWith('+')) {
+        cleaned = '+' + cleaned;
+    }
+
+    // Normalize multiple pluses at the start (e.g. ++1 -> +1)
+    cleaned = '+' + cleaned.replace(/^\++/, '');
+
+    return cleaned;
+}

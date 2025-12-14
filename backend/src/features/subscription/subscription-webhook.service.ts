@@ -3,6 +3,7 @@ import { SubscriberService } from '../subscriber/subscriber.service';
 import { logger } from '../../core/config';
 import { SubscriptionService } from './subscription.service';
 import { recordConversion } from '../../core/observability/metrics';
+import { sanitizePhoneNumber } from '../subscriber/subscriber.utils';
 
 export class StripeWebhookService {
   constructor(
@@ -59,8 +60,7 @@ export class StripeWebhookService {
 
     const phoneNumber = customer.phone; // Assuming phone number is stored on customer metadata or directly
     // Normalize the phone number to ensure it has exactly one leading '+'
-    // Remove all leading '+' and then add a single '+'
-    const normalizedPhoneNumber = '+' + phoneNumber.replace(/^\++/, '');
+    const normalizedPhoneNumber = sanitizePhoneNumber(phoneNumber || '');
 
     if (!normalizedPhoneNumber) {
       logger.warn({ customerId: customer.id }, "Stripe customer without phone number. Cannot update subscriber.");
