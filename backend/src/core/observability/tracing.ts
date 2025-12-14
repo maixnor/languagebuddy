@@ -101,8 +101,8 @@ export const initializeTracing = () => {
           enabled: true,
           // Ensure we capture OpenAI and other HTTP client calls
           ignoreIncomingRequestHook: (req) => {
-            // Ignore health checks and static files
-            return req.url?.includes('/health') || req.url?.includes('/static');
+            // Ignore health checks
+            return req.url?.includes('/health');
           },
           // Add request/response hooks for better visibility
           requestHook: (span, request) => {

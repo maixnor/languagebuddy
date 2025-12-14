@@ -113,25 +113,9 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
     }
   });
 
-  // Root endpoint - serve frontend
+  // Root endpoint
   app.get("/", (req: any, res: any) => {
     logger.info("/");
-    res.sendFile(process.cwd() + "/static/index.html", (err) => {
-      if (err) {
-        logger.warn({ err }, "Could not serve frontend index.html, falling back to text response");
-        res.send("You should not be seeing this. Please come back in like 2 days when I fixed the website :)");
-      }
-    });
-  });
-
-  // Serve frontend routes (privacy, impressum, etc.)
-  app.get(["/privacy", "/impressum"], (req: any, res: any) => {
-    const page = req.path.substring(1); // Remove leading slash
-    res.sendFile(process.cwd() + `/static/${page}.html`, (err) => {
-      if (err) {
-        logger.warn({ err, page }, `Could not serve ${page}.html`);
-        res.status(404).send("Page not found");
-      }
-    });
+    res.send("why are you even here?");
   });
 }

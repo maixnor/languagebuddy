@@ -1,0 +1,78 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+	<div class="container">
+		<div class="content">
+			<h1>Data Deletion Request</h1>
+			<p><strong>Effective Date:</strong> 1.1.2025</p>
+
+			<h2>How to Delete Your Data</h2>
+			<p>If you wish to delete your personal data that we hold, please follow these steps:</p>
+			<ul>
+				<li><strong>Email Us:</strong> Send an email to <a href="mailto:benjamin@meixner.org">benjamin@meixner.org</a>.</li>
+				<li><strong>Subject Line:</strong> Use "Data Deletion Request" as the subject.</li>
+				<li><strong>Include Details:</strong> Provide your name and any identifying information related to your account (specifically your phone number used for WhatsApp).</li>
+				<li><strong>Verification:</strong> We may need to verify your identity before processing the deletion.</li>
+			</ul>
+
+			<h2>Processing Time</h2>
+			<p>We aim to process all deletion requests within 30 days. You will receive a confirmation once your data has been deleted.</p>
+
+			<h2>Contact Us</h2>
+			<p>If you have any questions or need assistance, please contact us at <a href="mailto:benjamin@meixner.org">benjamin@meixner.org</a>.</p>
+
+			<a href="/" class="back-link">← Back to Home</a>
+		</div>
+	</div>
+</Layout>
+
+<style>
+	.content {
+		padding: 4rem 0;
+		max-width: 800px;
+		margin: 0 auto;
+	}
+
+	h1 {
+		margin-bottom: 2rem;
+		color: var(--secondary);
+	}
+
+	h2 {
+		margin-top: 2rem;
+		margin-bottom: 1rem;
+		color: var(--primary-dark);
+		font-size: 1.5rem;
+	}
+
+	p, ul {
+		margin-bottom: 1rem;
+		line-height: 1.6;
+		color: var(--text);
+	}
+
+	ul {
+		padding-left: 2rem;
+	}
+
+	li {
+		margin-bottom: 0.5rem;
+	}
+
+	a {
+		color: var(--primary);
+		text-decoration: none;
+	}
+
+	a:hover {
+		text-decoration: underline;
+	}
+
+	.back-link {
+		display: inline-block;
+		margin-top: 2rem;
+		font-weight: 600;
+	}
+</style>

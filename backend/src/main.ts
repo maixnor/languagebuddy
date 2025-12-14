@@ -14,7 +14,6 @@ async function main() {
   try {
     // Dynamically import modules AFTER tracing is initialized to ensure auto-instrumentation works
     const express = (await import("express")).default;
-    const serveStatic = (await import("serve-static")).default;
     await import("whatsapp-cloud-api-express");
 
     const { ServiceContainer } = await import('./core/container');
@@ -40,9 +39,6 @@ async function main() {
     
     // Setup routes
     setupRoutes(app, services);
-    
-    // Set up static file serving for HTML files
-    app.use('/static', serveStatic(process.cwd() + "/static"));
     
     // Start server
     const port = Number(config.server.port) || 3000;

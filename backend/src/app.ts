@@ -1,5 +1,4 @@
 import express from "express";
-import serveStatic from "serve-static";
 import { logger, config } from './core/config';
 import { ServiceContainer } from './core/container';
 import { setupRoutes } from './routes';
@@ -22,9 +21,6 @@ export class Application {
 
     // Setup routes
     setupRoutes(this.app, this.serviceContainer);
-
-    // Set up static file serving for HTML files
-
   }
 
   getApp(): express.Application {
