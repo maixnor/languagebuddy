@@ -9,18 +9,20 @@
 	<meta name="viewport" content="width=device-width" />
 	<meta name="generator" content={Astro.generator} />
 	<meta name="description" content="Learn languages naturally through WhatsApp conversations with your AI language buddy. Practice anytime, anywhere." />
-	<title>LanguageBuddy - Learn Languages Through WhatsApp</title>
+	<title>Maya - Learn Languages Through WhatsApp</title>
 </head>
 <body>
 	<header>
 		<nav>
 			<div class="container">
-				<div class="logo">LanguageBuddy</div>
+				<div class="logo-container">
+                    <img src="/langbud_maya.png" alt="Maya Logo" class="logo-img">
+                    <div class="logo">Maya</div>
+                </div>
 				<ul>
 					<li><a href="#features">Features</a></li>
 					<li><a href="#how-it-works">How It Works</a></li>
 					<li><a href="#pricing">Pricing</a></li>
-					<li><a href="#about">About</a></li>
 				</ul>
 			</div>
 		</nav>
@@ -34,12 +36,13 @@
 		<div class="container">
 			<div class="footer-content">
 				<div class="footer-section">
-					<h4>LanguageBuddy</h4>
+					<h4>Maya</h4>
 					<p>Learn languages naturally through WhatsApp conversations.</p>
 				</div>
 				<div class="footer-section">
 					<h4>Legal</h4>
 					<ul>
+						<li><a href="/faq">FAQ</a></li>
 						<li><a href="/privacy">Privacy Policy</a></li>
 						<li><a href="/impressum">Impressum</a></li>
 						<li><a href="/terms">Terms of Service</a></li>
@@ -106,8 +109,22 @@
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
-			padding: 1rem 2rem;
+			padding: 0.75rem 2rem;
 		}
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary);
+        }
 
 		.logo {
 			font-size: 1.5rem;
@@ -823,6 +840,10 @@
 
 		/* Responsive */
 		@media (max-width: 768px) {
+			header {
+				display: none;
+			}
+
 			.hero h1 {
 				font-size: 2rem;
 			}
@@ -864,6 +885,36 @@
 			.phone-demo {
 				min-height: 500px;
 			}
+
+            .features {
+                padding: 3rem 0;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 0.75rem;
+            }
+
+            .feature-card {
+                padding: 1.25rem;
+            }
+
+            .feature-card h3 {
+                font-size: 1.1rem;
+                min-height: 2.5rem; /* Ensure alignment */
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .feature-card p {
+                font-size: 0.9rem;
+            }
+
+            .feature-card .icon {
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+            }
 		}
 
 		/* Added for text-heavy pages and list alignment */
