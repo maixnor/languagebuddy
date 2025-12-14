@@ -201,7 +201,9 @@ ${digest.summary}
         prompt += `📌 Important notes: ${digest.userMemos.join(" • ")}\n`;
       }
 
-      if (digest.assistantMistakes && digest.assistantMistakes.length > 0) {
+      // Only show mistakes from the most recent digest to avoid repeated apologies
+      const isMostRecent = index === recentDigests.length - 1;
+      if (isMostRecent && digest.assistantMistakes && digest.assistantMistakes.length > 0) {
         prompt += `\n🚨 YOUR PREVIOUS MISTAKES (AUDIT): \n`;
         digest.assistantMistakes.forEach(mistake => {
            prompt += `- You said: "${mistake.originalText}"\n  Correction: "${mistake.correction}"\n  Reason: ${mistake.reason}\n`;

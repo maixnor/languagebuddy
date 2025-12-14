@@ -1,6 +1,7 @@
 import { generateSystemPrompt } from "./subscriber.prompts";
 import { Subscriber } from "./subscriber.types";
 import { DateTime } from "luxon";
+import { Digest } from "../digest/digest.types";
 
 describe("generateSystemPrompt", () => {
   const mockSubscriber: Subscriber = {
@@ -54,9 +55,10 @@ describe("generateSystemPrompt", () => {
     currentLocalTime: DateTime,
     conversationDurationMinutes: number | null = null,
     timeSinceLastMessageMinutes: number | null = null,
-    lastDigestTopic: string | null = null
+    lastDigestTopic: string | null = null,
+    subscriberOverride: Partial<Subscriber> | null = null
   ) => ({
-    subscriber: mockSubscriber,
+    subscriber: subscriberOverride ? { ...mockSubscriber, ...subscriberOverride } : mockSubscriber,
     conversationDurationMinutes,
     timeSinceLastMessageMinutes,
     currentLocalTime,
@@ -82,17 +84,11 @@ describe("generateSystemPrompt", () => {
     const now = DateTime.fromISO("2025-01-01T10:00:00.000Z", { zone: "America/New_York" });
     // Create subscriber with missing timezone
     const incompleteSubscriber = {
-        ...mockSubscriber,
-        profile: {
-            ...mockSubscriber.profile,
-            timezone: undefined // Simulate missing/invalid timezone
-        }
+        ...mockSubscriber.profile,
+        timezone: undefined // Simulate missing/invalid timezone
     };
     
-    const context = {
-        ...createPromptContext(now),
-        subscriber: incompleteSubscriber
-    };
+    const context = createPromptContext(now, null, null, null, { profile: incompleteSubscriber });
 
     const prompt = generateSystemPrompt(context);
     
@@ -175,5 +171,90 @@ describe("generateSystemPrompt", () => {
       expect(prompt).not.toContain("It is currently late at night/early morning for the user");
       expect(prompt).not.toContain("Suggest ending the conversation naturally soon");
     });
+  });
+
+  describe("Assistant Mistakes Logic", () => {
+    const createDigest = (timestamp: string, mistakes: any[] = []): Digest => ({
+      timestamp,
+      topic: "Topic " + timestamp,
+      summary: "Summary " + timestamp,
+      keyBreakthroughs: [],
+      areasOfStruggle: [],
+      vocabulary: { newWords: [], reviewedWords: [], struggledWith: [], mastered: [] },
+      phrases: { newPhrases: [], idioms: [], colloquialisms: [], formalExpressions: [] },
+      grammar: { conceptsCovered: [], mistakesMade: [], patternsPracticed: [] },
+      conversationMetrics: {
+        messagesExchanged: 10,
+        averageResponseTime: 5,
+        topicsDiscussed: [],
+        userInitiatedTopics: 0,
+        averageMessageLength: 50,
+        sentenceComplexity: 5,
+        punctuationAccuracy: 100,
+        capitalizationAccuracy: 100,
+        textCoherenceScore: 100,
+        emojiUsage: 0,
+        abbreviationUsage: []
+      },
+      assistantMistakes: mistakes,
+      userMemos: []
+    });
+  
+    it("should ONLY show ACTION REQUIRED for mistakes in the MOST RECENT digest", () => {
+      const d1 = createDigest("2025-01-01T10:00:00Z", [{
+          originalText: "Mistake 1",
+          correction: "Correction 1",
+          reason: "Hallucination"
+      }]);
+  
+      const d2 = createDigest("2025-01-02T10:00:00Z", [{
+          originalText: "Mistake 2",
+          correction: "Correction 2",
+          reason: "Grammar"
+      }]);
+  
+      const d3 = createDigest("2025-01-03T10:00:00Z", []);
+  
+      const now = DateTime.fromISO("2025-01-03T10:00:00Z");
+      const subscriberOverride = {
+          metadata: {
+              ...mockSubscriber.metadata,
+              digests: [d1, d2, d3]
+          }
+      };
+  
+      const context = createPromptContext(now, null, null, null, subscriberOverride);
+      const prompt = generateSystemPrompt(context);
+  
+      expect(prompt).toContain("Topic 2025-01-01T10:00:00Z");
+      expect(prompt).toContain("Topic 2025-01-02T10:00:00Z");
+      expect(prompt).toContain("Topic 2025-01-03T10:00:00Z");
+  
+      expect(prompt).not.toContain("Mistake 1");
+      expect(prompt).not.toContain("Mistake 2");
+      expect(prompt).not.toContain("ACTION REQUIRED: At the start of this conversation, apologize");
+    });
+  
+    it("should show ACTION REQUIRED if the MOST RECENT digest has mistakes", () => {
+        const d3 = createDigest("2025-01-03T10:00:00Z", [{
+            originalText: "Mistake 3",
+            correction: "Correction 3",
+            reason: "Fact check"
+        }]);
+    
+        const now = DateTime.fromISO("2025-01-03T10:00:00Z");
+        const subscriberOverride = {
+            metadata: {
+                ...mockSubscriber.metadata,
+                digests: [d3]
+            }
+        };
+    
+        const context = createPromptContext(now, null, null, null, subscriberOverride);
+        const prompt = generateSystemPrompt(context);
+    
+        expect(prompt).toContain("Mistake 3");
+        expect(prompt).toContain("ACTION REQUIRED: At the start of this conversation, apologize");
+      });
   });
 });
