@@ -53,9 +53,6 @@
             
             # Copy package.json for runtime reference
             cp package.json $out/
-            
-            # Copy static files
-            cp -r static $out/
           '';
         };
       });
