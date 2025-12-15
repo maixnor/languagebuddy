@@ -1,0 +1,30 @@
+### Task: Migrate Feedback & Deduplication to SQLite
+
+**Goal:** Move ephemeral/log-like data (Feedback, Message Deduplication) to SQLite.
+
+**Context:**
+-   Feedback is currently a Redis List (capped).
+-   Deduplication is currently Redis keys with TTL.
+
+**Schema 1: Feedback**
+-   Table: `feedback`
+-   Columns: `id` (INTEGER PRIMARY KEY AUTOINCREMENT), `phone_number` (TEXT), `content` (TEXT), `created_at` (TEXT).
+
+**Schema 2: Deduplication**
+-   Table: `processed_messages`
+-   Columns: `message_id` (TEXT PRIMARY KEY), `phone_number` (TEXT), `created_at` (TEXT).
+
+**Steps:**
+1.  **Update Database Migration:**
+    -   Add CREATE statements for both tables.
+2.  **Refactor FeedbackService:**
+    -   `addFeedback()`: `INSERT INTO feedback ...`
+    -   Remove the "cap" logic (SQLite can handle millions of rows, or add a cleanup job later).
+3.  **Refactor WhatsappDeduplicationService:**
+    -   `isDuplicate(messageId)`:
+        -   First, run a cleanup: `DELETE FROM processed_messages WHERE created_at < datetime('now', '-5 minutes')`. (Or run this periodically/async to avoid blocking).
+        -   Try `INSERT INTO processed_messages ...`.
+        -   If error (UNIQUE constraint), return true (is duplicate).
+        -   Else return false.
+4.  **Tests:**
+    -   Update unit/int tests for both services.
