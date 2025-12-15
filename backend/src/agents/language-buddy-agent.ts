@@ -6,12 +6,12 @@ import { logger } from '../core/config';
 // @ts-ignore
 import {createReactAgent} from "@langchain/langgraph/prebuilt";
 import {setContextVariable} from "@langchain/core/context";
-import { RedisCheckpointSaver } from "../core/persistence/redis-checkpointer";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
 import { z } from "zod";
 import { DigestService } from '../features/digest/digest.service';
 import { setSpanAttributes } from '../core/observability/tracing';
+import { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
 
 import {
   updateSubscriberTool,
@@ -23,12 +23,12 @@ import { feedbackTools } from "../tools/feedback-tools";
 import { checkLastResponse } from "./agent.check";
 
 export class LanguageBuddyAgent {
-  private checkpointer: RedisCheckpointSaver;
+  private checkpointer: ExtendedCheckpointSaver;
   private agent: any;
   private llm: ChatOpenAI;
   private digestService: DigestService;
 
-  constructor(checkpointer: RedisCheckpointSaver, llm: ChatOpenAI, digestService: DigestService) {
+  constructor(checkpointer: ExtendedCheckpointSaver, llm: ChatOpenAI, digestService: DigestService) {
     this.checkpointer = checkpointer;
     this.llm = llm;
     this.digestService = digestService;
@@ -47,6 +47,7 @@ export class LanguageBuddyAgent {
       checkpointer: checkpointer,
     })
   }
+
 
   async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string, metadata?: Record<string, any>): Promise<string> {
     try {
@@ -170,7 +171,7 @@ export class LanguageBuddyAgent {
       });
     }
 
-    const existingCheckpoint = await this.checkpointer.getCheckpoint(subscriber.connections.phone);
+    const existingCheckpoint = await this.checkpointer.getTuple({ configurable: { thread_id: subscriber.connections.phone } });
     const existingMetadata = existingCheckpoint?.metadata || {};
 
     // Session ID Logic for Tracing
@@ -209,7 +210,7 @@ export class LanguageBuddyAgent {
   async clearConversation(phone: string): Promise<void> {
     try {
       logger.info({ phone }, "Starting conversation clearance");
-      await this.checkpointer.clearUserHistory(phone);
+      await this.checkpointer.deleteThread(phone);
       logger.info({ phone }, "Conversation clearance completed");
     } catch (error) {
       logger.error({ err: error, phone }, "Error clearing conversation");
@@ -221,14 +222,14 @@ export class LanguageBuddyAgent {
   }
 
   async isOnboardingConversation(phone: string): Promise<boolean> {
-    const checkpointTuple = await this.checkpointer.getCheckpoint(phone);
+    const checkpointTuple = await this.checkpointer.getTuple({ configurable: { thread_id: phone } });
     if (!checkpointTuple) return false;
     return (checkpointTuple.metadata as any)?.type === 'onboarding';
   }
 
   async currentlyInActiveConversation(userPhone: string) {
     try {
-      const checkpoint = await this.checkpointer.getCheckpoint(userPhone);
+      const checkpoint = await this.checkpointer.getTuple({ configurable: { thread_id: userPhone } });
       if (!checkpoint) {
         logger.info({ phone: userPhone }, "No active conversation found");
         return false;
@@ -256,7 +257,7 @@ export class LanguageBuddyAgent {
 
   async getConversationDuration(phone: string): Promise<number | null> {
     try {
-      const checkpoint = await this.checkpointer.getCheckpoint(phone);
+      const checkpoint = await this.checkpointer.getTuple({ configurable: { thread_id: phone } });
       if (checkpoint && (checkpoint.metadata as any)?.conversationStartedAt) {
         const startedAt = DateTime.fromISO((checkpoint.metadata as any).conversationStartedAt);
         const now = DateTime.now();
@@ -271,7 +272,7 @@ export class LanguageBuddyAgent {
 
   async getTimeSinceLastMessage(phone: string): Promise<number | null> {
     try {
-      const checkpoint = await this.checkpointer.getCheckpoint(phone);
+      const checkpoint = await this.checkpointer.getTuple({ configurable: { thread_id: phone } });
       if (!checkpoint) return null;
 
       const messages = (checkpoint.checkpoint as any).values?.messages || 

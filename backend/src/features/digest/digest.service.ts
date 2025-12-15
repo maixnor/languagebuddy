@@ -3,24 +3,24 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { Digest } from './digest.types';
 import { Subscriber } from '../subscriber/subscriber.types';
 import { logger } from '../../core/config';
-import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { DigestAnalysisSchema } from './digest.contracts';
 import { digestsAttemptedTotal, digestsFailedTotal } from '../../core/observability/metrics';
+import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 
 export class DigestService {
   private static instance: DigestService;
   private llm: ChatOpenAI;
-  private checkpointer: RedisCheckpointSaver;
+  private checkpointer: ExtendedCheckpointSaver;
   private subscriberService: SubscriberService;
 
-  private constructor(llm: ChatOpenAI, checkpointer: RedisCheckpointSaver, subscriberService: SubscriberService) {
+  private constructor(llm: ChatOpenAI, checkpointer: ExtendedCheckpointSaver, subscriberService: SubscriberService) {
     this.llm = llm;
     this.checkpointer = checkpointer;
     this.subscriberService = subscriberService;
   }
 
-  static getInstance(llm?: ChatOpenAI, checkpointer?: RedisCheckpointSaver, subscriberService?: SubscriberService): DigestService {
+  static getInstance(llm?: ChatOpenAI, checkpointer?: ExtendedCheckpointSaver, subscriberService?: SubscriberService): DigestService {
     if (!DigestService.instance) {
       if (!llm || !checkpointer || !subscriberService) {
         throw new Error("LLM, checkpointer, and subscriberService are required for first initialization");
@@ -110,7 +110,7 @@ export class DigestService {
     const startTime = Date.now();
     
     try {
-      const checkpoint = await this.checkpointer.getCheckpoint(phoneNumber);
+      const checkpoint = await this.checkpointer.getTuple({ configurable: { thread_id: phoneNumber } });
       
       if (!checkpoint || !checkpoint.checkpoint || !checkpoint.checkpoint.channel_values) {
         logger.warn({

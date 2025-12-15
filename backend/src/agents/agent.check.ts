@@ -2,8 +2,8 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { logger } from '../core/config';
-import { RedisCheckpointSaver } from "../core/persistence/redis-checkpointer";
 import { z } from "zod";
+import { ExtendedCheckpointSaver } from '../core/persistence/sqlite-checkpointer'; // Added import
 
 const AuditResultSchema = z.object({
   status: z.enum(["OK", "ERROR"]).describe("The result of the audit. 'OK' if the last assistant message is correct, 'ERROR' if a mistake was found."),
@@ -14,7 +14,7 @@ const AuditResultSchema = z.object({
 export async function checkLastResponse(
   subscriber: Subscriber,
   llm: ChatOpenAI,
-  checkpointer: RedisCheckpointSaver
+  checkpointer: ExtendedCheckpointSaver
 ): Promise<string> {
     const phone = subscriber.connections.phone;
     const checkpoint = await checkpointer.getCheckpoint(phone);
@@ -76,7 +76,7 @@ Check for:
     }
 }
 
-async function injectSystemCorrection(phone: string, correction: string, checkpointer: RedisCheckpointSaver): Promise<void> {
+async function injectSystemCorrection(phone: string, correction: string, checkpointer: ExtendedCheckpointSaver): Promise<void> {
     const checkpointTuple = await checkpointer.getCheckpoint(phone);
     if (!checkpointTuple) return;
 
