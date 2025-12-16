@@ -188,6 +188,13 @@ export class MessagingService {
 
     const subscriber = existingSubscriber;
     
+    // Update lastMessageSentAt to mark user activity (strictly for user replies)
+    try {
+      await this.services.subscriberService.updateSubscriber(phone, { lastMessageSentAt: new Date() });
+    } catch (error) {
+      logger.error({ err: error, phone }, "Failed to update lastMessageSentAt");
+    }
+
     // Handle user commands
     if (await handleUserCommand(
       subscriber, 

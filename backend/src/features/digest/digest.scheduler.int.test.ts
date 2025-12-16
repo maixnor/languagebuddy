@@ -1,45 +1,40 @@
 import { DateTime } from 'luxon';
-import Redis from 'ioredis';
+
 import { SubscriberService } from '../../features/subscriber/subscriber.service';
 import { SchedulerService } from '../scheduling/scheduler.service';
 import { DigestService } from '../../features/digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { Subscriber } from '../../features/subscriber/subscriber.types';
 import { WhatsAppService } from '../../core/messaging/whatsapp';
+import { DatabaseService } from '../../core/database';
 
 describe('SchedulerService - Digest Scheduler (Integration)', () => {
-  let redis: Redis;
+
+    let dbService: DatabaseService;
   let subscriberService: SubscriberService;
   let scheduler: SchedulerService;
   let digestService: DigestService;
   let agent: LanguageBuddyAgent;
   const testPhone = '+1987654321';
 
-  beforeAll(() => {
-    redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-    });
-  });
-
-  afterAll(async () => {
-    await redis.quit();
-  });
-
   beforeEach(async () => {
-    // Clear test data before each test
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
+    dbService = new DatabaseService(':memory:'); // Initialize dbService
+    dbService.migrate(); // Apply migrations
+
+    // Clear SQLite tables
+    dbService.getDb().exec('DELETE FROM subscribers');
+    dbService.getDb().exec('DELETE FROM daily_usage');
+    dbService.getDb().exec('DELETE FROM checkpoints');
+    dbService.getDb().exec('DELETE FROM checkpoint_writes');
+    dbService.getDb().exec('DELETE FROM feedback');
+    dbService.getDb().exec('DELETE FROM processed_messages');
     
     // Reset singleton instances for fresh state
     (SubscriberService as any).instance = null;
     (SchedulerService as any).instance = null;
     (DigestService as any).instance = null;
     
-    subscriberService = SubscriberService.getInstance(redis);
+    subscriberService = SubscriberService.getInstance(dbService); // Pass dbService
     
     // Mock agent for testing (we don't want to actually call LLM in integration tests)
     agent = {
@@ -104,12 +99,8 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
   });
 
   afterEach(async () => {
-    // Clean up test data after each test
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
     jest.clearAllMocks();
+    dbService.close(); // Close dbService
   });
 
   describe('3 AM Digest Creation Flow', () => {
@@ -518,5 +509,5 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
       
       expect(shouldSend).toBe(false);
     });
-  });
+});
 });

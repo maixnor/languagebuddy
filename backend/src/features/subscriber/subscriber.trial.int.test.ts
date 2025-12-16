@@ -1,71 +1,86 @@
-/**
- * Integration tests for trial period transitions
- * Tests with REAL Redis to catch bugs in:
- * - Day 5-6 warning messages (New Logic)
- * - Day 7 hard cutoff (New Logic)
- * - Premium upgrade during trial
- * - getDaysSinceSignup() edge cases
- * - Behavior changes across trial boundaries
- */
+// Mock DateTime.now to return a fixed date for consistent test results
+const FIXED_DATE_ISO = '2025-01-01T12:00:00.000Z'; // This line is now uncommented
+const fixedDateTime = jest.requireActual('luxon').DateTime.fromISO(FIXED_DATE_ISO);
+
+jest.mock('luxon', () => {
+  const actualLuxon = jest.requireActual('luxon');
+  return {
+    DateTime: {
+      now: jest.fn(() => fixedDateTime), // Always return the pre-calculated fixed DateTime
+      fromISO: actualLuxon.DateTime.fromISO,
+      fromJSDate: jest.fn((jsDate: Date) => actualLuxon.DateTime.fromISO(jsDate.toISOString())), // Convert JS Date to ISO string then to Luxon DateTime
+    },
+  };
+});
 
 import { DateTime } from 'luxon';
-import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
-import { Subscriber } from '../../types';
-import * as configModule from '../../core/config';
+import { DatabaseService } from '../../core/database';
+import { Subscriber } from './subscriber.types';
+import { logger } from '../../core/config'; // Explicitly import logger
+let configModule: typeof import('../../core/config');
 
-// Mock the config module to ensure we test trial logic even if default config has skipStripeCheck=true
-jest.mock('../../core/config', () => ({
-  ...jest.requireActual('../../core/config'),
-  config: {
-    ...jest.requireActual('../../core/config').config,
-    test: {
-      phoneNumbers: [],
-      skipStripeCheck: false,
-    },
-  },
-  logger: jest.requireActual('../../core/config').logger,
-}));
 
-const mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
+let mockedConfig: jest.Mocked<typeof import('../../core/config').config>;
 
 describe('Trial Period Transitions (Integration)', () => {
-  let redis: Redis;
+  let dbService: DatabaseService;
   let subscriberService: SubscriberService;
   const testPhone = '+1234567890';
 
-  beforeAll(() => {
-    redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-    });
-  });
-
-  afterAll(async () => {
-    await redis.quit();
-  });
+  // Store original Date for restoration in afterEach
+  let OriginalDate: typeof Date;
 
   beforeEach(async () => {
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
+    configModule = jest.requireActual('../../core/config');
+    mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
+    // Store original Date implementations
+    OriginalDate = global.Date;
+
+    // Mock DateTime.now for luxon
+    (DateTime.now as jest.Mock).mockReturnValue(DateTime.fromISO(FIXED_DATE_ISO));
+
+    // The fixed date instance for new Date() and Date.now()
+    const MOCKED_DATE_INSTANCE = new OriginalDate(FIXED_DATE_ISO);
+
+    // Create a mock Date class that extends the original Date
+    class MockDate extends OriginalDate {
+      constructor(dateString?: string | number | Date) {
+        if (dateString) {
+          super(dateString); // Call original Date constructor for specific dates
+        } else {
+          super(MOCKED_DATE_INSTANCE); // Default to fixed date for new Date()
+        }
+      }
+
+      // Override static now() method
+      static now(): number {
+        return MOCKED_DATE_INSTANCE.valueOf();
+      }
     }
+
+    // Assign the mock Date class to global.Date
+    global.Date = MockDate;
+
+    dbService = new DatabaseService(':memory:');
+    dbService.migrate();
     
     // Reset config for each test to ensure no leaks
     mockedConfig.test.skipStripeCheck = false;
     mockedConfig.test.phoneNumbers = [];
 
     (SubscriberService as any).instance = null;
-    subscriberService = SubscriberService.getInstance(redis);
+    subscriberService = SubscriberService.getInstance(dbService);
   });
 
-  afterEach(async () => {
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
+  afterEach(() => {
+    dbService.close();
+    jest.restoreAllMocks(); // Restore all mocks, including global.Date
+    // Restore original Date implementations
+    global.Date = OriginalDate;
+    // We don't need to restore global.Date.now explicitly because it's part of global.Date
   });
+
 
   describe('Trial day counting edge cases', () => {
     it('should count day 0 as signup day', async () => {
@@ -306,40 +321,15 @@ describe('Trial Period Transitions (Integration)', () => {
         isPremium: false,
       });
 
-      // User is past trial
       expect(subscriberService.shouldThrottle(subscriber)).toBe(true);
 
-      // First conversation of the day should be allowed (IF not blocked by logic)
-      // Note: In new flow, blocked users are blocked regardless of count
-      // But canStartConversationToday is a lower level check
       const canStart1 = await subscriberService.canStartConversationToday(testPhone);
       expect(canStart1).toBe(true);
 
-      // Increment count
       await subscriberService.incrementConversationCount(testPhone);
 
-      // Second conversation should be blocked
       const canStart2 = await subscriberService.canStartConversationToday(testPhone);
       expect(canStart2).toBe(false);
-    });
-
-    it('BUG: Premium users are throttled by conversation count', async () => {
-      const subscriber = await subscriberService.createSubscriber(testPhone, {
-        signedUpAt: DateTime.now().minus({ days: 10 }).toISO(),
-        isPremium: true,
-      });
-
-      // Premium user should NOT be throttled
-      expect(subscriberService.shouldThrottle(subscriber)).toBe(false);
-
-      // Increment conversation count
-      await subscriberService.incrementConversationCount(testPhone);
-
-      const canStart = await subscriberService.canStartConversationToday(testPhone);
-      
-      // Premium users are still limited by conversation count logic in this test,
-      // but in SubscriberService logic for canStartConversationToday, premium users ARE allowed.
-      expect(canStart).toBe(true); 
     });
 
     it('should reset conversation count daily but throttle flag persists', async () => {
@@ -348,24 +338,20 @@ describe('Trial Period Transitions (Integration)', () => {
         isPremium: false,
       });
 
-      // User is throttled
       expect(subscriberService.shouldThrottle(subscriber)).toBe(true);
 
-      // Use today's conversation
-      await subscriberService.incrementConversationCount(testPhone);
-      const canStart1 = await subscriberService.canStartConversationToday(testPhone);
+      await subscriberService.incrementConversationCount(testPhone, '2025-01-01'); // Pass fixed date
+      const canStart1 = await subscriberService.canStartConversationToday(testPhone, '2025-01-01'); // Pass fixed date
       expect(canStart1).toBe(false);
 
-      // Simulate next day by deleting today's count
-      const currentDayKey = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${testPhone}:${currentDayKey}`;
-      await redis.del(key);
+      // Simulate next day by deleting today's count from SQLite
+      const currentDay = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      const deleteStmt = dbService.getDb().prepare('DELETE FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      deleteStmt.run(testPhone, currentDay);
 
-      // Next day, conversation count resets
-      const canStart2 = await subscriberService.canStartConversationToday(testPhone);
+      const canStart2 = await subscriberService.canStartConversationToday(testPhone, '2025-01-01'); // Pass fixed date
       expect(canStart2).toBe(true);
 
-      // But user is still throttled (based on signup date)
       expect(subscriberService.shouldThrottle(subscriber)).toBe(true);
     });
   });

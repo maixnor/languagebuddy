@@ -2,7 +2,7 @@ import { handleUserCommand } from './agent.user-commands';
 import { WhatsAppService } from '../core/messaging/whatsapp';
 import { LanguageBuddyAgent } from './language-buddy-agent';
 import { Subscriber } from '../features/subscriber/subscriber.types';
-import { RedisClientType } from 'redis';
+
 import { logger } from '../core/config';
 
 // Mock the logger to prevent actual logging during tests

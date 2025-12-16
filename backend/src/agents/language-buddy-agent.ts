@@ -19,26 +19,30 @@ import {
   addLanguageDeficiencyTool,
   proposeMistakeToleranceChangeTool,
 } from "../features/subscriber/subscriber.tools";
-import { feedbackTools } from "../tools/feedback-tools";
+import { getFeedbackTools } from "../tools/feedback-tools";
 import { checkLastResponse } from "./agent.check";
 
+import { FeedbackService } from '../features/feedback/feedback.service';
+
 export class LanguageBuddyAgent {
-  private checkpointer: ExtendedCheckpointSaver;
+  private checkpointer: BaseCheckpointSaver;
   private agent: any;
   private llm: ChatOpenAI;
   private digestService: DigestService;
+  private feedbackService: FeedbackService;
 
-  constructor(checkpointer: ExtendedCheckpointSaver, llm: ChatOpenAI, digestService: DigestService) {
+  constructor(checkpointer: BaseCheckpointSaver, llm: ChatOpenAI, digestService: DigestService, feedbackService: FeedbackService) {
     this.checkpointer = checkpointer;
     this.llm = llm;
     this.digestService = digestService;
+    this.feedbackService = feedbackService;
 
     const allTools = [
       updateSubscriberTool,
       createSubscriberTool,
       addLanguageDeficiencyTool,
       proposeMistakeToleranceChangeTool,
-      ...feedbackTools,
+      ...getFeedbackTools(this.feedbackService),
     ];
 
     this.agent = createReactAgent({

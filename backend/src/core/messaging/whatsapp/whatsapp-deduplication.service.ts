@@ -1,47 +1,46 @@
-import { Redis } from 'ioredis';
-import { logger } from '../../config';
+import { DatabaseService } from '../../../core/database';
+import { pino } from 'pino';
 
-const MESSAGE_ID_TTL_SECONDS = 30 * 60; // 30 minutes
-const THROTTLE_TTL_SECONDS = 5; // 5 seconds
+const logger = pino({ name: 'WhatsappDeduplicationService' });
+
+const MESSAGE_ID_TTL_MINUTES = 30; // 30 minutes
 
 export class WhatsappDeduplicationService {
   private static instance: WhatsappDeduplicationService;
-  private redis: Redis;
+  private db: DatabaseService;
 
-  constructor(redis: Redis) {
-    this.redis = redis;
+  constructor(db: DatabaseService) {
+    this.db = db;
   }
-
-  async isDuplicateMessage(messageId: string): Promise<boolean> {
-    const key = `whatsapp:msgid:${messageId}`;
-    const exists = await this.redis.exists(key);
-    if (exists) {
-      logger.trace({ messageId }, 'Duplicate message detected');
-      return true;
-    }
-    await this.redis.set(key, '1', 'EX', MESSAGE_ID_TTL_SECONDS);
-    return false;
-  }
-
-  async isThrottled(phone: string): Promise<boolean> {
-    const key = `whatsapp:throttle:${phone}`;
-    const exists = await this.redis.exists(key);
-    if (exists) {
-      logger.trace({ phone }, 'User is throttled');
-      return true;
-    }
-    await this.redis.set(key, '1', 'EX', THROTTLE_TTL_SECONDS);
-    return false;
-  }
-
-  static getInstance(redis: Redis) {
+  static getInstance(db: DatabaseService) {
     if (!WhatsappDeduplicationService.instance) {
-      if (!redis) {
-        throw new Error("Redis instance required for first initialization");
+      if (!db) {
+        throw new Error("DatabaseService instance required for first initialization");
       }
-      WhatsappDeduplicationService.instance = new WhatsappDeduplicationService(redis);
+      WhatsappDeduplicationService.instance = new WhatsappDeduplicationService(db);
     }
     return WhatsappDeduplicationService.instance;
-
   }
+
+  async recordMessageProcessed(messageId: string, phoneNumber?: string): Promise<boolean> {
+    try {
+      const db = this.db.getDb();
+      const now = new Date().toISOString();
+      
+      // Cleanup old entries before recording new one
+      db.prepare(`DELETE FROM processed_messages WHERE created_at < datetime('now', '-${MESSAGE_ID_TTL_MINUTES} minutes')`).run();
+
+      const stmt = db.prepare('INSERT INTO processed_messages (message_id, phone_number, created_at) VALUES (?, ?, ?)');
+      stmt.run(messageId, phoneNumber || null, now);
+      return false; // Not a duplicate
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+        logger.info({ messageId }, "Attempted to record a duplicate message.");
+        return true; // Is a duplicate
+      }
+      logger.error({ err: error, messageId, phoneNumber }, "Error recording message as processed");
+      throw error;
+    }
+  }
+
 }

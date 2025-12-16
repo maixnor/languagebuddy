@@ -7,7 +7,7 @@
 **LanguageBuddy** is a WhatsApp-based language learning service. It uses:
 - **LangGraph** for stateful conversational agents.
 - **OpenAI GPT-4** for intelligence.
-- **Redis** for persistent state (conversation history, user profiles).
+- **SQLite** for persistent state (conversation history, user profiles).
 - **WhatsApp Cloud API** for user interface.
 - **TypeScript/Node.js** backend.
 
@@ -32,12 +32,12 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 
 ### Services & Container
 -   **`ServiceContainer`**: Central singleton container initializing all feature services (`backend/src/services/service-container.ts`).
--   **Pattern**: Services still follow `getInstance(redis)` pattern but are located within their feature folders.
+-   **Pattern**: Services still follow `getInstance(database)` pattern but are located within their feature folders.
 
-### Data Model (Redis)
--   **Conversation State**: `checkpoint:${phone}` (Managed by LangGraph `RedisCheckpointSaver`).
--   **User Profile**: `subscriber:phone:${phone}` (Managed by `SubscriberService`).
--   **Onboarding State**: `onboarding:${phone}` (Managed by `OnboardingService`).
+### Data Model (SQLite)
+-   **Conversation State**: `checkpoints` table (Managed by LangGraph `SqliteCheckpointSaver`).
+-   **User Profile**: `subscribers` table (Managed by `SubscriberService`).
+-   **Onboarding State**: `onboarding_states` table (Managed by `OnboardingService`).
 
 ### The Agent (`LanguageBuddyAgent`)
 -   **Orchestrator**: `backend/src/agents/language-buddy-agent.ts`.
@@ -75,9 +75,9 @@ Within each feature folder (`backend/src/features/<feature_name>/`), we aim for 
     -   **Usage**: `npm test` (runs fast).
 
 2.  **Integration Tests** (`*.int.test.ts`) - **REQUIRED for State/Service Logic**
-    -   **Scope**: Service interactions, Redis state persistence.
+    -   **Scope**: Service interactions, SQLite state persistence.
     -   **Location**: Collocated within the feature folder (e.g., `features/subscriber/subscriber.service.int.test.ts`).
-    -   **Mocks**: Real Redis (local/container), MOCK OpenAI/LLM calls.
+    -   **Mocks**: Real SQLite (in-memory or file), MOCK OpenAI/LLM calls.
 
 3.  **E2E Tests** (`*.e2e.test.ts`) - **SPARINGLY**
     -   **Scope**: Full system flow including real OpenAI responses.

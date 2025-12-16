@@ -1,42 +1,28 @@
 
 import { SubscriberService } from './subscriber.service';
-import Redis from 'ioredis';
-
-// Mock Redis
-const mockRedisData = new Map<string, string>();
-const mockRedis = {
-  get: jest.fn((key) => Promise.resolve(mockRedisData.get(key) || null)),
-  set: jest.fn((key, value) => {
-    mockRedisData.set(key, value as string);
-    return Promise.resolve('OK');
-  }),
-  keys: jest.fn((pattern) => {
-      // simplistic match
-      const prefix = pattern.replace('*', '');
-      return Promise.resolve(Array.from(mockRedisData.keys()).filter(k => k.startsWith(prefix)));
-  }),
-  eval: jest.fn(() => Promise.resolve(1)), // Mock atomic increment success
-} as unknown as Redis;
+import { DatabaseService } from '../../core/database';
 
 describe('Subscriber Service Hydration', () => {
   let service: SubscriberService;
+  let dbService: DatabaseService;
 
-  beforeAll(() => {
-     // Reset singleton
-    (SubscriberService as any).instance = undefined;
-    service = SubscriberService.getInstance(mockRedis);
+  beforeEach(() => {
+    dbService = new DatabaseService(':memory:');
+    dbService.migrate(); // Apply migrations to create tables
+    // Reset singleton instance for each test to ensure fresh database connection
+    (SubscriberService as any).instance = undefined; 
+    service = SubscriberService.getInstance(dbService);
   });
   
   afterEach(() => {
-     mockRedisData.clear();
-     jest.clearAllMocks();
+    dbService.close();
   });
 
-  it('should hydrate Date objects when fetching from Redis', async () => {
+  it('should hydrate Date objects when fetching from SQLite', async () => {
     const phone = '+1234567890';
     const now = new Date();
     
-    // 1. Create a subscriber (which saves it to Redis as JSON string)
+    // 1. Create a subscriber (which saves it to SQLite as JSON string)
     const created = await service.createSubscriber(phone, {
         signedUpAt: now,
         lastActiveAt: now,

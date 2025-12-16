@@ -1,6 +1,6 @@
 /**
  * Integration tests focused on conversation count tracking
- * Tests with REAL Redis to catch bugs in:
+ * Tests with REAL SQLite to catch bugs in:
  * - Redis key expiration timing
  * - Daily increments across timezone boundaries
  * - Race conditions on concurrent messages
@@ -8,12 +8,11 @@
  */
 
 import { DateTime } from 'luxon';
-import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
+import { DatabaseService } from '../../core/database';
 import { sanitizePhoneNumber } from './subscriber.utils';
 import * as configModule from '../../core/config';
 
-// Mock the config module to ensure we test race conditions even if default config has skipStripeCheck=true
 jest.mock('../../core/config', () => ({
   ...jest.requireActual('../../core/config'),
   config: {
@@ -29,31 +28,20 @@ jest.mock('../../core/config', () => ({
 const mockedConfig = configModule.config as jest.Mocked<typeof configModule.config>;
 
 describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
-  let redis: Redis;
+  let dbService: DatabaseService;
   let subscriberService: SubscriberService;
   const testPhone = '+1234567890';
 
   beforeEach(async () => {
-    redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-    });
-    // Clear ALL conversation count test data
-    const keysToDelete = await redis.keys(`conversation_count:*`);
-    if (keysToDelete.length > 0) {
-      await redis.del(...keysToDelete);
-    }
+    dbService = new DatabaseService(':memory:');
+    dbService.migrate();
     
-    // Reset config
     mockedConfig.test.skipStripeCheck = false;
     mockedConfig.test.phoneNumbers = [];
 
     (SubscriberService as any).instance = null;
-    subscriberService = SubscriberService.getInstance(redis);
+    subscriberService = SubscriberService.getInstance(dbService);
 
-    // Ensure test subscriber has a default timezone for consistent key generation
-    // This subscriber is for the general testPhone, not necessarily for special cases
     await subscriberService.createSubscriber(testPhone, {
       profile: {
         timezone: 'UTC'
@@ -62,43 +50,29 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
   });
 
   afterEach(async () => {
-    // Clean up ALL conversation count test data after each test
-    const keysToDelete = await redis.keys(`conversation_count:*`);
-    if (keysToDelete.length > 0) {
-      await redis.del(...keysToDelete);
-    }
-    // Also clean up subscriber-related keys for the main testPhone
-    const subscriberKeys = await redis.keys(`subscriber:${testPhone}`);
-    if (subscriberKeys.length > 0) {
-      await redis.del(...subscriberKeys);
-    }
-    await redis.quit();
+    dbService.close();
   });
 
-  describe('Race condition: SET vs INCR', () => {
-    it('should handle concurrent increments safely (Atomic INCR)', async () => {
+  describe('Race condition: Atomic increments', () => {
+    it('should handle concurrent increments safely', async () => {
       const subscriber = await subscriberService.getSubscriber(testPhone);
       const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${testPhone}:${today}`;
 
-      const results = await Promise.all([
+      await Promise.all([
         subscriberService.incrementConversationCount(testPhone),
         subscriberService.incrementConversationCount(testPhone),
       ]);
       
-      const count = await redis.get(key);
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, today);
       
-      console.log('Concurrent INCR test - Count:', count);
-      expect(count).toBe('2');
+      expect(row?.conversation_start_count).toBe(2);
     });
 
     it('should handle multiple rapid increments correctly', async () => {
-      // Get the subscriber to determine the correct timezone for key generation
       const subscriber = await subscriberService.getSubscriber(testPhone);
-      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
 
-      // Hammer the increment with 100 concurrent calls
       const promises = [];
       for (let i = 0; i < 100; i++) {
         promises.push(subscriberService.incrementConversationCount(testPhone));
@@ -106,171 +80,104 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
       
       await Promise.all(promises);
       
-      const count = await redis.get(key);
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, today);
       
-      console.log('100 concurrent increments - Count:', count);
-      
-      // Should be exactly 100
-      expect(count).toBe('100');
+      expect(row?.conversation_start_count).toBe(100);
     });
   });
 
-  describe('Redis TTL behavior', () => {
-    it('should preserve TTL when using INCR after SET', async () => {
-      // Get the subscriber to determine the correct timezone for key generation
-      const subscriber = await subscriberService.getSubscriber(testPhone);
-      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
 
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const ttl1 = await redis.ttl(key);
-      expect(ttl1).toBeGreaterThan(86000);
-      
-      // Wait a bit longer to ensure TTL has definitely decreased
-      await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds
-      
-      // Increment again
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const ttl2 = await redis.ttl(key);
-      
-      // BUG CHECK: INCR should NOT reset TTL
-      // TTL should be 3-4 seconds less than original
-      expect(ttl2).toBeGreaterThan(86400 - 5); // Allow up to 5 seconds for test execution
-      expect(ttl2).toBeLessThan(86400 - 1); // Should definitely be less than 86400 - 1
-    });
-
-    it('should expire key after 24 hours', async () => {
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const subscriber = await subscriberService.getSubscriber(testPhone);
-      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${testPhone}:${today}`;
-      
-      // Manually set TTL to 1 second for testing
-      await redis.expire(key, 1);
-      
-      // Wait for expiration
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      const exists = await redis.exists(key);
-      expect(exists).toBe(0);
-      
-      // Should allow conversation again
-      const canStart = await subscriberService.canStartConversationToday(testPhone);
-      expect(canStart).toBe(true);
-    });
-
-    it('should ensure TTL is set even if key exists without one', async () => {
-      // If key exists without TTL (e.g. created by raw INCR),
-      // our logic should detect it and set TTL
-      
-      const subscriber = await subscriberService.getSubscriber(testPhone);
-      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${testPhone}:${today}`;
-      
-      // Simulate race: manually INCR before our code runs
-      await redis.incr(key);
-      
-      // Now run our increment logic
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const ttl = await redis.ttl(key);
-      
-      // TTL should be set
-      expect(ttl).not.toBe(-1);
-      expect(ttl).toBeGreaterThan(0);
-    });
-  });
 
   describe('Timezone edge cases', () => {
-    it('should use server timezone for date boundaries', async () => {
-      const serverNow = DateTime.now();
-      const tokyoNow = DateTime.now().setZone('Asia/Tokyo');
-      const nyNow = DateTime.now().setZone('America/New_York');
-      
-      console.log('Server date:', serverNow.toISODate());
-      console.log('Tokyo date:', tokyoNow.toISODate());
-      console.log('NY date:', nyNow.toISODate());
-      
-      // BUG: If server and user are in different timezones,
-      // the "day" might be different!
-      
-      await subscriberService.incrementConversationCount(testPhone);
-      
+    it('should use subscriber timezone for date boundaries for counting', async () => {
       const subscriber = await subscriberService.getSubscriber(testPhone);
-      const serverKeyToday = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const serverKey = `conversation_count:${testPhone}:${serverKeyToday}`;
-      const serverCount = await redis.get(serverKey);
+      if (!subscriber) throw new Error("Subscriber not found");
+
+      // Set subscriber's timezone to a different one for this test
+      await subscriberService.updateSubscriber(testPhone, { profile: { timezone: 'America/Los_Angeles' } });
+      const laSubscriber = await subscriberService.getSubscriber(testPhone);
+      if (!laSubscriber) throw new Error("LA Subscriber not found");
+
+      // Increment a conversation count
+      await subscriberService.incrementConversationCount(testPhone);
+
+      // Verify the count in the database for the LA timezone's "today"
+      const laToday = DateTime.now().setZone('America/Los_Angeles').toISODate();
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, laToday);
       
-      expect(serverCount).toBe('1');
-      
-      // If dates differ, user's "today" might be server's "yesterday" or "tomorrow"
+      expect(row?.conversation_start_count).toBe(1);
+
+      // Ensure no count for UTC today if different
+      const utcToday = DateTime.now().setZone('UTC').toISODate();
+      if (laToday !== utcToday) {
+        const utcRow = stmt.get(testPhone, utcToday);
+        expect(utcRow).toBeUndefined(); // Should not have an entry for UTC today if different
+      }
     });
 
-    it('should handle date rollover at midnight', async () => {
-      const pastDate = DateTime.now().minus({ days: 1 }).toISODate(); // Simulate a past day
-      const pastKey = `conversation_count:${testPhone}:${pastDate}`;
-      await redis.set(pastKey, '5', 'EX', 86400); // Set count for past day to 5
+    it('should handle date rollover at midnight in subscriber timezone', async () => {
+      const subscriber = await subscriberService.getSubscriber(testPhone);
+      if (!subscriber) throw new Error("Subscriber not found");
+
+      // Simulate a past day's entry
+      const pastDate = DateTime.now().setZone(subscriber.profile.timezone || 'UTC').minus({ days: 1 }).toISODate();
+      const insertPastStmt = dbService.getDb().prepare(`
+        INSERT INTO daily_usage (phone_number, usage_date, message_count, conversation_start_count, last_interaction_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(phone_number, usage_date) DO UPDATE SET conversation_start_count = ?
+      `);
+      insertPastStmt.run(testPhone, pastDate, 0, 5, new Date().toISOString(), 5);
 
       // Increment today
       await subscriberService.incrementConversationCount(testPhone);
 
-      const subscriber = await subscriberService.getSubscriber(testPhone);
       const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber); // Get current "today"
-      const todayKey = `conversation_count:${testPhone}:${today}`;
-      const todayCount = await redis.get(todayKey);
       
-      // Should be 1 (new day)
-      expect(todayCount).toBe('1');
-      
-      // Past day's count should still exist
-      const pastCount = await redis.get(pastKey);
-      expect(pastCount).toBe('5');
+      const pastStmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const pastCountRow = pastStmt.get(testPhone, pastDate);
+      expect(pastCountRow?.conversation_start_count).toBe(5);
+
+      const todayStmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const todayCountRow = todayStmt.get(testPhone, today);
+      expect(todayCountRow?.conversation_start_count).toBe(1);
     });
 
-    it('should handle user near midnight in their timezone', async () => {
-      // User in Tokyo at 11:59 PM, server in UTC (different date)
-      // BUG POTENTIAL: User might be throttled incorrectly
-      
-      // This is a documentation test - actual fix would require
-      // storing user timezone and using it for date calculations
-      
-      const serverDate = DateTime.now().toISODate();
-      const userDate = DateTime.now().setZone('Asia/Tokyo').toISODate();
-      
-      if (serverDate !== userDate) {
-        console.warn('BUG: Server and user timezone dates differ!', {
-          serverDate,
-          userDate,
-        });
-      }
+    it('should correctly attribute conversation to the correct day despite timezones', async () => {
+      // Setup subscriber with a timezone that crosses UTC midnight
+      await subscriberService.updateSubscriber(testPhone, { profile: { timezone: 'Pacific/Kiritimati' } }); // UTC+14
+      const kiribatiSubscriber = await subscriberService.getSubscriber(testPhone);
+      if (!kiribatiSubscriber) throw new Error("Kiribati Subscriber not found");
+
+      // Get "today" in Kiribati time
+      const kiribatiToday = DateTime.now().setZone('Pacific/Kiritimati').toISODate();
+
+      // Trigger conversation start
+      await subscriberService.attemptToStartConversation(testPhone);
+
+      // Check database for an entry on kiribatiToday
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, kiribatiToday);
+      expect(row?.conversation_start_count).toBe(1);
     });
   });
 
   describe('Concurrent user access patterns', () => {
     it('should handle user sending multiple messages in quick succession', async () => {
-      // Get the subscriber to determine the correct timezone for key generation
+      await subscriberService.incrementConversationCount(testPhone);
+      await subscriberService.incrementConversationCount(testPhone);
+      await subscriberService.incrementConversationCount(testPhone);
+      
       const subscriber = await subscriberService.getSubscriber(testPhone);
-      const today = DateTime.now().setZone(subscriber?.profile.timezone || 'UTC').toISODate();
-      const key = `conversation_count:${testPhone}:${today}`;
-
-      // Real-world: User sends 3 messages within 1 second
+      const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, today);
       
-      await subscriberService.incrementConversationCount(testPhone);
-      await subscriberService.incrementConversationCount(testPhone);
-      await subscriberService.incrementConversationCount(testPhone);
-      
-      const count = await redis.get(key);
-      
-      expect(count).toBe('3');
+      expect(row?.conversation_start_count).toBe(3);
     });
 
-    it('should handle check-then-act pattern correctly', async () => {
-      // Pattern: Check if can start, then increment
-      // This is NOT atomic - race condition possible
-      
+    it('should handle check-then-act pattern correctly (non-atomic behavior)', async () => {
       const canStart = await subscriberService.canStartConversationToday(testPhone);
       expect(canStart).toBe(true);
       
@@ -281,84 +188,64 @@ describe('Conversation Count Tracking - Race Conditions (Integration)', () => {
     });
 
     it('should prevent double spending using atomic attemptToStartConversation', async () => {
-      // Two requests attempt to start simultaneously
       const [result1, result2] = await Promise.all([
         subscriberService.attemptToStartConversation(testPhone),
         subscriberService.attemptToStartConversation(testPhone),
       ]);
       
-      // Only one should succeed
       const successCount = (result1 ? 1 : 0) + (result2 ? 1 : 0);
       expect(successCount).toBe(1);
       
       const subscriber = await subscriberService.getSubscriber(testPhone);
       const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${testPhone}:${today}`;
-      const count = await redis.get(key);
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(testPhone, today);
       
-      expect(count).toBe('1');
+      expect(row?.conversation_start_count).toBe(1);
     });
   });
 
-  describe('Redis connection issues', () => {
-    it('should handle Redis being temporarily unavailable', async () => {
-      // Simulate Redis down by creating new disconnected instance
-      const badRedis = new Redis({
-        host: 'nonexistent-host',
-        port: 9999,
-        retryStrategy: () => null, // Don't retry
-        lazyConnect: true,
-      });
-      
-      (SubscriberService as any).instance = null;
-      const badService = SubscriberService.getInstance(badRedis);
-      
-      // Should not hang or throw unhandled error
-      try {
-        await badService.canStartConversationToday(testPhone);
-      } catch (err) {
-        // Expected to fail, but should be caught
-        expect(err).toBeDefined();
-      }
-      
-      // badRedis will be garbage collected.
-    });
-  });
 
-  describe('Key naming and collision', () => {
+
+  describe('Phone number handling', () => {
     it('should not collide with similar phone numbers', async () => {
       const phone1 = '+1234567890';
-      const phone2 = '12345678901'; // One extra digit
+      const phone2 = '+12345678901'; 
       
+      // Create subscribers first so their timezones are set, affecting daily_usage date keys
+      await subscriberService.createSubscriber(phone1, { profile: { timezone: 'UTC' } });
+      await subscriberService.createSubscriber(phone2, { profile: { timezone: 'UTC' } });
+
       await subscriberService.incrementConversationCount(phone1);
       await subscriberService.incrementConversationCount(phone2);
       
       const subscriber1 = await subscriberService.getSubscriber(phone1);
       const today1 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber1);
-      const key1 = `conversation_count:${sanitizePhoneNumber(phone1)}:${today1}`;
+      const stmt1 = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row1 = stmt1.get(sanitizePhoneNumber(phone1), today1);
 
       const subscriber2 = await subscriberService.getSubscriber(phone2);
       const today2 = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber2);
-      const key2 = `conversation_count:${sanitizePhoneNumber(phone2)}:${today2}`;
+      const stmt2 = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row2 = stmt2.get(sanitizePhoneNumber(phone2), today2);
       
-      const count1 = await redis.get(key1);
-      const count2 = await redis.get(key2);
-      
-      expect(count1).toBe('1');
-      expect(count2).toBe('1');
+      expect(row1?.conversation_start_count).toBe(1);
+      expect(row2?.conversation_start_count).toBe(1);
     });
 
-    it('should handle special characters in phone number', async () => {
+    it('should handle special characters in phone number (after sanitization)', async () => {
       const phoneWithSpecial = '+1-234-567-8900';
-      
+      const sanitizedPhone = sanitizePhoneNumber(phoneWithSpecial);
+
+      await subscriberService.createSubscriber(phoneWithSpecial, { profile: { timezone: 'UTC' } });
       await subscriberService.incrementConversationCount(phoneWithSpecial);
       
-      const subscriber = await subscriberService.getSubscriber(phoneWithSpecial);
+      const subscriber = await subscriberService.getSubscriber(sanitizedPhone);
       const today = (subscriberService as any)._getTodayInSubscriberTimezone(subscriber);
-      const key = `conversation_count:${sanitizePhoneNumber(phoneWithSpecial)}:${today}`;
-      const count = await redis.get(key);
+      const stmt = dbService.getDb().prepare('SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?');
+      const row = stmt.get(sanitizedPhone, today);
       
-      expect(count).toBe('1');
+      expect(row?.conversation_start_count).toBe(1);
     });
   });
 });

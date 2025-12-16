@@ -63,6 +63,7 @@ export interface Language {
 }
 
 export interface Subscriber {
+  status: "active" | "paused" | "onboarding" | "inactive";
   connections: {
     phone: string;
     // discord: string;

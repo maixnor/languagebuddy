@@ -1,4 +1,4 @@
-import Redis from 'ioredis';
+import { DatabaseService } from '../../core/database';
 import { Subscriber } from './subscriber.types';
 import { logger, config } from '../../core/config';
 import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber, sanitizePhoneNumber } from './subscriber.utils';
@@ -7,107 +7,12 @@ import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptFo
 import { recordNewSubscriber } from '../../core/observability/metrics';
 
 
-export class SubscriberService {  private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
+export class SubscriberService {  private static instance: SubscriberService; // Declare the static instance property
+  private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
     const timezone = ensureValidTimezone(subscriber?.profile.timezone);
     return DateTime.now().setZone(timezone).toISODate();
   }
 
-  /**
-   * Returns true if the user can start a conversation today (throttle logic).
-   * Only allows one conversation per day for non-premium users after trial.
-   * 
-   * @deprecated Use attemptToStartConversation for atomic check-and-act
-   */
-  public async canStartConversationToday(phoneNumber: string): Promise<boolean> {
-    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
-    // Bypass throttle if global skip is enabled or if it's a whitelisted test number
-    if (config.test.skipStripeCheck || isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
-      logger.debug({ phoneNumber: sanitizedPhone }, "Bypassing conversation throttle due to test configuration.");
-      return true;
-    }
-    
-    const subscriber = await this.getSubscriber(sanitizedPhone);
-    if (subscriber && subscriber.isPremium) {
-      return true; // Premium users can always start a conversation
-    }
-
-    const today = this._getTodayInSubscriberTimezone(subscriber); // Use helper
-
-    const key = `conversation_count:${sanitizedPhone}:${today}`;
-    const count = await this.redis.get(key);
-    return !count || parseInt(count) < 1;
-  }
-
-  /**
-   * Atomically checks if the user can start a conversation and increments the count if allowed.
-   * Returns true if conversation is allowed (and count was incremented).
-   */
-  public async attemptToStartConversation(phoneNumber: string): Promise<boolean> {
-    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
-    // Bypass throttle and always allow if global skip is enabled or if it's a whitelisted test number
-    if (config.test.skipStripeCheck || isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
-      logger.debug({ phoneNumber: sanitizedPhone }, "Bypassing conversation throttle due to test configuration.");
-      // For test users, we still want to increment conversation count if it's a test phone number (non-premium)
-      // but not if skipStripeCheck is true, as that implies no real usage.
-      if (isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone)) {
-        await this.incrementConversationCount(sanitizedPhone);
-      }
-      return true;
-    }
-    
-    const subscriber = await this.getSubscriber(sanitizedPhone);
-    
-    // Always allow premium users, but we still might want to track their usage.
-    if (subscriber && subscriber.isPremium) {
-      await this.incrementConversationCount(sanitizedPhone);
-      return true;
-    }
-
-    const today = this._getTodayInSubscriberTimezone(subscriber);
-    const key = `conversation_count:${sanitizedPhone}:${today}`;
-    const ttl = 86400;
-    const limit = 1;
-
-    // Atomic check-and-increment using Lua
-    // Returns 1 if allowed (incremented), 0 if denied
-    const result = await this.redis.eval(`
-      local count = redis.call("GET", KEYS[1])
-      if not count or tonumber(count) < tonumber(ARGV[2]) then
-         local new_count = redis.call("INCR", KEYS[1])
-         if new_count == 1 or redis.call("TTL", KEYS[1]) == -1 then
-            redis.call("EXPIRE", KEYS[1], ARGV[1])
-         end
-         return 1
-      else
-         return 0
-      end
-    `, 1, key, ttl, limit);
-    
-    return result === 1;
-  }
-
-  /**
-   * Increments the daily conversation count for the user.
-   * Uses atomic Lua script to ensure TTL is set correctly.
-   */
-  public async incrementConversationCount(phoneNumber: string): Promise<void> {
-    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
-    const subscriber = await this.getSubscriber(sanitizedPhone); // Get subscriber to access timezone
-    const today = this._getTodayInSubscriberTimezone(subscriber); // Use helper
-    const key = `conversation_count:${sanitizedPhone}:${today}`;
-    const ttl = 86400;
-
-    // Atomic INCR + EXPIRE using Lua
-    await this.redis.eval(`
-      local count = redis.call("INCR", KEYS[1])
-      if count == 1 or redis.call("TTL", KEYS[1]) == -1 then
-        redis.call("EXPIRE", KEYS[1], ARGV[1])
-      end
-      return count
-    `, 1, key, ttl);
-  }
-  private static instance: SubscriberService;
-  private redis: Redis;
 
   /**
    * Returns the number of days since the user signed up.
@@ -139,7 +44,7 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
     const nowInUserTimezone = DateTime.now().setZone(timezone);
 
     // Calculate the difference in full days based on 24-hour periods
-    return Math.floor(nowInUserTimezone.diff(signedUpInUserTimezone, 'days').days);
+    return Math.floor(nowInUserTimezone.diff(signedUpInUserTimezone, 'days').toObject().days || 0);
   }
 
   /**
@@ -180,16 +85,18 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
     return !subscriber.isPremium && days >= 7;
   }
 
-  private constructor(redis: Redis) {
-    this.redis = redis;
+  private dbService: DatabaseService;
+
+  private constructor(dbService: DatabaseService) {
+    this.dbService = dbService;
   }
 
-  static getInstance(redis?: Redis): SubscriberService {
+  static getInstance(dbService?: DatabaseService): SubscriberService {
     if (!SubscriberService.instance) {
-      if (!redis) {
-        throw new Error("Redis instance required for first initialization");
+      if (!dbService) {
+        throw new Error("DatabaseService instance required for first initialization");
       }
-      SubscriberService.instance = new SubscriberService(redis);
+      SubscriberService.instance = new SubscriberService(dbService);
     }
     return SubscriberService.instance;
   }
@@ -235,43 +142,22 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
       const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
-      
-      // 1. Try fetching with sanitized key (E.164 with +)
-      let cachedSubscriber = await this.redis.get(`subscriber:${sanitizedPhone}`);
-      
-      // 2. Lazy Migration: If not found, try fetching with legacy key (without +)
-      // The user stated they saved numbers without the + previously.
-      if (!cachedSubscriber) {
-        const phoneWithoutPlus = sanitizedPhone.replace(/^\+/, '');
-        const legacyKey = `subscriber:${phoneWithoutPlus}`;
-        
-        // Only check if legacy key is actually different (it should be)
-        if (legacyKey !== `subscriber:${sanitizedPhone}`) {
-            const rawSubscriber = await this.redis.get(legacyKey);
-            
-            if (rawSubscriber) {
-              logger.info({ phoneNumber, sanitizedPhone, legacyKey }, "Lazy migration: Found subscriber with legacy key. Migrating to sanitized key.");
-              const subscriber = JSON.parse(rawSubscriber);
-              
-              // Update phone number to sanitized version
-              subscriber.connections.phone = sanitizedPhone;
-              
-              // Save to new key (sanitized)
-              await this.saveSubscriber(subscriber);
-              
-              // Delete old key
-              await this.redis.del(legacyKey);
-              
-              // Use the migrated subscriber
-              cachedSubscriber = JSON.stringify(subscriber);
-            }
-        }
-      }
+      const stmt = this.dbService.getDb().prepare('SELECT phone_number, status, created_at, last_active_at, data FROM subscribers WHERE phone_number = ?');
+      const row = stmt.get(sanitizedPhone) as { phone_number: string, status: string, created_at: string, last_active_at: string | null, data: string } | undefined;
 
-      if (cachedSubscriber) {
-        const subscriber = JSON.parse(cachedSubscriber);
+      if (row) {
+        const subscriberPartial = JSON.parse(row.data);
+        const subscriber: Subscriber = {
+          ...subscriberPartial,
+          connections: {
+            ...subscriberPartial.connections,
+            phone: row.phone_number, // Ensure the phone number from the column is used
+          },
+          status: row.status,
+          signedUpAt: row.created_at ? new Date(row.created_at) : undefined,
+          lastActiveAt: row.last_active_at ? new Date(row.last_active_at) : undefined,
+        };
         this.hydrateSubscriber(subscriber);
-        subscriber.lastActiveAt = new Date();
         return subscriber;
       }
       return null;
@@ -309,11 +195,17 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
       lastActiveAt: new Date(),
       nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
       isTestUser: isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone), // Set test user flag
+      status: "onboarding", // Initialize status explicitly
       ...initialData
     };
 
-    // Set isPremium to true if conditions are met
-    if (config.test.skipStripeCheck || subscriber.isTestUser) { // Use the new isTestUser flag
+
+
+    // If initialData explicitly sets isPremium, respect it.
+    // Otherwise, apply test-specific overrides.
+    if (initialData?.isPremium !== undefined) {
+      subscriber.isPremium = initialData.isPremium;
+    } else if (config.test.skipStripeCheck || subscriber.isTestUser) {
       subscriber.isPremium = true;
       logger.info({ phoneNumber: sanitizedPhone }, "Subscriber created as premium due to test configuration or being a test user.");
     }
@@ -369,16 +261,13 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
 
   async getAllSubscribers(): Promise<Subscriber[]> {
     try {
-      const keys = await this.redis.keys('subscriber:*');
-      if (keys.length === 0) {
-        return [];
-      }
+      const stmt = this.dbService.getDb().prepare('SELECT data FROM subscribers');
+      const rows = stmt.all() as { data: string }[];
 
       const subscribers: Subscriber[] = [];
-      for (const key of keys) {
-        const cachedSubscriber = await this.redis.get(key);
-        if (cachedSubscriber) {
-          const subscriber = JSON.parse(cachedSubscriber);
+      for (const row of rows) {
+        if (row && row.data) {
+          const subscriber = JSON.parse(row.data);
           this.hydrateSubscriber(subscriber);
           subscribers.push(subscriber);
         }
@@ -395,16 +284,38 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
   private async saveSubscriber(subscriber: Subscriber): Promise<void> {
     try {
       const sanitizedPhone = sanitizePhoneNumber(subscriber.connections.phone);
-      // Ensure the object itself has the sanitized phone number
-      subscriber.connections.phone = sanitizedPhone;
-      
-      await this.redis.set(
-        `subscriber:${sanitizedPhone}`,
-        JSON.stringify(subscriber)
-      );
+      subscriber.connections.phone = sanitizedPhone; // Ensure the object itself has the sanitized phone number
+
+      const status = subscriber.status;
+      // Ensure signedUpAt is a Date object before converting to ISO string
+      let signedUpAtDate: Date | undefined;
+      if (subscriber.signedUpAt instanceof Date) {
+        signedUpAtDate = subscriber.signedUpAt;
+      } else if (typeof subscriber.signedUpAt === 'string') {
+        const parsedDate = new Date(subscriber.signedUpAt);
+        if (!isNaN(parsedDate.getTime())) {
+          signedUpAtDate = parsedDate;
+        }
+      }
+      const createdAtISO = signedUpAtDate ? signedUpAtDate.toISOString() : new Date().toISOString();
+
+      const lastActiveAt = subscriber.lastActiveAt;
+      const lastActiveAtISO = (lastActiveAt instanceof Date && !isNaN(lastActiveAt.getTime())) ? lastActiveAt.toISOString() : null;
+
+      const rest: Partial<Subscriber> = { ...subscriber };
+      delete rest.status;
+      delete rest.signedUpAt;
+      delete rest.lastActiveAt;
+      const data = JSON.stringify(rest);
+
+      const stmt = this.dbService.getDb().prepare(`
+        INSERT OR REPLACE INTO subscribers (phone_number, status, created_at, last_active_at, data)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      stmt.run(sanitizedPhone, status, createdAtISO, lastActiveAtISO, data);
     } catch (error) {
-      logger.error({ err: error, phone: subscriber.connections.phone }, "Error caching subscriber");
-      throw error; // Re-throw the error to prevent silent failures
+      logger.error({ err: error, phone: subscriber.connections.phone }, "Error saving subscriber");
+      throw error;
     }
   }
 
@@ -429,6 +340,124 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
     }
   }
 
+  public async incrementMessageCount(phoneNumber: string): Promise<void> {
+    try {
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      const stmt = this.dbService.getDb().prepare(`
+        INSERT INTO daily_usage (phone_number, usage_date, message_count)
+        VALUES (?, date('now'), 1)
+        ON CONFLICT(phone_number, usage_date) DO UPDATE SET message_count = message_count + 1
+      `);
+      stmt.run(sanitizedPhone);
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error incrementing message count");
+      throw error;
+    }
+  }
+
+  public async getMessageCount(phoneNumber: string): Promise<number> {
+    try {
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT message_count FROM daily_usage WHERE phone_number = ? AND usage_date = date('now')
+      `);
+      const row = stmt.get(sanitizedPhone) as { message_count: number } | undefined;
+      return row?.message_count || 0;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error getting message count");
+      return 0;
+    }
+  }
+
+  public async canStartConversationToday(phoneNumber: string, nowDate?: string): Promise<boolean> {
+    const subscriber = await this.getSubscriber(phoneNumber);
+    const isBypassed = config.test.skipStripeCheck || subscriber?.isPremium || (subscriber && isTestPhoneNumber(subscriber.connections.phone)) || config.test.phoneNumbers.includes(phoneNumber);
+
+    if (isBypassed) {
+        return true;
+    }
+
+    try {
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      let usageDate = nowDate;
+
+      if (!usageDate) {
+        if (subscriber && subscriber.profile.timezone) {
+           usageDate = DateTime.now().setZone(subscriber.profile.timezone).toISODate();
+        } else {
+           // Fallback if no subscriber or timezone found (shouldn't happen for active users)
+           usageDate = DateTime.now().toUTC().toISODate(); 
+        }
+      }
+
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT conversation_start_count FROM daily_usage WHERE phone_number = ? AND usage_date = ?
+      `);
+      const row = stmt.get(sanitizedPhone, usageDate) as { conversation_start_count: number } | undefined;
+      return (row?.conversation_start_count || 0) === 0;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error checking if conversation can be started today");
+      return false;
+    }
+  }
+
+  public async incrementConversationCount(phoneNumber: string, nowDate?: string): Promise<void> {
+    try {
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      let usageDate = nowDate;
+
+      if (!usageDate) {
+        const subscriber = await this.getSubscriber(sanitizedPhone);
+        const timezone = ensureValidTimezone(subscriber?.profile.timezone);
+        usageDate = DateTime.now().setZone(timezone).toISODate();
+      }
+
+      const stmt = this.dbService.getDb().prepare(`
+        INSERT INTO daily_usage (phone_number, usage_date, conversation_start_count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(phone_number, usage_date) DO UPDATE SET conversation_start_count = conversation_start_count + 1
+      `);
+      stmt.run(sanitizedPhone, usageDate);
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error incrementing conversation count");
+      throw error;
+    }
+  }
+
+  public async attemptToStartConversation(phoneNumber: string): Promise<boolean> {
+    const subscriber = await this.getSubscriber(phoneNumber);
+    const isBypassedUser = config.test.skipStripeCheck || (subscriber && isTestPhoneNumber(subscriber.connections.phone)) || config.test.phoneNumbers.includes(phoneNumber);
+
+    const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+    const timezone = ensureValidTimezone(subscriber?.profile.timezone);
+    const today = DateTime.now().setZone(timezone).toISODate();
+
+    if (isBypassedUser) {
+        // For bypassed users, we always increment
+        await this.incrementConversationCount(phoneNumber, today);
+        return true;
+    }
+
+    try {
+      // Atomic check-and-increment:
+      // Try to insert with count=1.
+      // If conflict (row exists), try to increment ONLY IF count is 0.
+      // If count is > 0, the WHERE clause fails, and changes will be 0.
+      const stmt = this.dbService.getDb().prepare(`
+        INSERT INTO daily_usage (phone_number, usage_date, conversation_start_count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(phone_number, usage_date) 
+        DO UPDATE SET conversation_start_count = conversation_start_count + 1
+        WHERE conversation_start_count = 0
+      `);
+      const result = stmt.run(sanitizedPhone, today);
+      return result.changes > 0;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error attempting to start conversation");
+      return false;
+    }
+  }
+
   public getDailySystemPrompt(subscriber: Subscriber): string {
     const targetLanguage = subscriber.profile.learningLanguages?.[0] || {
       languageName: 'English',
@@ -444,7 +473,9 @@ export class SubscriberService {  private _getTodayInSubscriberTimezone(subscrib
 
     let prompt = generateRegularSystemPromptForSubscriber(subscriber, targetLanguage);
 
-    prompt += `\n\nTASK: INITIATE NEW DAY CONVERSATION
+    prompt += `
+
+TASK: INITIATE NEW DAY CONVERSATION
     - This is a fresh start after a nightly reset.
     - Initiate a conversation naturally.
     - If there's a topic from the last digest, you might reference it or start something new.

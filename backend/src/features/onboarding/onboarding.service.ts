@@ -1,4 +1,3 @@
-import Redis from 'ioredis';
 import { logger } from '../../core/config';
 import { OnboardingState } from './onboarding.types';
 
@@ -9,14 +8,11 @@ import { OnboardingState } from './onboarding.types';
 export class OnboardingService {
   private static instance: OnboardingService;
 
-  private constructor(redis: Redis) {}
+  private constructor() {}
 
-  static getInstance(redis?: Redis): OnboardingService {
+  static getInstance(): OnboardingService {
     if (!OnboardingService.instance) {
-      if (!redis) {
-        // tolerate
-      }
-      OnboardingService.instance = new OnboardingService(redis!);
+      OnboardingService.instance = new OnboardingService();
     }
     return OnboardingService.instance;
   }

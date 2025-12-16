@@ -11,16 +11,16 @@ import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint';
 export class DigestService {
   private static instance: DigestService;
   private llm: ChatOpenAI;
-  private checkpointer: ExtendedCheckpointSaver;
+  private checkpointer: BaseCheckpointSaver;
   private subscriberService: SubscriberService;
 
-  private constructor(llm: ChatOpenAI, checkpointer: ExtendedCheckpointSaver, subscriberService: SubscriberService) {
+  private constructor(llm: ChatOpenAI, checkpointer: BaseCheckpointSaver, subscriberService: SubscriberService) {
     this.llm = llm;
     this.checkpointer = checkpointer;
     this.subscriberService = subscriberService;
   }
 
-  static getInstance(llm?: ChatOpenAI, checkpointer?: ExtendedCheckpointSaver, subscriberService?: SubscriberService): DigestService {
+  static getInstance(llm?: ChatOpenAI, checkpointer?: BaseCheckpointSaver, subscriberService?: SubscriberService): DigestService {
     if (!DigestService.instance) {
       if (!llm || !checkpointer || !subscriberService) {
         throw new Error("LLM, checkpointer, and subscriberService are required for first initialization");
@@ -48,7 +48,7 @@ export class DigestService {
         previousDigestCount: subscriber.metadata.digests?.length || 0
       }, "Creating conversation digest");
 
-      // Get the conversation history from Redis
+      // Get the conversation history from SQLite
       const conversationHistory = await this.getConversationHistory(subscriber.connections.phone);
       
       if (!conversationHistory || conversationHistory.length < 5) {
@@ -104,7 +104,7 @@ export class DigestService {
   }
 
   /**
-   * Extracts conversation messages from Redis checkpoint
+   * Extracts conversation messages from SQLite checkpoint
    */
   private async getConversationHistory(phoneNumber: string): Promise<any[]> {
     const startTime = Date.now();

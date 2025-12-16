@@ -9,17 +9,16 @@ import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { OnboardingService } from '../features/onboarding/onboarding.service';
 import { WhatsappDeduplicationService } from '../core/messaging/whatsapp/whatsapp-deduplication.service';
 import { DigestService } from '../features/digest/digest.service';
-import { SqliteCheckpointSaver } from '../core/persistence/sqlite-checkpointer';
-import { RedisCheckpointSaver } from '../core/persistence/redis-checkpointer';
+import { BaseCheckpointSaver } from '@langchain/langgraph-checkpoint'; // Add BaseCheckpointSaver
+import { SqliteCheckpointSaver } from '../core/persistence/sqlite-checkpointer'; // Single import
 import { initializeSubscriberTools } from '../features/subscriber/subscriber.tools';
-import { initializeFeedbackTools } from '../tools/feedback-tools';
+
 import { LanguageBuddyAgent } from '../agents/language-buddy-agent';
 import { WhatsAppService } from '../core/messaging/whatsapp/whatsapp.service';
-import Redis from 'ioredis';
 import { DatabaseService } from './database'; // Added import
 
 export class ServiceContainer {
-  public redisClient!: Redis;
+
   public dbService!: DatabaseService; // Declared dbService
   public llm!: ChatOpenAI;
   public languageBuddyAgent!: LanguageBuddyAgent;
@@ -34,21 +33,9 @@ export class ServiceContainer {
   public stripeWebhookService!: StripeWebhookService;
 
   async initialize(): Promise<void> {
-    this.redisClient = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-      // tls: {},
-    });
 
-    this.redisClient.on('connect', () => {});
-
-    this.redisClient.on('error', (err: any) => {
-      logger.error({ err }, 'Redis connection error:');
-    });
 
     this.dbService = new DatabaseService(); // Initialized dbService
-    this.dbService.migrate(); // Apply migrations
 
     this.llm = new ChatOpenAI({
       model: 'gpt-4o-mini',
@@ -56,20 +43,25 @@ export class ServiceContainer {
     });
 
     this.subscriberService = SubscriberService.getInstance(this.dbService); // Passed dbService
-    this.onboardingService = OnboardingService.getInstance(this.redisClient);
+    this.onboardingService = OnboardingService.getInstance();
     this.feedbackService = FeedbackService.getInstance(this.dbService);
-    this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.redisClient);
+    this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.dbService);
 
     this.digestService = DigestService.getInstance(
       this.llm,
-      new SqliteCheckpointSaver(this.dbService.getDb()),
+      new SqliteCheckpointSaver(this.dbService),
       this.subscriberService
     );
 
-    initializeSubscriberTools(this.redisClient);
-    initializeFeedbackTools(this.dbService);
+    initializeSubscriberTools(this.dbService);
 
-    this.languageBuddyAgent = new LanguageBuddyAgent(new SqliteCheckpointSaver(this.dbService.getDb()), this.llm, this.digestService);
+
+    this.languageBuddyAgent = new LanguageBuddyAgent(
+      new SqliteCheckpointSaver(this.dbService), 
+      this.llm, 
+      this.digestService, 
+      this.feedbackService
+    );
 
     this.schedulerService = SchedulerService.getInstance(this.subscriberService, this.languageBuddyAgent);
     this.schedulerService.startSchedulers();

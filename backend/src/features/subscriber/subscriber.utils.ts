@@ -185,7 +185,8 @@ export function getMissingProfileFieldsReflective(profile: Record<string, any>):
  * @returns True if the phone number is a test number, false otherwise.
  */
 export function isTestPhoneNumber(phoneNumber: string): boolean {
-    return phoneNumber.startsWith('+69');
+    const sanitized = sanitizePhoneNumber(phoneNumber);
+    return sanitized.startsWith('+69');
 }
 
 /**

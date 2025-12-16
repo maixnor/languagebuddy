@@ -8,43 +8,35 @@ export interface FeedbackEntry {
   category: "content" | "technical" | "suggestion" | "other";
 }
 
-import Redis from 'ioredis';
-import { logger } from '../../core/config';
+import { DatabaseService } from '../../core/database';
+import { pino } from 'pino';
+
+const logger = pino({ name: 'feedback-service' });
 
 export class FeedbackService {
   private static instance: FeedbackService;
-  private redis: Redis;
+  private db: DatabaseService;
 
-  private constructor(redis: Redis) {
-    this.redis = redis;
+  private constructor(db: DatabaseService) {
+    this.db = db;
   }
 
-  static getInstance(redis?: Redis): FeedbackService {
+  static getInstance(db?: DatabaseService): FeedbackService {
     if (!FeedbackService.instance) {
-      if (!redis) {
-        throw new Error("Redis instance required for first initialization");
+      if (!db) {
+        throw new Error("DatabaseService instance required for first initialization");
       }
-      FeedbackService.instance = new FeedbackService(redis);
+      FeedbackService.instance = new FeedbackService(db);
     }
     return FeedbackService.instance;
   }
 
   async saveFeedback(feedback: FeedbackEntry): Promise<void> {
     try {
-      // Save individual feedback entry
-      const feedbackKey = `feedback:${feedback.userPhone}:${Date.now()}`;
-      await this.redis.setex(feedbackKey, 90 * 24 * 60 * 60, JSON.stringify(feedback)); // 90 days
-
-      // Add to global feedback list for analysis
-      await this.redis.lpush('feedback:all', JSON.stringify(feedback));
-      await this.redis.ltrim('feedback:all', 0, 999); // Keep last 1000 feedback entries
-
-      // Track daily feedback count per user
-      const today = new Date().toISOString().split('T')[0];
-      const dailyCountKey = `feedback_count:${feedback.userPhone}:${today}`;
-      await this.redis.incr(dailyCountKey);
-      await this.redis.expire(dailyCountKey, 24 * 60 * 60); // Expire after 24 hours
-      logger.info(`Saved feedback for ${feedback.userPhone.slice(-4)}`);
+      const db = this.db.getDb();
+      const stmt = db.prepare('INSERT INTO feedback (phone_number, content, created_at) VALUES (?, ?, ?)');
+      stmt.run(feedback.userPhone, JSON.stringify(feedback), feedback.timestamp);
+      logger.info({ phoneNumber: feedback.userPhone }, `Saved feedback for user`);
     } catch (error) {
       logger.error({ err: error, feedback }, "Error saving feedback");
       throw error;
@@ -53,51 +45,25 @@ export class FeedbackService {
 
   async getUserFeedbackCount(phoneNumber: string): Promise<number> {
     try {
+      const db = this.db.getDb();
       const today = new Date().toISOString().split('T')[0];
-      const dailyCountKey = `feedback_count:${phoneNumber}:${today}`;
-      const count = await this.redis.get(dailyCountKey);
-      return parseInt(count || '0', 10);
+      const stmt = db.prepare('SELECT COUNT(*) FROM feedback WHERE phone_number = ? AND created_at LIKE ? || \'%\'');
+      const result = stmt.get(phoneNumber, today) as { 'COUNT(*)': number };
+      return result['COUNT(*)'];
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error getting user feedback count");
       return 0;
     }
   }
 
-  async shouldRequestFeedback(phoneNumber: string): Promise<boolean> {
-    try {
-      const todayCount = await this.getUserFeedbackCount(phoneNumber);
-      const maxDaily = 2; // Max 2 feedback requests per day
-      
-      if (todayCount >= maxDaily) {
-        return false;
-      }
-
-      // Random chance (1% probability)
-      return Math.random() < 0.01;
-    } catch (error) {
-      logger.error({ err: error, phoneNumber }, "Error checking if should request feedback");
-      return false;
-    }
-  }
-
   async getAllFeedback(limit: number = 100): Promise<FeedbackEntry[]> {
     try {
-      const feedbackData = await this.redis.lrange('feedback:all', 0, limit - 1);
-      return feedbackData.map(data => JSON.parse(data));
+      const db = this.db.getDb();
+      const stmt = db.prepare('SELECT content FROM feedback ORDER BY created_at DESC LIMIT ?');
+      const feedbackData = stmt.all(limit) as { content: string }[];
+      return feedbackData.map(data => JSON.parse(data.content));
     } catch (error) {
       logger.error({ err: error }, "Error getting all feedback");
-      return [];
-    }
-  }
-
-  async getFeedbackByCategory(category: string, limit: number = 50): Promise<FeedbackEntry[]> {
-    try {
-      const allFeedback = await this.getAllFeedback(500); // Get more to filter
-      return allFeedback
-        .filter(feedback => feedback.category === category)
-        .slice(0, limit);
-    } catch (error) {
-      logger.error({ err: error, category }, "Error getting feedback by category");
       return [];
     }
   }

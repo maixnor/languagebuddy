@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
+import Database from 'better-sqlite3';
+import { SqliteCheckpointSaver } from '../../core/persistence/sqlite-checkpointer';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { ChatOpenAI } from "@langchain/openai";
 import { Checkpoint } from "@langchain/langgraph";
@@ -9,8 +9,8 @@ import { SubscriberService } from '../subscriber/subscriber.service';
 import { DigestService } from './digest.service';
 
 describe('Conversation Persistence & Clearance Bug', () => {
-  let redis: Redis;
-  let checkpointer: RedisCheckpointSaver;
+  let db: Database;
+  let checkpointer: SqliteCheckpointSaver;
   let agent: LanguageBuddyAgent;
   let mockLlm: any;
   let mockDigestService: DigestService;
@@ -31,42 +31,80 @@ describe('Conversation Persistence & Clearance Bug', () => {
     }
   } as unknown as Subscriber;
 
-  beforeAll(() => {
-    redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-    });
-    // Initialize SubscriberService
-    SubscriberService.getInstance(redis);
-  });
 
-  afterAll(async () => {
-    await redis.quit();
-  });
 
   beforeEach(async () => {
-    await redis.del(`checkpoint:${testPhone}`);
-    const keys = await redis.keys(`writes:${testPhone}:*`);
-    if (keys.length > 0) await redis.del(...keys);
+    db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS checkpoints (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        parent_checkpoint_id TEXT,
+        type TEXT NOT NULL,
+        checkpoint TEXT NOT NULL,
+        metadata TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, created_at DESC),
+        UNIQUE (checkpoint_id)
+      );
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS checkpoint_writes (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        idx INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, checkpoint_id, task_id, idx)
+      );
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS checkpoint_blobs (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        blob_id TEXT NOT NULL,
+        data BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, checkpoint_id, blob_id)
+      );
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS subscribers (
+        phone_number TEXT PRIMARY KEY,
+        profile TEXT,
+        metadata TEXT
+      );
+    `);
+    
+    // Initialize SubscriberService with a mock DatabaseService
+    // Since SubscriberService expects DatabaseService, we need to mock it
+    const mockDbService = {
+      getDb: () => db,
+      migrate: jest.fn(),
+      close: jest.fn(),
+    } as any; // Using 'any' for simplicity in mock, should be more precise in real code
+    SubscriberService.getInstance(mockDbService);
 
-    checkpointer = new RedisCheckpointSaver(redis);
+    checkpointer = new SqliteCheckpointSaver(mockDbService);
+
     
     // Mock LLM to inspect what messages it receives
-    mockLlm = {
-      invoke: jest.fn().mockResolvedValue({
-        content: "I am a mock response",
-        tool_calls: [],
-        // LangGraph expects an AIMessage object in the response for some versions
-        messages: [new AIMessage("I am a mock response")]
-      }),
+    const mockLlmBase = {
+      invoke: jest.fn().mockResolvedValue(new AIMessage("I am a mock response")),
       bind: jest.fn().mockReturnThis(),
       withStructuredOutput: jest.fn().mockReturnThis(),
-      bindTools: jest.fn().mockReturnThis(),
       modelName: 'mock-gpt-4',
-      // Add other required properties if needed by the specific LangChain version
       lc_namespace: ['langchain', 'chat_models', 'openai'],
+      bindTools: jest.fn(), // Placeholder
     };
+    
+    // Set up return value for bindTools to return self (or compatible mock)
+    mockLlmBase.bindTools.mockReturnValue(mockLlmBase);
+
+    mockLlm = mockLlmBase as any;
 
     mockDigestService = {
       getRecentDigests: jest.fn().mockResolvedValue([]),
@@ -97,23 +135,23 @@ describe('Conversation Persistence & Clearance Bug', () => {
       pending_sends: [],
     };
 
-    await checkpointer.putTuple(
+    await checkpointer.put(
       { configurable: { thread_id: testPhone } },
       dummyCheckpoint,
       { conversationStartedAt: new Date().toISOString() }
     );
 
     // Verify state exists
-    const existsBefore = await redis.exists(`checkpoint:${testPhone}`);
-    expect(existsBefore).toBe(1);
+    const existsBefore = await checkpointer.get({ configurable: { thread_id: testPhone } });
+    expect(existsBefore).toBeDefined();
     expect(await agent.currentlyInActiveConversation(testPhone)).toBe(true);
 
     // 2. Execute clear command
     await agent.clearConversation(testPhone);
 
     // 3. Verify state is gone from Redis
-    const existsAfter = await redis.exists(`checkpoint:${testPhone}`);
-    expect(existsAfter).toBe(0);
+    const existsAfter = await checkpointer.get({ configurable: { thread_id: testPhone } });
+    expect(existsAfter).toBeUndefined();
     expect(await agent.currentlyInActiveConversation(testPhone)).toBe(false);
 
     // 4. Initiate a new conversation (simulating what happens after !clear or !night)
@@ -122,17 +160,16 @@ describe('Conversation Persistence & Clearance Bug', () => {
     // 5. Verify what the LLM received
     // The LLM should have received the SystemMessage and the NEW HumanMessage ("New start")
     // It should NOT have received "I like apples"
-    const lastCallArgs = mockLlm.bindTools.mock.calls[0] || mockLlm.invoke.mock.calls[0]; 
-    // Note: implementation detail of createReactAgent might call bindTools or invoke depending on version/setup.
-    // In LangGraph prebuilt agent, it usually binds tools first.
-    // Let's inspect the agent execution.
+    // const lastCallArgs = mockLlm.bindTools.mock.calls[0] || mockLlm.invoke.mock.calls[0]; 
     
     // Since we can't easily spy on the internal compiled graph's calls to the LLM without deep mocking,
     // let's verify the NEW checkpoint state in Redis.
     
-    const newCheckpointTuple = await checkpointer.getCheckpoint(testPhone);
-    expect(newCheckpointTuple).toBeDefined();
-    const newMessages = newCheckpointTuple?.checkpoint.channel_values.messages;
+    // checkpointer.get() returns the Checkpoint object directly, not the Tuple
+    const newCheckpoint = await checkpointer.get({ configurable: { thread_id: testPhone } });
+    
+    expect(newCheckpoint).toBeDefined();
+    const newMessages = newCheckpoint?.channel_values.messages;
     
     // Should contain SystemMessage + HumanMessage("New start") + AIMessage("I am a mock response")
     // Should NOT contain "I like apples"

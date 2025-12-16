@@ -9,15 +9,11 @@ import { DigestService } from '../../features/digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { Subscriber, Language } from '../../features/subscriber/subscriber.types';
 import { Digest } from '../../features/digest/digest.types';
-import Redis from 'ioredis';
-import { ChatOpenAI } from '@langchain/openai';
-import { RedisCheckpointSaver } from '../../core/persistence/redis-checkpointer';
-import { config } from '../../core/config';
+import Database from 'better-sqlite3';
+import { SqliteCheckpointSaver } from '../../core/persistence/sqlite-checkpointer';
 import { initializeSubscriberTools } from '../subscriber/subscriber.tools';
-import { initializeFeedbackTools } from '../../tools/feedback-tools';
+import { FeedbackService } from '../feedback/feedback.service'; // Import FeedbackService
 
-// Real Redis instance for testing
-let redisClient: Redis;
 
 // Predefined conversation templates
 interface ConversationMessage {
@@ -138,12 +134,19 @@ class DigestTestHelper {
   private subscriberService: SubscriberService;
   private digestService: DigestService;
   private agent: LanguageBuddyAgent;
-  private checkpointer: RedisCheckpointSaver;
+  private checkpointer: SqliteCheckpointSaver; // Corrected type
   private llm: ChatOpenAI;
+  private feedbackService: FeedbackService; // Added feedbackService
 
-  constructor(phone: string) {
+  constructor(phone: string, db: Database) {
     this.phone = phone;
-    this.subscriberService = SubscriberService.getInstance(redisClient);
+    
+    // Mock DatabaseService for SubscriberService
+    const mockDbService = {
+      getDb: () => db,
+      migrate: jest.fn(), // Mock migrate as it's called during getInstance
+    } as any; 
+    this.subscriberService = SubscriberService.getInstance(mockDbService);
     
     // Create LLM and checkpointer
     this.llm = new ChatOpenAI({
@@ -151,17 +154,16 @@ class DigestTestHelper {
       temperature: 0.3,
       maxTokens: 1000,
     });
-    this.checkpointer = new RedisCheckpointSaver(redisClient);
+    this.checkpointer = new SqliteCheckpointSaver(mockDbService); // Corrected instantiation
     
     // Initialize digest service
     this.digestService = DigestService.getInstance(this.llm, this.checkpointer, this.subscriberService);
     
-    // Initialize tools
-    initializeSubscriberTools(redisClient);
-    initializeFeedbackTools(redisClient);
-    
+    // Initialize feedback service (new dependency for agent)
+    this.feedbackService = FeedbackService.getInstance(mockDbService);
+
     // Create agent
-    this.agent = new LanguageBuddyAgent(this.checkpointer, this.llm, this.digestService);
+    this.agent = new LanguageBuddyAgent(this.checkpointer, this.llm, this.digestService, this.feedbackService); // Pass feedbackService
   }
 
   async createGermanLearner(name: string = 'Sarah'): Promise<Subscriber> {
@@ -253,8 +255,8 @@ class DigestTestHelper {
 
     const config = { configurable: { thread_id: this.phone } };
 
-    // Save the mock conversation state to Redis
-    await this.checkpointer.putTuple(config, mockCheckpoint, mockMetadata);
+    // Save the mock conversation state to SQLite
+    await this.checkpointer.put(config, mockCheckpoint, mockMetadata);
     
     console.log(`[TEST] Loaded conversation '${template.name}' with ${messagesWithTimestamps.length} messages`);
     
@@ -266,7 +268,7 @@ class DigestTestHelper {
 
   async verifyConversationLoaded(): Promise<boolean> {
     try {
-      const checkpoint = await this.checkpointer.getCheckpoint(this.phone);
+      const checkpoint = await this.checkpointer.get({ configurable: { thread_id: this.phone } });
       if (!checkpoint || !checkpoint.checkpoint || !checkpoint.checkpoint.channel_values) {
         return false;
       }
@@ -341,16 +343,11 @@ class DigestTestHelper {
     console.log(`[TEST] Cleaning up test data for ${this.phone}`);
     
     try {
-      // Clean up Redis data
-      await redisClient.del(`subscriber:${this.phone}`);
-      await redisClient.del(`checkpoint:${this.phone}`);
-      await redisClient.del(`conversation_count:${this.phone}:*`);
-      
-      // Clean up any other test-related keys
-      const keys = await redisClient.keys(`*${this.phone}*`);
-      if (keys.length > 0) {
-        await redisClient.del(...keys);
-      }
+      // Clean up SQLite data
+      db.exec(`DELETE FROM subscribers WHERE phone_number = '${this.phone}'`);
+      db.exec(`DELETE FROM checkpoints WHERE thread_id = '${this.phone}'`);
+      db.exec(`DELETE FROM daily_usage WHERE phone_number = '${this.phone}'`);
+
     } catch (error) {
       console.error(`[TEST] Cleanup error:`, error);
     }
@@ -362,36 +359,53 @@ describe('Digest System E2E Test', () => {
   const testPhone = '+1234567890digest'; // Use a unique test phone number
 
   beforeAll(async () => {
-    // Initialize Redis client for testing
-    redisClient = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-      lazyConnect: true,
-    });
-
-    await redisClient.connect();
-    console.log('[TEST] Redis connected for digest testing');
+    // SQLite will be initialized in beforeEach for each test
+    console.log('[TEST] E2E Digest Test Suite Started');
   });
 
   beforeEach(async () => {
-    test = new DigestTestHelper(testPhone);
+    // Create an in-memory database for each test
+    db = new Database(':memory:');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS checkpoints (
+        thread_id TEXT PRIMARY KEY,
+        checkpoint TEXT
+      );
+    `);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS subscribers (
+        phone_number TEXT PRIMARY KEY,
+        profile TEXT,
+        metadata TEXT
+      );
+    `);
+    // Need a daily_usage table for some subscriber service functions
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS daily_usage (
+        phone_number TEXT NOT NULL,
+        usage_date TEXT NOT NULL,
+        message_count INTEGER DEFAULT 0,
+        conversation_start_count INTEGER DEFAULT 0,
+        last_interaction_at TEXT,
+        PRIMARY KEY (phone_number, usage_date)
+      );
+    `);
+
+    test = new DigestTestHelper(testPhone, db);
     
     // Clean up any existing data for this test phone
     await test.cleanup();
   });
 
   afterEach(async () => {
-    if (test) {
-      await test.cleanup();
+    // Close the database connection after each test
+    if (db) {
+      db.close();
     }
   });
 
   afterAll(async () => {
-    // Close Redis connection properly
-    if (redisClient && redisClient.status !== 'end') {
-      await redisClient.quit();
-    }
+    console.log('[TEST] E2E Digest Test Suite Finished');
   });
 
   it('should create a complete subscriber profile and generate a digest from German dative conversation', async () => {

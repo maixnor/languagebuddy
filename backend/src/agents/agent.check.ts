@@ -3,7 +3,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { logger } from '../core/config';
 import { z } from "zod";
-import { ExtendedCheckpointSaver } from '../core/persistence/sqlite-checkpointer'; // Added import
+
 
 const AuditResultSchema = z.object({
   status: z.enum(["OK", "ERROR"]).describe("The result of the audit. 'OK' if the last assistant message is correct, 'ERROR' if a mistake was found."),
@@ -14,15 +14,16 @@ const AuditResultSchema = z.object({
 export async function checkLastResponse(
   subscriber: Subscriber,
   llm: ChatOpenAI,
-  checkpointer: ExtendedCheckpointSaver
+  checkpointer: any
 ): Promise<string> {
     const phone = subscriber.connections.phone;
-    const checkpoint = await checkpointer.getCheckpoint(phone);
+    const checkpointTuple = await checkpointer.get({ configurable: { thread_id: phone } });
+    const checkpoint = checkpointTuple?.checkpoint;
 
-    const messages = (checkpoint?.checkpoint as any)?.values?.messages || 
-                     (checkpoint?.checkpoint as any)?.channel_values?.messages;
+    const messages = (checkpoint as any)?.values?.messages ||
+                     (checkpoint as any)?.channel_values?.messages;
 
-    if (!checkpoint || !checkpoint.checkpoint || !messages?.length) {
+    if (!checkpoint || !messages?.length) {
       return "I can't check anything yet because the conversation is empty.";
     }
 
@@ -76,8 +77,8 @@ Check for:
     }
 }
 
-async function injectSystemCorrection(phone: string, correction: string, checkpointer: ExtendedCheckpointSaver): Promise<void> {
-    const checkpointTuple = await checkpointer.getCheckpoint(phone);
+async function injectSystemCorrection(phone: string, correction: string, checkpointer: any): Promise<void> {
+    const checkpointTuple = await checkpointer.get({ configurable: { thread_id: phone } });
     if (!checkpointTuple) return;
 
     const checkpoint = checkpointTuple.checkpoint as any;
@@ -109,11 +110,11 @@ async function injectSystemCorrection(phone: string, correction: string, checkpo
         };
     }
     
-    await checkpointer.putTuple(
+    await checkpointer.put(
       checkpointTuple.config,
       newCheckpoint,
       checkpointTuple.metadata,
-      checkpointTuple.parentConfig
+      undefined // Added newVersions argument to satisfy BaseCheckpointSaver interface
     );
     logger.info({ phone, correction }, "Injected system correction into conversation");
 }

@@ -13,14 +13,16 @@ import { SubscriptionService } from './subscription.service';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { StripeWebhookService } from './subscription-webhook.service';
 import Stripe from 'stripe';
-import Redis from 'ioredis';
+
 import { config } from '../../core/config';
+import { DatabaseService } from '../../core/database';
 
 // Mock Stripe
 jest.mock('stripe');
 
 describe('SubscriptionService & StripeWebhookService - Integration Tests', () => {
-  let redis: Redis;
+
+  let dbService: DatabaseService; // Declared dbService
   let subscriptionService: SubscriptionService;
   let subscriberService: SubscriberService;
   let stripeWebhookService: StripeWebhookService;
@@ -30,25 +32,24 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
   const testWebhookSecret = 'wh_test_secret';
 
   beforeAll(() => {
-    redis = new Redis({
-      host: config.redis.host,
-      port: config.redis.port,
-      password: config.redis.password,
-    });
+    dbService = new DatabaseService(':memory:'); // Initialize dbService
+    dbService.migrate(); // Apply migrations
   });
 
   afterAll(async () => {
-    await redis.quit();
+    dbService.close(); // Close dbService
   });
 
   beforeEach(async () => {
-    // Clear test data
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-    await redis.del(`subscriber:${testPhone}`);
-    await redis.del(`subscriber:${testPhoneWithPlus}`);
+    // Clear tables for a clean state before each test (SQLite)
+    dbService.getDb().exec('DELETE FROM subscribers');
+    dbService.getDb().exec('DELETE FROM daily_usage');
+    dbService.getDb().exec('DELETE FROM checkpoints');
+    dbService.getDb().exec('DELETE FROM checkpoint_writes');
+    dbService.getDb().exec('DELETE FROM feedback');
+    dbService.getDb().exec('DELETE FROM processed_messages');
+
+
 
     // Explicitly set config values for Stripe, ensuring they are available to StripeService
     (config.stripe as any).secretKey = 'sk_test_123';
@@ -62,7 +63,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
     // Initialize StripeService with the dummy API key from config
     subscriptionService.initialize(config.stripe.secretKey);
     
-    subscriberService = SubscriberService.getInstance(redis);
+    subscriberService = SubscriberService.getInstance(dbService); // Pass dbService
     stripeWebhookService = new StripeWebhookService(
       subscriberService,
       subscriptionService,
@@ -87,15 +88,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
 
   });
 
-  afterEach(async () => {
-    // Clean up Redis after each test
-    const keys = await redis.keys(`*${testPhone}*`);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-    await redis.del(`subscriber:${testPhone}`);
-    await redis.del(`subscriber:${testPhoneWithPlus}`);
-  });
+
 
   describe('initialize()', () => {
     it('should set stripe to null if no API key provided', () => {
@@ -280,7 +273,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
       
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
         limit: 1,
-        query: `phone:'+${testPhone}'`,
+        query: `phone:'+1234567890'`,
       });
     });
 
@@ -454,7 +447,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
       
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
         limit: 1,
-        query: "phone:'+'",
+        query: "phone:''",
       });
       expect(result).toBe(false);
     });
@@ -471,7 +464,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
       // BUG POTENTIAL: No sanitization of phone number
       expect(mockStripe.customers.search).toHaveBeenCalledWith({
         limit: 1,
-        query: `phone:'+123-456-7890'`,
+        query: `phone:'+1234567890'`,
       });
     });
 

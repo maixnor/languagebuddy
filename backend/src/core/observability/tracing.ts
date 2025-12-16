@@ -87,15 +87,6 @@ export const initializeTracing = () => {
         '@opentelemetry/instrumentation-fs': {
           enabled: false,
         },
-        // Configure Redis instrumentation for proper span hierarchy
-        '@opentelemetry/instrumentation-ioredis': {
-          enabled: true,
-          // Enable response hook to add more context
-          dbStatementSerializer: (cmdName, cmdArgs) => {
-            // Sanitize arguments to avoid exposing sensitive data
-            return `${cmdName}`;
-          },
-        },
         // Configure HTTP instrumentation for external API calls
         '@opentelemetry/instrumentation-http': {
           enabled: true,
@@ -239,39 +230,7 @@ export const traceOpenAI = <T>(
   });
 };
 
-// Helper for Redis operations - use CLIENT span kind for database calls
-export const traceRedis = <T>(
-  operation: string,
-  fn: (span: any) => Promise<T>,
-  additionalAttributes?: Record<string, string | number | boolean>
-): Promise<T> => {
-  const tracer = trace.getTracer(serviceInfo.name);
-  
-  return tracer.startActiveSpan(`redis.${operation}`, {
-    kind: SpanKind.CLIENT, // CLIENT for database operations
-    attributes: {
-      'db.system': 'redis',
-      'db.operation': operation,
-      'peer.service': 'redis',
-      ...additionalAttributes,
-    },
-  }, async (span) => {
-    try {
-      const result = await fn(span);
-      span.setStatus({ code: SpanStatusCode.OK });
-      return result;
-    } catch (error) {
-      span.setStatus({
-        code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      span.recordException(error as Error);
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
-};
+
 
 // Enhanced helper to add events to current span
 export const addSpanEvent = (

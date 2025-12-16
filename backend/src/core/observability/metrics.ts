@@ -28,6 +28,12 @@ export const subscribersFreeThrottledTotal = new Gauge({
   registers: [metricsRegistry]
 });
 
+export const subscribersChurnedTotal = new Gauge({
+  name: 'languagebuddy_subscribers_churned_total',
+  help: 'Total number of subscribers who have not replied in the last 7 days',
+  registers: [metricsRegistry]
+});
+
 export const conversionsTrialToPremiumTotal = new Counter({
   name: 'languagebuddy_conversions_trial_to_premium_total',
   help: 'Number of trial users who converted to premium',
@@ -86,11 +92,7 @@ export const subscriberAnomaliesDetectedHourly = new Gauge({
   registers: [metricsRegistry]
 });
 
-export const redisInconsistenciesDetectedHourly = new Gauge({
-  name: 'languagebuddy_redis_inconsistencies_detected_hourly',
-  help: 'Number of inconsistencies found in Redis during last hourly scan',
-  registers: [metricsRegistry]
-});
+
 
 // --- Existing Metrics ---
 export const totalSubscribers = new Gauge({

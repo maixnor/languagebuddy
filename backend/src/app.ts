@@ -39,7 +39,6 @@ export class Application {
     return {
       timestamp: new Date().toISOString(),
       services: {
-        redis: this.serviceContainer.redisClient.status,
         whatsapp: this.serviceContainer.whatsappService.isInitialized() ? "enabled" : "failed",
         openai: { 
           model: this.serviceContainer.llm.model, 

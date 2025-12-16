@@ -33,7 +33,7 @@ async function main() {
     const services = new ServiceContainer();
     await services.initialize();
 
-    // Start Metrics Scheduler (polls Redis for stats)
+    // Start Metrics Scheduler
     const metricsService = MetricsService.getInstance(services);
     metricsService.startScheduler(60000); // Poll every minute
     
@@ -52,16 +52,6 @@ async function main() {
       server.close(async () => {
         logger.info('HTTP server closed');
         
-        try {
-          if (services.redisClient) {
-            logger.info('Closing Redis connection...');
-            await services.redisClient.quit();
-            logger.info('Redis connection closed');
-          }
-        } catch (err) {
-          logger.error({ err }, 'Error closing Redis connection');
-        }
-
         process.exit(0);
       });
 

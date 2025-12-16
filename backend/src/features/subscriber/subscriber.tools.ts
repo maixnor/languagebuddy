@@ -5,17 +5,16 @@ import { SubscriberService } from "./subscriber.service"; // Adjusted import
 import { logger } from "../../core/config";
 import { z } from "zod";
 import { getContextVariable } from "@langchain/core/context";
-import Redis from "ioredis";
+import { DatabaseService } from "../../core/database";
 import {
   SubscriberUpdateContract,
   type SubscriberUpdateContract as SubscriberUpdateContractType,
-  SetLanguageContract, // Added import for SetLanguageContract
-} from "./subscriber.contracts"; // Adjusted import
-
+  SetLanguageContract,
+} from "./subscriber.contracts";
 let subscriberService: SubscriberService;
 
-export function initializeSubscriberTools(redis: Redis) {
-  subscriberService = SubscriberService.getInstance(redis);
+export function initializeSubscriberTools(dbService: DatabaseService) {
+  subscriberService = SubscriberService.getInstance(dbService);
 }
 
 export const updateSubscriberTool: DynamicStructuredTool =

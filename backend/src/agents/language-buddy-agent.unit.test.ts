@@ -1,5 +1,5 @@
 import { LanguageBuddyAgent } from './language-buddy-agent';
-import { RedisCheckpointSaver } from '../core/persistence/redis-checkpointer';
+
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { DateTime } from 'luxon';
@@ -9,7 +9,7 @@ import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { DigestService } from '../features/digest/digest.service';
 import { Digest } from '../features/digest/digest.types';
 
-jest.mock('../core/persistence/redis-checkpointer');
+
 jest.mock('@langchain/openai');
 jest.mock('../features/subscriber/subscriber.prompts'); // Mock generateSystemPrompt
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts'; // For type referencing
@@ -17,84 +17,187 @@ const mockGenerateSystemPrompt = generateSystemPrompt as jest.Mock;
 jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
 jest.mock('../features/digest/digest.service'); // Mock DigestService
 
+import { FeedbackService } from '../features/feedback/feedback.service';
+jest.mock('../features/feedback/feedback.service'); // Mock FeedbackService
+
+// Define a mock class that implements BaseCheckpointSaver
+
+class MockCheckpointer implements BaseCheckpointSaver {
+
+  getTuple: jest.Mock = jest.fn();
+
+  putTuple: jest.Mock = jest.fn();
+
+  put: jest.Mock = jest.fn();
+
+  deleteThread: jest.Mock = jest.fn();
+
+  list: jest.Mock = jest.fn();
+
+  get: jest.Mock = jest.fn(); // Assuming 'get' might be used directly for some reason, though getTuple is preferred
+
+}
+
+
+
 describe('LanguageBuddyAgent', () => {
-  let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
+
+  let mockCheckpointer: jest.Mocked<MockCheckpointer>;
+
   let mockLlm: jest.Mocked<ChatOpenAI>;
+
   let agent: LanguageBuddyAgent;
+
   let mockAgentInvoke: jest.Mock;
+
   let mockDigestService: jest.Mocked<DigestService>;
 
+
+
   const mockSubscriber: Subscriber = {
+
     profile: {
+
       name: "Test User",
+
       speakingLanguages: [
+
         {
+
           languageName: "English",
+
           overallLevel: "C2",
+
           skillAssessments: [],
+
           deficiencies: [],
+
           firstEncountered: new Date(),
+
           lastPracticed: new Date(),
+
           totalPracticeTime: 0,
+
           confidenceScore: 100,
+
         },
+
       ],
+
       learningLanguages: [
+
         {
+
           languageName: "German",
+
           overallLevel: "B1",
+
           skillAssessments: [],
+
           deficiencies: [],
+
           firstEncountered: new Date(),
+
           lastPracticed: new Date(),
+
           totalPracticeTime: 0,
+
           confidenceScore: 50,
+
           isTarget: true,
+
         },
+
       ],
+
       timezone: "America/New_York",
+
       fluencyLevel: "intermediate",
+
       areasOfStruggle: ["grammar", "vocabulary"],
+
       mistakeTolerance: "normal"
+
     },
+
     connections: {
+
       phone: "+1234567890",
+
     },
+
     metadata: {
+
       digests: [],
+
       personality: "friendly",
+
       streakData: {
+
         currentStreak: 0,
+
         longestStreak: 0,
+
         lastActiveDate: new Date(),
+
       },
+
       predictedChurnRisk: 0,
+
       engagementScore: 50,
+
       difficultyPreference: "adaptive",
+
     },
+
     isPremium: false,
+
     signedUpAt: new Date().toISOString(),
+
   };
 
+
+
   beforeEach(() => {
-    mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
+
+    mockCheckpointer = new MockCheckpointer() as jest.Mocked<MockCheckpointer>;
+
     mockLlm = {} as any; 
+
     mockAgentInvoke = jest.fn().mockResolvedValue({
+
       messages: [{ content: 'AI Response' }]
+
     });
+
+
 
     (SubscriberService.getInstance as jest.Mock).mockReturnValue({
-      hydrateSubscriber: jest.fn(),
-    });
-    mockDigestService = new DigestService(null as any, null as any, null as any) as jest.Mocked<DigestService>;
-    mockDigestService.getRecentDigests.mockResolvedValue([]); // Default to no digests
 
-    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm, mockDigestService);
-    (agent as any).agent = { invoke: mockAgentInvoke }; 
+      hydrateSubscriber: jest.fn(),
+
+    });
+
+        mockDigestService = new DigestService(null as any, mockCheckpointer, null as any) as jest.Mocked<DigestService>;
+
+        mockDigestService.getRecentDigests.mockResolvedValue([]); // Default to no digests
+
+        const mockFeedbackService = {} as jest.Mocked<FeedbackService>;
+
+    
+
+    
+
+        agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm, mockDigestService, mockFeedbackService);
+
+        (agent as any).agent = { invoke: mockAgentInvoke }; 
+
+
 
     jest.useFakeTimers(); 
+
     mockGenerateSystemPrompt.mockReturnValue('Generated System Prompt');
-    mockCheckpointer.getCheckpoint.mockResolvedValue(undefined); 
+
   });
 
   afterEach(() => {
@@ -105,16 +208,17 @@ describe('LanguageBuddyAgent', () => {
 
   describe('getConversationDuration', () => {
     it('should return null if no checkpoint is found', async () => {
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce(undefined);
+      mockCheckpointer.get.mockResolvedValueOnce(undefined);
       const duration = await agent.getConversationDuration('phone123');
       expect(duration).toBeNull();
     });
 
     it('should return null if conversationStartedAt is not in metadata', async () => {
       const checkpoint: Checkpoint = {
-        channel_versions: {}, versions_seen: {}, ts: '', id: '', values: {},
+        v: 1, id: '1', ts: new Date().toISOString(), channel_values: {}, versions_seen: {},
+        values: {}, pending_sends: []
       };
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
+      mockCheckpointer.get.mockResolvedValueOnce({
         config: {}, checkpoint, metadata: {}, parentConfig: {}
       });
       const duration = await agent.getConversationDuration('phone123');
@@ -124,18 +228,19 @@ describe('LanguageBuddyAgent', () => {
     it('should calculate the correct conversation duration in minutes', async () => {
       const startedAt = DateTime.now().minus({ minutes: 30, seconds: 15 }).toISO();
       const checkpoint: Checkpoint = {
-        channel_versions: {}, versions_seen: {}, ts: '', id: '', values: {},
+        v: 1, id: '1', ts: new Date().toISOString(), channel_values: {}, versions_seen: {},
+        values: {}, pending_sends: []
       };
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
-        config: {}, checkpoint, metadata: { conversationStartedAt: startedAt }, parentConfig: {}
-      });
-
+            mockCheckpointer.getTuple.mockResolvedValueOnce({
+              config: {}, checkpoint, metadata: { conversationStartedAt: startedAt }, parentConfig: {}
+            });
       const duration = await agent.getConversationDuration('phone123');
       expect(duration).toBeCloseTo(30.25, 1); // Roughly 30 minutes and 15 seconds
     });
 
+
     it('should handle errors gracefully', async () => {
-      mockCheckpointer.getCheckpoint.mockRejectedValueOnce(new Error('Redis error'));
+      mockCheckpointer.get.mockRejectedValueOnce(new Error('Checkpoint error'));
       const duration = await agent.getConversationDuration('phone123');
       expect(duration).toBeNull();
     });
@@ -143,16 +248,17 @@ describe('LanguageBuddyAgent', () => {
 
   describe('getTimeSinceLastMessage', () => {
     it('should return null if no checkpoint is found', async () => {
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce(undefined);
+      mockCheckpointer.get.mockResolvedValueOnce(undefined);
       const timeSince = await agent.getTimeSinceLastMessage('phone123');
       expect(timeSince).toBeNull();
     });
 
     it('should return null if no messages in checkpoint', async () => {
       const checkpoint: Checkpoint = {
-        channel_versions: {}, versions_seen: {}, ts: '', id: '', values: { messages: [] },
+        v: 1, id: '1', ts: new Date().toISOString(), channel_values: {}, versions_seen: {},
+        values: { messages: [] }, pending_sends: []
       };
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
+      mockCheckpointer.getTuple.mockResolvedValueOnce({
         config: {}, checkpoint, metadata: {}, parentConfig: {}
       });
       const timeSince = await agent.getTimeSinceLastMessage('phone123');
@@ -161,9 +267,10 @@ describe('LanguageBuddyAgent', () => {
 
     it('should return null if last message has no timestamp', async () => {
       const checkpoint: Checkpoint = {
-        channel_versions: {}, versions_seen: {}, ts: '', id: '', values: { messages: [{ content: 'hi' }] },
+        v: 1, id: '1', ts: new Date().toISOString(), channel_values: {}, versions_seen: {},
+        values: { messages: [{ content: 'hi' }] }, pending_sends: []
       };
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
+      mockCheckpointer.getTuple.mockResolvedValueOnce({
         config: {}, checkpoint, metadata: {}, parentConfig: {}
       });
       const timeSince = await agent.getTimeSinceLastMessage('phone123');
@@ -173,9 +280,10 @@ describe('LanguageBuddyAgent', () => {
     it('should calculate the correct time since last message in minutes', async () => {
       const lastMessageTime = DateTime.now().minus({ hours: 1, minutes: 15 }).toISO();
       const checkpoint: Checkpoint = {
-        channel_versions: {}, versions_seen: {}, ts: '', id: '', values: { messages: [{ content: 'last', timestamp: lastMessageTime }] },
+        v: 1, id: '1', ts: new Date().toISOString(), channel_values: {}, versions_seen: {},
+        values: { messages: [{ content: 'last', timestamp: lastMessageTime }] }, pending_sends: []
       };
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
+      mockCheckpointer.getTuple.mockResolvedValueOnce({
         config: {}, checkpoint, metadata: {}, parentConfig: {}
       });
 
@@ -184,7 +292,7 @@ describe('LanguageBuddyAgent', () => {
     });
 
     it('should handle errors gracefully', async () => {
-      mockCheckpointer.getCheckpoint.mockRejectedValueOnce(new Error('Redis error'));
+      mockCheckpointer.getTuple.mockRejectedValueOnce(new Error('Checkpoint error'));
       const timeSince = await agent.getTimeSinceLastMessage('phone123');
       expect(timeSince).toBeNull();
     });
@@ -193,24 +301,43 @@ describe('LanguageBuddyAgent', () => {
   describe('initiateConversation', () => {
     it('should generate system prompt and invoke agent with it', async () => {
       const humanMessage = 'Hi there!';
+      // Mock for conversationDurationMinutes and timeSinceLastMessageMinutes
+      jest.spyOn(agent, 'getConversationDuration').mockResolvedValue(60);
+      jest.spyOn(agent, 'getTimeSinceLastMessage').mockResolvedValue(10);
+      const now = DateTime.now();
+      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
+      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
+      const checkpoint: Checkpoint = {
+        v: 1, id: '1', ts: now.toISO(), channel_values: {
+          messages: [{ content: 'test', timestamp: lastMessageTime }]
+        }, versions_seen: {},
+        values: {}, pending_sends: []
+      };
+
+
       await agent.initiateConversation(mockSubscriber, humanMessage);
 
       // The conversationDurationMinutes and timeSinceLastMessageMinutes are derived from agent's own methods,
-      // which internally call mockCheckpointer.getCheckpoint. We verify the final values passed to generateSystemPrompt.
+      // which internally call mockCheckpointer.getTuple. We verify the final values passed to generateSystemPrompt.
       expect(mockGenerateSystemPrompt).toHaveBeenCalledWith(
         expect.objectContaining({
           subscriber: mockSubscriber,
-          conversationDurationMinutes: null, // Because getCheckpoint is mocked to return undefined
-          timeSinceLastMessageMinutes: null,
+          conversationDurationMinutes: 60,
+          timeSinceLastMessageMinutes: 10,
           currentLocalTime: expect.any(DateTime),
           lastDigestTopic: null,
         })
       );
+      // Dynamically calculate sessionId to match agent's logic
+      const currentLocalTime = DateTime.now().setZone(mockSubscriber.profile.timezone || 'UTC');
+      const dateString = currentLocalTime.toISODate();
+      const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
+
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
-          metadata: {} 
+          metadata: { sessionId: expectedSessionId }
         }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
@@ -240,14 +367,17 @@ describe('LanguageBuddyAgent', () => {
       };
       
       mockDigestService.getRecentDigests.mockResolvedValueOnce([mockDigest]);
-      mockCheckpointer.getCheckpoint.mockResolvedValueOnce({
-        config: {}, checkpoint: {
-            id: "1",
-            ts: "2023-01-01T00:00:00Z",
-            channel_values: {},
-            versions_seen: {},
-            channel_versions: {}
-        }, metadata: {}, parentConfig: {}
+      const now = DateTime.now();
+      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
+      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
+      const checkpoint: Checkpoint = {
+          v: 1, id: '1', ts: now.toISO(), channel_values: {
+              messages: [{ content: 'test', timestamp: lastMessageTime }]
+          }, versions_seen: {},
+          values: {}, pending_sends: []
+      };
+      mockCheckpointer.get.mockResolvedValueOnce({
+          config: {}, checkpoint, metadata: { conversationStartedAt }, parentConfig: {}
       });
 
       await agent.initiateConversation(mockSubscriber, humanMessage);
@@ -274,12 +404,14 @@ describe('LanguageBuddyAgent', () => {
       
       await agent.initiateConversation(mockSubscriber, humanMessage, overridePrompt);
 
+      const expectedSessionId = `${mockSubscriber.connections.phone}_${DateTime.now().setZone(mockSubscriber.profile.timezone || 'UTC').toISODate()}`;
+
       expect(mockGenerateSystemPrompt).not.toHaveBeenCalled();
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
-          metadata: {} 
+          metadata: { sessionId: expectedSessionId }
         }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
@@ -298,24 +430,43 @@ describe('LanguageBuddyAgent', () => {
   describe('processUserMessage', () => {
     it('should generate system prompt and invoke agent with it', async () => {
       const humanMessage = 'What\'s up?';
+      // Mock for conversationDurationMinutes and timeSinceLastMessageMinutes
+      jest.spyOn(agent, 'getConversationDuration').mockResolvedValue(60);
+      jest.spyOn(agent, 'getTimeSinceLastMessage').mockResolvedValue(10);
+      const now = DateTime.now();
+      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
+      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
+      const checkpoint: Checkpoint = {
+        v: 1, id: '1', ts: now.toISO(), channel_values: {
+          messages: [{ content: 'test', timestamp: lastMessageTime }]
+        }, versions_seen: {},
+        values: {}, pending_sends: []
+      };
+
+
       await agent.processUserMessage(mockSubscriber, humanMessage);
 
       // The conversationDurationMinutes and timeSinceLastMessageMinutes are derived from agent's own methods,
-      // which internally call mockCheckpointer.getCheckpoint. We verify the final values passed to generateSystemPrompt.
+      // which internally call mockCheckpointer.getTuple. We verify the final values passed to generateSystemPrompt.
       expect(mockGenerateSystemPrompt).toHaveBeenCalledWith(
         expect.objectContaining({
           subscriber: mockSubscriber,
-          conversationDurationMinutes: null,
-          timeSinceLastMessageMinutes: null,
+          conversationDurationMinutes: 60,
+          timeSinceLastMessageMinutes: 10,
           currentLocalTime: expect.any(DateTime),
           lastDigestTopic: null,
         })
       );
+      // Dynamically calculate sessionId to match agent's logic
+      const currentLocalTime = DateTime.now().setZone(mockSubscriber.profile.timezone || 'UTC');
+      const dateString = currentLocalTime.toISODate();
+      const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
+
       expect(mockAgentInvoke).toHaveBeenCalledWith(
         { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
-          metadata: {} 
+          metadata: { sessionId: expectedSessionId }
         }
       );
       const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;

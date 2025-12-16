@@ -2,19 +2,17 @@ import { DigestService } from '../../features/digest/digest.service';
 import { SubscriberService } from '../../features/subscriber/subscriber.service';
 import { Digest } from '../../features/digest/digest.types';
 import { Subscriber } from '../../features/subscriber/subscriber.types';
-import Redis from 'ioredis';
-import { ChatOpenAI } from '@langchain/openai';
-import { RedisCheckpointSaver } from '../../persistence/redis-checkpointer';
 
-// Mock Redis
-jest.mock('ioredis');
+import { ChatOpenAI } from '@langchain/openai';
+import { SqliteCheckpointSaver } from '../../core/persistence/sqlite-checkpointer';
+
+
 
 describe('DigestService - Empty Digest Validation', () => {
   let digestService: DigestService;
   let subscriberService: jest.Mocked<SubscriberService>;
-  let mockRedis: jest.Mocked<Redis>;
   let mockLLM: jest.Mocked<ChatOpenAI>;
-  let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
+  let mockCheckpointer: jest.Mocked<SqliteCheckpointSaver>;
   
   const testSubscriber: Subscriber = {
     profile: {
@@ -55,9 +53,8 @@ describe('DigestService - Empty Digest Validation', () => {
   };
 
   beforeEach(() => {
-    mockRedis = new Redis() as jest.Mocked<Redis>;
     mockLLM = {} as jest.Mocked<ChatOpenAI>;
-    mockCheckpointer = {} as jest.Mocked<RedisCheckpointSaver>;
+    mockCheckpointer = {} as jest.Mocked<SqliteCheckpointSaver>;
     
     subscriberService = {
       getSubscriber: jest.fn().mockResolvedValue(testSubscriber),

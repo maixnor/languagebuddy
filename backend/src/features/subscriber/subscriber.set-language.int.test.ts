@@ -1,23 +1,18 @@
-import Redis from 'ioredis';
 import { SubscriberService } from './subscriber.service';
+import { DatabaseService } from '../../core/database';
 import { Subscriber } from './subscriber.types';
 
 describe('SubscriberService - setLanguage Integration Tests', () => {
-  let redis: Redis;
+  let dbService: DatabaseService;
   let subscriberService: SubscriberService;
   const testPhoneNumber = '+15551234567';
 
-  beforeAll(() => {
-    redis = new Redis();
-    subscriberService = SubscriberService.getInstance(redis);
-  });
-
-  afterAll(async () => {
-    await redis.quit();
-  });
-
   beforeEach(async () => {
-    await redis.flushdb(); // Clear Redis before each test
+    dbService = new DatabaseService(':memory:');
+    dbService.migrate(); // Apply migrations to create tables
+    (SubscriberService as any).instance = undefined; // Clear singleton instance
+    subscriberService = SubscriberService.getInstance(dbService);
+    
     // Create a base subscriber for tests
     await subscriberService.createSubscriber(testPhoneNumber, {
       profile: {
@@ -43,8 +38,13 @@ describe('SubscriberService - setLanguage Integration Tests', () => {
           confidenceScore: 50,
           currentLanguage: true, // Initially learning English
         }],
-      }
+      },
+      status: 'active', // Default status for tests
     });
+  });
+
+  afterEach(() => {
+    dbService.close();
   });
 
   describe('Bug 2.4 & 2.5 - setLanguage functionality', () => {

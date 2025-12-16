@@ -5,7 +5,7 @@ test:
   npm run build && npm run test
 
 stream-logs instance:
-  ssh wb.maixnor.com 'journalctl -u languagebuddy-api-{{instance}}.service -n 50 -f | grep --line-buffered "msg\":\"" | sed -n "s/.*\"msg\":\"\([^\"]*\)\".*/\1/p"'
+  ssh wb.maixnor.com 'journalctl -u languagebuddy-api-{{instance}}.service -n 50 -f' | grep --line-buffered "msg\":\"" | sed -u -n "s/.*\"msg\":\"\([^\"]*\)\".*/\1/p"
 
 deploy-prod:
   cd .. && nix run .#deploy-prod
@@ -15,3 +15,11 @@ deploy-test:
 
 checkpoint phone:
   sh redis-connect.sh get checkpoint:{{phone}} | jq '.checkpoint.channel_values.messages[].kwargs.content' 
+
+db-clean:
+  @echo "Cleaning SQLite database..."
+  @rm -f data/languagebuddy.sqlite
+
+db-migrate: db-clean
+  @echo "Running data migration..."
+  npm run migrate:data

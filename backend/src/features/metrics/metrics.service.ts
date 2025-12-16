@@ -5,11 +5,11 @@ import {
   activeSubscribers24h, 
   activeConversations, 
   inactiveSubscribers3d,
+  subscribersChurnedTotal,
   subscribersPremiumTotal,
   subscribersTrialTotal,
   subscribersFreeThrottledTotal,
-  subscriberAnomaliesDetectedHourly,
-  redisInconsistenciesDetectedHourly
+  subscriberAnomaliesDetectedHourly
 } from '../../core/observability/metrics';
 import { DateTime } from 'luxon';
 import { SubscriberService } from '../subscriber/subscriber.service';
@@ -32,7 +32,7 @@ export class MetricsService {
   }
 
   /**
-   * Main function to poll Redis and update Gauges.
+   * Main function to poll data sources and update Gauges.
    * This operation can be expensive if there are thousands of users,
    * so it should run infrequently (e.g., every 5-10 minutes).
    */
@@ -45,31 +45,56 @@ export class MetricsService {
       let countActive24h = 0;
       let countActiveConvos = 0; // Active < 30m
       let countInactive3d = 0;
+      let countChurned = 0; // Inactive > 7d
       let countPremium = 0;
       let countTrial = 0;
       let countFreeThrottled = 0;
 
       for (const sub of subscribers) {
-        if (!sub.lastActiveAt) continue;
-
-        const lastActive = DateTime.fromJSDate(new Date(sub.lastActiveAt));
-        const diffMinutes = now.diff(lastActive, 'minutes').minutes;
-        const diffHours = now.diff(lastActive, 'hours').hours;
-        const diffDays = now.diff(lastActive, 'days').days;
-
-        // Metric 2: Active in last 24h
-        if (diffHours <= 24) {
-          countActive24h++;
+        // Active 24h (General Activity - including system updates if any, but usually lastActiveAt)
+        if (sub.lastActiveAt) {
+          const lastActive = DateTime.fromJSDate(new Date(sub.lastActiveAt));
+          const diffHours = now.diff(lastActive, 'hours').hours;
+          if (diffHours <= 24) {
+            countActive24h++;
+          }
         }
 
-        // Metric 3: Active Conversation (last 30m)
-        if (diffMinutes <= 30) {
-          countActiveConvos++;
+        // Determine the "last user action" time.
+        // If lastMessageSentAt exists, use it.
+        // If not, we fall back to signedUpAt for inactivity/churn calculations (assuming they never replied).
+        // For active conversations, if lastMessageSentAt is missing, they are definitely not active.
+        const lastUserMessage = sub.lastMessageSentAt ? DateTime.fromJSDate(new Date(sub.lastMessageSentAt)) : null;
+
+        // Metric 3: Active Conversation (last 30m) - Strictly User Reply
+        if (lastUserMessage) {
+          const diffMinutes = now.diff(lastUserMessage, 'minutes').minutes;
+          if (diffMinutes <= 30) {
+            countActiveConvos++;
+          }
+        }
+
+        // Calculate inactivity time base
+        let timeSinceLastActionDays = 0;
+        if (lastUserMessage) {
+             timeSinceLastActionDays = now.diff(lastUserMessage, 'days').days;
+        } else if (sub.signedUpAt) {
+             // If never sent a message, use sign up time
+             const signedUp = DateTime.fromJSDate(new Date(sub.signedUpAt));
+             timeSinceLastActionDays = now.diff(signedUp, 'days').days;
+        } else {
+             // Fallback if even signedUpAt is missing (should not happen)
+             timeSinceLastActionDays = 999; 
         }
 
         // Metric 4: Inactive > 3d
-        if (diffDays >= 3) {
+        if (timeSinceLastActionDays >= 3) {
           countInactive3d++;
+        }
+
+        // Metric: Churned > 7d
+        if (timeSinceLastActionDays >= 7) {
+            countChurned++;
         }
 
         // Metric: Premium Subscribers
@@ -92,6 +117,7 @@ export class MetricsService {
       activeSubscribers24h.set(countActive24h);
       activeConversations.set(countActiveConvos);
       inactiveSubscribers3d.set(countInactive3d);
+      subscribersChurnedTotal.set(countChurned);
       subscribersPremiumTotal.set(countPremium);
       subscribersTrialTotal.set(countTrial);
       subscribersFreeThrottledTotal.set(countFreeThrottled);
@@ -101,6 +127,7 @@ export class MetricsService {
         active24h: countActive24h, 
         activeConvos: countActiveConvos, 
         inactive3d: countInactive3d,
+        churned: countChurned,
         premium: countPremium,
         trial: countTrial,
         freeThrottled: countFreeThrottled
@@ -119,7 +146,6 @@ export class MetricsService {
     try {
       logger.debug("Updating hourly quality metrics...");
       let anomaliesCount = 0;
-      let inconsistenciesCount = 0;
 
       // --- Placeholder for Subscriber Anomalies Detection ---
       // In a real scenario, this would involve fetching all subscribers and
@@ -140,28 +166,11 @@ export class MetricsService {
       }
       subscriberAnomaliesDetectedHourly.set(anomaliesCount);
 
-
-      // --- Placeholder for Redis Inconsistencies Detection ---
-      // This would involve more complex Redis scans, e.g.,
-      // - Checking for LangGraph checkpoints without corresponding subscriber records.
-      // - Validating checkpoint structure.
-      // For now, we'll simulate or keep it at 0.
-      const allRedisKeys = await this.services.redisClient.keys('*');
-      const checkpointKeys = allRedisKeys.filter(key => key.startsWith('checkpoint:'));
-      const subscriberKeys = allRedisKeys.filter(key => key.startsWith('subscriber:'));
-
-      for (const cpKey of checkpointKeys) {
-          const phone = cpKey.split(':')[1];
-          if (!subscriberKeys.includes(`subscriber:${phone}`)) {
-              inconsistenciesCount++;
-          }
-      }
-      redisInconsistenciesDetectedHourly.set(inconsistenciesCount);
+      // --- Removed Redis Inconsistencies Detection as Redis is no longer used ---
 
 
       logger.debug({ 
         subscriberAnomalies: anomaliesCount, 
-        redisInconsistencies: inconsistenciesCount 
       }, "Hourly quality metrics updated");
 
     } catch (error) {

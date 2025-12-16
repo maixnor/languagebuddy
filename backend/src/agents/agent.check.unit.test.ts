@@ -1,15 +1,15 @@
 import { checkLastResponse } from './agent.check';
-import { RedisCheckpointSaver } from '../core/persistence/redis-checkpointer';
+
 import { ChatOpenAI } from '@langchain/openai';
-import { Checkpoint } from '@langchain/langgraph';
+import { Checkpoint } from '@langchain/langgraph-checkpoint';
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
-jest.mock('../core/persistence/redis-checkpointer');
+jest.mock('../core/persistence/sqlite-checkpointer');
 jest.mock('@langchain/openai');
 
 describe('checkLastResponse (standalone)', () => {
-  let mockCheckpointer: jest.Mocked<RedisCheckpointSaver>;
+  let mockCheckpointer: jest.Mocked<any>;
   let mockLlm: jest.Mocked<ChatOpenAI>;
   let mockStructuredLlm: { invoke: jest.Mock };
 
@@ -29,7 +29,11 @@ describe('checkLastResponse (standalone)', () => {
   };
 
   beforeEach(() => {
-    mockCheckpointer = new RedisCheckpointSaver(jest.fn() as any) as jest.Mocked<RedisCheckpointSaver>;
+    mockCheckpointer = {
+        get: jest.fn(),
+        put: jest.fn(),
+        delete: jest.fn(),
+    } as jest.Mocked<any>;
     
     // Mock Structured LLM
     mockStructuredLlm = { invoke: jest.fn() };
@@ -38,7 +42,7 @@ describe('checkLastResponse (standalone)', () => {
     } as any;
     
     // Default empty checkpoint
-    mockCheckpointer.getCheckpoint.mockResolvedValue(undefined);
+    mockCheckpointer.get.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -54,10 +58,11 @@ describe('checkLastResponse (standalone)', () => {
     // Setup history
     const history = [new HumanMessage("Hola"), new AIMessage("Hola, ¿cómo estás?")];
     const checkpoint: Checkpoint = {
-      id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+      v: 1, // Add version
+      id: '1', ts: new Date().toISOString(), channel_versions: {}, versions_seen: {},
       values: { messages: history }
     };
-    mockCheckpointer.getCheckpoint.mockResolvedValue({
+    mockCheckpointer.get.mockResolvedValue({
       config: {}, checkpoint, metadata: {}, parentConfig: {}
     });
 
@@ -71,17 +76,18 @@ describe('checkLastResponse (standalone)', () => {
     
     expect(result).toContain("Los saludos son correctos");
     expect(result).toContain("✅");
-    expect(mockCheckpointer.putTuple).not.toHaveBeenCalled(); // No correction injected
+    expect(mockCheckpointer.put).not.toHaveBeenCalled(); // No correction injected
   });
 
   it('should identify mistake and inject correction', async () => {
     // Setup history
     const history = [new HumanMessage("Where is the Eiffel Tower?"), new AIMessage("It is in Berlin.")];
     const checkpoint: Checkpoint = {
-      id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+      v: 1, // Add version
+      id: '1', ts: new Date().toISOString(), channel_versions: {}, versions_seen: {},
       values: { messages: history }
     };
-    mockCheckpointer.getCheckpoint.mockResolvedValue({
+    mockCheckpointer.get.mockResolvedValue({
       config: {}, checkpoint, metadata: {}, parentConfig: {}
     });
 
@@ -98,9 +104,14 @@ describe('checkLastResponse (standalone)', () => {
     expect(result).toContain("⚠️");
     
     // Verify injection
-    expect(mockCheckpointer.putTuple).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(mockCheckpointer.put).toHaveBeenCalledWith(
+      expect.anything(), // config
       expect.objectContaining({
+        id: '1',
+        ts: expect.any(String),
+        v: 1,
+        channel_versions: {},
+        versions_seen: {},
         values: expect.objectContaining({
           messages: expect.arrayContaining([
             expect.any(HumanMessage),
@@ -109,8 +120,8 @@ describe('checkLastResponse (standalone)', () => {
           ])
         })
       }),
-      expect.anything(),
-      expect.anything()
+      expect.anything(), // parentConfig
+      undefined
     );
   });
 
@@ -118,15 +129,16 @@ describe('checkLastResponse (standalone)', () => {
      // Setup history
      const history = [new HumanMessage("Hi"), new AIMessage("Hi")];
      const checkpoint: Checkpoint = {
-         id: '1', ts: '1', channel_versions: {}, versions_seen: {},
+         v: 1, // Add version
+         id: '1', ts: new Date().toISOString(), channel_versions: {}, versions_seen: {},
          values: { messages: history }
      };
-     mockCheckpointer.getCheckpoint.mockResolvedValue({
+     mockCheckpointer.get.mockResolvedValue({
          config: {}, checkpoint, metadata: {}, parentConfig: {}
      });
  
      // Mock error
-     mockStructuredLlm.invoke.mockRejectedValue(new Error("OpenAI error"));
+     mockStructuredLlm.invoke.mockRejectedValue(new Error("LLM error"));
  
      const result = await checkLastResponse(mockSubscriber, mockLlm, mockCheckpointer);
      expect(result).toContain("error occurred while performing the check");
