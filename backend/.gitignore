@@ -4,3 +4,4 @@ result
 .env.*
 coverage
 data/*.sqlite*
+src/build-info.ts

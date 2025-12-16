@@ -1,63 +1,27 @@
-import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
-import path from 'path';
-import { logger } from './index'; // Corrected path to config's logger
-
-let commitHash: string | null = null;
-let packageVersion: string | null = null;
+import { logger } from './index';
+// @ts-ignore - build-info is auto-generated and might not exist during initial check
+import { COMMIT_HASH, PACKAGE_VERSION } from '../../build-info';
 
 export function loadCommitHash(): string | null {
-  if (commitHash !== null) {
-    return commitHash;
-  }
-
-  try {
-    // Get the short commit hash
-    const hash = execSync('git rev-parse --short HEAD', { 
-      encoding: 'utf8',
-      cwd: process.cwd()
-    }).trim();
-    
-    commitHash = hash;
-    logger.info(`Loaded commit hash: ${commitHash}`);
-    return commitHash;
-  } catch (error) {
-    logger.warn('Failed to load commit hash:', error);
-    commitHash = 'unknown';
-    return commitHash;
-  }
+  // Logger call preserved for backward compatibility/debugging, though less useful now
+  logger.debug(`Loaded commit hash: ${COMMIT_HASH}`);
+  return COMMIT_HASH;
 }
 
 export function loadPackageVersion(): string | null {
-  if (packageVersion !== null) {
-    return packageVersion;
-  }
-
-  try {
-    // Read package.json from the current working directory
-    const packageJsonPath = path.join(process.cwd(), 'package.json');
-    const packageJsonContent = readFileSync(packageJsonPath, 'utf8');
-    const packageJson = JSON.parse(packageJsonContent);
-    
-    packageVersion = packageJson.version || 'unknown';
-    logger.info(`Loaded package version: ${packageVersion}`);
-    return packageVersion;
-  } catch (error) {
-    logger.warn('Failed to load package version:', error);
-    packageVersion = 'unknown';
-    return packageVersion;
-  }
+  logger.debug(`Loaded package version: ${PACKAGE_VERSION}`);
+  return PACKAGE_VERSION;
 }
 
 export function loadVersionInfo(): void {
-  loadCommitHash();
-  loadPackageVersion();
+  // Values are now statically imported, but we log them for confirmation
+  logger.info(`Version Info: v${PACKAGE_VERSION} (${COMMIT_HASH})`);
 }
 
 export function getCommitHash(): string | null {
-  return commitHash;
+  return COMMIT_HASH;
 }
 
 export function getPackageVersion(): string | null {
-  return packageVersion;
+  return PACKAGE_VERSION;
 }

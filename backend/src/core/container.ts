@@ -35,7 +35,7 @@ export class ServiceContainer {
   async initialize(): Promise<void> {
 
 
-    this.dbService = new DatabaseService(); // Initialized dbService
+    this.dbService = new DatabaseService(config.dbPath);
 
     this.llm = new ChatOpenAI({
       model: 'gpt-4o-mini',

@@ -1,5 +1,6 @@
 import pino from 'pino';
 import { getTraceContext } from '../observability/tracing';
+import path from 'path';
 
 // Configure Pino logger
 let _transport: any; // To hold the pino-pretty transport stream
@@ -85,6 +86,7 @@ export const getConfig = () => ({
     phoneNumbers: process.env.TEST_PHONE_NUMBERS ? process.env.TEST_PHONE_NUMBERS.split(',') : [],
     skipStripeCheck: process.env.SKIP_STRIPE_CHECK === 'true',
   },
+  dbPath: process.env.DB_PATH || path.join(process.cwd(), 'data', 'languagebuddy.sqlite'),
   features: {
     dailyMessages: {
       enabled: true,

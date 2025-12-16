@@ -27,7 +27,7 @@
           name = "languagebuddy-backend";
 
           buildInputs = with pkgs; [
-            nodejs_24
+            nodejs_20
           ];
 
           src = self;
