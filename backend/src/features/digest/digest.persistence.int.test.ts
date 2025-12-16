@@ -34,6 +34,7 @@ describe('Conversation Persistence & Clearance Bug', () => {
 
 
   beforeEach(async () => {
+    (SubscriberService as any).instance = null; // Clear singleton
     db = new Database(':memory:');
     db.exec(`
       CREATE TABLE IF NOT EXISTS checkpoints (

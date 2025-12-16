@@ -364,6 +364,11 @@ describe('Digest System E2E Test', () => {
   });
 
   beforeEach(async () => {
+    // Clear singletons
+    (SubscriberService as any).instance = null;
+    (DigestService as any).instance = null;
+    (FeedbackService as any).instance = null;
+
     // Create an in-memory database for each test
     db = new Database(':memory:');
     db.exec(`

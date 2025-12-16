@@ -491,10 +491,12 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
       const lastSent = DateTime.fromISO('2025-11-25T12:00:00', { zone: 'utc' }); // 3 days ago
 
       const subscriber = await subscriberService.createSubscriber(testPhone, {
-        lastMessageSentAt: lastSent.toISO(),
+        lastMessageSentAt: lastSent.toJSDate(),
       });
 
       const shouldSend = await scheduler.shouldSendReengagementMessage(subscriber, nowUtc);
+      
+      expect(shouldSend).toBe(true);
     });
 
     it('should not send re-engagement within 3 days', async () => {
@@ -502,7 +504,7 @@ describe('SchedulerService - Digest Scheduler (Integration)', () => {
       const lastSent = DateTime.fromISO('2025-11-26T12:00:00', { zone: 'utc' }); // 2 days ago
 
       const subscriber = await subscriberService.createSubscriber(testPhone, {
-        lastMessageSentAt: lastSent.toISO(),
+        lastMessageSentAt: lastSent.toJSDate(),
       });
 
       const shouldSend = await scheduler.shouldSendReengagementMessage(subscriber, nowUtc);
