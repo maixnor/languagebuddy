@@ -38,8 +38,6 @@
           };
 
           npmConfigHook = pkgs.importNpmLock.npmConfigHook;
-          npmRebuild = true;
-          npmFlags = "--build-from-source --unsafe-perm --foreground-scripts";
 
           buildPhase = ''
             npm run build:full
