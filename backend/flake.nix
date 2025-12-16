@@ -37,10 +37,10 @@
             npmRoot = ./.;
           };
 
-          npmConfigHook = pkgs.importNpmLock.npmConfigHook;
-          npmRebuild = true;
-
           buildPhase = ''
+            export NIX_BUILD_TOP=$(pwd)
+            npm install --prefix . --loglevel verbose --unsafe-perm --foreground-scripts --build-from-source
+            npm rebuild --prefix . --loglevel verbose --unsafe-perm --foreground-scripts --build-from-source
             npm run build
           '';
 
