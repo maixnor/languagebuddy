@@ -1,3 +1,4 @@
+import { logger } from './observability/logging';
 import Database from 'better-sqlite3';
 import path from 'path';
 import * as crypto from 'crypto';
@@ -100,10 +101,10 @@ export class DatabaseService {
         try {
           this.db.exec(migration);
           this.db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
-          console.log(`Applied migration: ${migrationName}`);
+          logger.info(`Applied migration: ${migrationName}`);
         } catch (error: any) {
           if (error.message.includes('duplicate column name')) {
-            console.warn(`Migration ${migrationName} skipped (column already exists). Marking as applied.`);
+            logger.warn(`Migration ${migrationName} skipped (column already exists). Marking as applied.`);
             this.db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
           } else {
             throw error;

@@ -49,6 +49,59 @@ export class SubscriberService {  private static instance: SubscriberService; //
     return Math.floor(nowInUserTimezone.diff(signedUpInUserTimezone, 'days').toObject().days || 0);
   }
 
+  public async getTotalSubscribersCount(): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare('SELECT COUNT(*) as count FROM subscribers');
+      const row = stmt.get() as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting total subscribers count");
+      return 0;
+    }
+  }
+
+  public async getPremiumSubscribersCount(): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare("SELECT COUNT(*) as count FROM subscribers WHERE json_extract(data, '$.isPremium') = TRUE");
+      const row = stmt.get() as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting premium subscribers count");
+      return 0;
+    }
+  }
+
+  public async getActiveSubscribers24hCount(): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count 
+        FROM subscribers 
+        WHERE last_active_at IS NOT NULL 
+          AND datetime(last_active_at) >= datetime('now', '-24 hours')
+      `);
+      const row = stmt.get() as { count: number };
+      return row.count;
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  public async getActiveConversationsCount(minutes: number): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count
+        FROM subscribers
+        WHERE json_extract(data, '$.lastMessageSentAt') IS NOT NULL
+          AND datetime(json_extract(data, '$.lastMessageSentAt')) >= datetime('now', '-' || ? || ' minutes')
+      `);
+      const row = stmt.get(minutes) as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting active conversations count");
+      return 0;
+    }
+  }
+
   /**
    * Returns true if the user should see a subscription warning (days 6-7, not premium).
    * Note: "Day 6 and 7" corresponds to indices 5 and 6 (since day 1 is index 0).
@@ -591,6 +644,82 @@ TASK: INITIATE NEW DAY CONVERSATION
     } catch (error) {
       logger.error({ err: error, phoneNumber, languageName, deficiency }, "Error adding language deficiency");
       throw error;
+    }
+  }
+
+  private async getSubscribersByInactivity(days: number): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count
+        FROM subscribers
+        WHERE 
+          CASE 
+            WHEN json_extract(data, '$.lastMessageSentAt') IS NOT NULL 
+            THEN datetime(json_extract(data, '$.lastMessageSentAt'))
+            ELSE datetime(created_at)
+          END <= datetime('now', '-' || ? || ' days')
+      `);
+      const row = stmt.get(days) as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error, days }, "Error getting subscribers by inactivity");
+      return 0;
+    }
+  }
+
+  public async getInactiveSubscribersCount(days: number = 3): Promise<number> {
+    return this.getSubscribersByInactivity(days);
+  }
+
+  public async getChurnedSubscribersCount(days: number = 7): Promise<number> {
+    return this.getSubscribersByInactivity(days);
+  }
+
+  public async getTrialSubscribersCount(trialDays: number): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count
+        FROM subscribers
+        WHERE json_extract(data, '$.isPremium') = FALSE
+          AND datetime(created_at) >= datetime('now', '-' || ? || ' days')
+      `);
+      const row = stmt.get(trialDays) as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting trial subscribers count");
+      return 0;
+    }
+  }
+
+  public async getFreeThrottledSubscribersCount(trialDays: number): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count
+        FROM subscribers
+        WHERE json_extract(data, '$.isPremium') = FALSE
+          AND datetime(created_at) < datetime('now', '-' || ? || ' days')
+      `);
+      const row = stmt.get(trialDays) as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting free throttled subscribers count");
+      return 0;
+    }
+  }
+
+  public async getAnomalousSubscribersCount(): Promise<number> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT COUNT(*) as count
+        FROM subscribers
+        WHERE phone_number IS NULL OR phone_number = ''
+          OR json_extract(data, '$.profile.name') IS NULL OR json_extract(data, '$.profile.name') = ''
+      `);
+      const row = stmt.get() as { count: number };
+      return row.count;
+    } catch (error) {
+      logger.error({ err: error }, "Error getting anomalous subscribers count");
+      return 0;
     }
   }
 }

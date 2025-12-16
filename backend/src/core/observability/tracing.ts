@@ -1,3 +1,4 @@
+import { logger } from './logging';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
@@ -62,7 +63,7 @@ export const initializeTracing = () => {
       // In development, still send to Tempo if available, otherwise console
       // This ensures you can see trace structure in Grafana even in dev
       const defaultDevEndpoint = process.env.DEV_TEMPO_ENDPOINT || 'http://localhost:4318/v1/traces';
-      console.log(`Development mode: sending traces to ${defaultDevEndpoint}`);
+      logger.debug(`Development mode: sending traces to ${defaultDevEndpoint}`);
       return new OTLPTraceExporterHTTP({
         url: defaultDevEndpoint,
       });
@@ -116,7 +117,7 @@ export const initializeTracing = () => {
 
   sdk.start();
   
-  console.log('OpenTelemetry tracing initialized successfully');
+  logger.info('OpenTelemetry tracing initialized successfully');
   return sdk;
 };
 

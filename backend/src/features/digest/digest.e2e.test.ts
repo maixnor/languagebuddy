@@ -1,3 +1,5 @@
+import { logger } from '../../core/observability/logging';
+
 import dotenv from 'dotenv';
 import path from 'path';
 
@@ -167,7 +169,7 @@ class DigestTestHelper {
   }
 
   async createGermanLearner(name: string = 'Sarah'): Promise<Subscriber> {
-    console.log(`[TEST] Creating German learner: ${name}`);
+    logger.debug(`[TEST] Creating German learner: ${name}`);
     
     const englishLanguage: Language = {
       languageName: 'English',
@@ -215,7 +217,7 @@ class DigestTestHelper {
       isPremium: true
     });
 
-    console.log(`[TEST] Created subscriber: ${subscriber.profile.name}`);
+    logger.debug(`[TEST] Created subscriber: ${subscriber.profile.name}`);
     return subscriber;
   }
 
@@ -225,7 +227,7 @@ class DigestTestHelper {
       throw new Error(`Conversation template '${templateName}' not found`);
     }
 
-    console.log(`[TEST] Loading conversation: ${template.name}`);
+    logger.debug(`[TEST] Loading conversation: ${template.name}`);
     
     // Add timestamps to messages if not present
     const messagesWithTimestamps = template.messages.map(msg => ({
@@ -258,7 +260,7 @@ class DigestTestHelper {
     // Save the mock conversation state to SQLite
     await this.checkpointer.put(config, mockCheckpoint, mockMetadata);
     
-    console.log(`[TEST] Loaded conversation '${template.name}' with ${messagesWithTimestamps.length} messages`);
+    logger.debug(`[TEST] Loaded conversation '${template.name}' with ${messagesWithTimestamps.length} messages`);
     
     return {
       ...template,
@@ -273,16 +275,16 @@ class DigestTestHelper {
         return false;
       }
       const messages = checkpoint.checkpoint.channel_values.messages as any[] || [];
-      console.log(`[TEST] Found ${messages.length} messages in checkpoint`);
+      logger.debug(`[TEST] Found ${messages.length} messages in checkpoint`);
       return messages.length > 0;
     } catch (error) {
-      console.error(`[TEST] Error verifying conversation state:`, error);
+      logger.error(`[TEST] Error verifying conversation state:`, error);
       return false;
     }
   }
 
   async createDigest(): Promise<Digest | undefined> {
-    console.log(`[TEST] Creating conversation digest`);
+    logger.debug(`[TEST] Creating conversation digest`);
     
     const subscriber = await this.subscriberService.getSubscriber(this.phone);
     if (!subscriber) throw new Error('Subscriber not found');
@@ -292,14 +294,14 @@ class DigestTestHelper {
       
       if (digest) {
         await this.digestService.saveDigestToSubscriber(subscriber, digest);
-        console.log(`[TEST] Digest created and saved successfully`);
+        logger.debug(`[TEST] Digest created and saved successfully`);
       } else {
-        console.log(`[TEST] Digest creation returned undefined`);
+        logger.debug(`[TEST] Digest creation returned undefined`);
       }
       
       return digest;
     } catch (error) {
-      console.error(`[TEST] Error creating digest:`, error);
+      logger.error(`[TEST] Error creating digest:`, error);
       throw error;
     }
   }
@@ -340,7 +342,7 @@ class DigestTestHelper {
   }
 
   async cleanup(): Promise<void> {
-    console.log(`[TEST] Cleaning up test data for ${this.phone}`);
+    logger.debug(`[TEST] Cleaning up test data for ${this.phone}`);
     
     try {
       // Clean up SQLite data
@@ -349,7 +351,7 @@ class DigestTestHelper {
       db.exec(`DELETE FROM daily_usage WHERE phone_number = '${this.phone}'`);
 
     } catch (error) {
-      console.error(`[TEST] Cleanup error:`, error);
+      logger.error(`[TEST] Cleanup error:`, error);
     }
   }
 }
@@ -360,7 +362,7 @@ describe('Digest System E2E Test', () => {
 
   beforeAll(async () => {
     // SQLite will be initialized in beforeEach for each test
-    console.log('[TEST] E2E Digest Test Suite Started');
+    logger.debug('[TEST] E2E Digest Test Suite Started');
   });
 
   beforeEach(async () => {
@@ -410,7 +412,7 @@ describe('Digest System E2E Test', () => {
   });
 
   afterAll(async () => {
-    console.log('[TEST] E2E Digest Test Suite Finished');
+    logger.debug('[TEST] E2E Digest Test Suite Finished');
   });
 
   it('should create a complete subscriber profile and generate a digest from German dative conversation', async () => {
@@ -448,7 +450,7 @@ describe('Digest System E2E Test', () => {
     expect(updatedSubscriber!.metadata.digests).toHaveLength(1);
     expect(updatedSubscriber!.metadata.digests[0].timestamp).toBe(digest!.timestamp);
     
-    console.log('[TEST] Digest created for dative conversation:', {
+    logger.debug('[TEST] Digest created for dative conversation:', {
       topic: digest!.topic,
       summary: digest!.summary,
       vocabularyCount: digest!.vocabulary.newWords.length,
@@ -485,7 +487,7 @@ describe('Digest System E2E Test', () => {
     expect(typeof digest!.conversationMetrics.messagesExchanged).toBe('number');
     expect(digest!.conversationMetrics.messagesExchanged).toBeGreaterThan(0);
     
-    console.log('[TEST] Food vocabulary digest insights:', {
+    logger.debug('[TEST] Food vocabulary digest insights:', {
       keyBreakthroughs: digest!.keyBreakthroughs,
       areasOfStruggle: digest!.areasOfStruggle,
       vocabularyNew: digest!.vocabulary.newWords,
@@ -522,7 +524,7 @@ describe('Digest System E2E Test', () => {
     expect(learningLanguage.currentObjectives).toBeDefined();
     expect(learningLanguage.deficiencies).toBeDefined();
     
-    console.log('[TEST] Language profile updated after past tense conversation:', {
+    logger.debug('[TEST] Language profile updated after past tense conversation:', {
       originalObjectives: originalObjectiveCount,
       updatedObjectives: learningLanguage.currentObjectives?.length,
       originalDeficiencies: originalDeficiencyCount,
@@ -559,7 +561,7 @@ describe('Digest System E2E Test', () => {
     const userMemos = await test.getUserMemos(10);
     expect(Array.isArray(userMemos)).toBe(true);
     
-    console.log('[TEST] Recent digests and memos retrieved:', {
+    logger.debug('[TEST] Recent digests and memos retrieved:', {
       digestCount: recentDigests.length,
       memoCount: userMemos.length,
       latestTopic: recentDigests[0].topic,
@@ -593,12 +595,12 @@ describe('Digest System E2E Test', () => {
     // Short conversations might not generate meaningful digests, but should not crash
     if (digest) {
       expect(digest.conversationMetrics.messagesExchanged).toBe(3);
-      console.log('[TEST] Short conversation digest:', {
+      logger.debug('[TEST] Short conversation digest:', {
         topic: digest.topic,
         vocabulary: digest.vocabulary.newWords.length
       });
     } else {
-      console.log('[TEST] Short conversation correctly returned no digest');
+      logger.debug('[TEST] Short conversation correctly returned no digest');
     }
   }, 30000);
 
@@ -611,7 +613,7 @@ describe('Digest System E2E Test', () => {
     // This conversation specifically focuses on past tense, so we expect grammar insights
     expect(digest!.grammar.conceptsCovered.length).toBeGreaterThan(0);
     
-    console.log('[TEST] Past tense conversation analysis:', {
+    logger.debug('[TEST] Past tense conversation analysis:', {
       grammarConcepts: digest!.grammar.conceptsCovered,
       mistakes: digest!.grammar.mistakesMade,
       areasOfStruggle: digest!.areasOfStruggle
@@ -631,7 +633,7 @@ describe('Digest System E2E Test', () => {
     
     expect(totalVocabulary).toBeGreaterThan(0);
     
-    console.log('[TEST] Food vocabulary conversation analysis:', {
+    logger.debug('[TEST] Food vocabulary conversation analysis:', {
       newWords: digest!.vocabulary.newWords,
       reviewedWords: digest!.vocabulary.reviewedWords,
       topic: digest!.topic
@@ -659,7 +661,7 @@ describe('Digest System E2E Test', () => {
     expect(finalSubscriber).toBeTruthy();
     expect(finalSubscriber!.metadata.digests).toHaveLength(0);
     
-    console.log('[TEST] Single AI message correctly handled:', {
+    logger.debug('[TEST] Single AI message correctly handled:', {
       messageCount: template.messages.length,
       humanMessages: humanMessages.length,
       aiMessages: aiMessages.length,
