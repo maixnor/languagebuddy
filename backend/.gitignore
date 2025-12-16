@@ -3,3 +3,4 @@ result
 .env
 .env.*
 coverage
+data/*.sqlite*
