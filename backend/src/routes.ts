@@ -88,7 +88,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
         commit: getCommitHash()
       },
       services: {
-        redis: services.redisClient.status,
+
         whatsapp: services.whatsappService.isInitialized() ? "enabled" : "failed",
         openai: { 
           model: services.llm.model, 
