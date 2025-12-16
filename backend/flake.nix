@@ -28,7 +28,7 @@
 
           buildInputs = with pkgs; [
             git # used for getting commit hash during build
-            nodejs_20
+            nodejs_22
           ];
 
           src = self;
@@ -37,11 +37,12 @@
             npmRoot = ./.;
           };
 
+          npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+          npmRebuild = true;
+          npmFlags = "--build-from-source --unsafe-perm --foreground-scripts";
+
           buildPhase = ''
-            export NIX_BUILD_TOP=$(pwd)
-            npm install --prefix . --loglevel verbose --unsafe-perm --foreground-scripts --build-from-source
-            npm rebuild --prefix . --loglevel verbose --unsafe-perm --foreground-scripts --build-from-source
-            npm run build
+            npm run build:full
           '';
 
           installPhase = ''

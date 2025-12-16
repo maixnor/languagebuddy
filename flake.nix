@@ -118,14 +118,17 @@
 
             # Deploy to server
             echo "🌐 Deploying to $ENVIRONMENT server..."
+            
+            # Pre-deploy cleanup/permissions: Ensure target directory exists and has correct ownership/permissions
+            # shellcheck disable=SC2029
+            ssh "$SERVER" "sudo mkdir -p $DEPLOY_PATH && sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
+
             # Deploy with rsync (no --delete to avoid permission issues)
-            if ! rsync -az --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
+            if ! rsync -az --no-perms --no-times --omit-dir-times --owner --group --rsync-path="sudo rsync" "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
                 exit 1
             fi
-            # Fix ownership and permissions
-            # shellcheck disable=SC2029
-            ssh "$SERVER" "sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
+
 
             # Restart service
             echo "🔄 Restarting $ENVIRONMENT service..."
@@ -185,15 +188,13 @@
             ssh "$SERVER" "sudo rm -rf $DEPLOY_PATH/_astro $DEPLOY_PATH/impressum $DEPLOY_PATH/privacy 2>/dev/null || true && sudo mkdir -p $DEPLOY_PATH && sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
             
             # Rsync
-            if ! rsync -az --no-perms --no-owner --no-group --no-times --omit-dir-times "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
+            if ! rsync -az --no-perms --no-times --omit-dir-times --owner --group --rsync-path="sudo rsync" "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
                 echo "❌ Error: Deployment failed, aborting"
                 rm -rf "$TEMP_DIR"
                 exit 1
             fi
             
-            # Post-deploy permissions
-            # shellcheck disable=SC2029
-            ssh "$SERVER" "sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
+
             
             # Cleanup
             # files from nix store are read-only, so we need to make them writable before deleting
