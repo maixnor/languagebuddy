@@ -27,6 +27,7 @@
           name = "languagebuddy-backend";
 
           buildInputs = with pkgs; [
+            git # used for getting commit hash during build
             nodejs_20
           ];
 
@@ -37,6 +38,7 @@
           };
 
           npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+          npmRebuild = true;
 
           buildPhase = ''
             npm run build
