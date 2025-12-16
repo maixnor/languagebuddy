@@ -1,24 +1,10 @@
 # SQLite Deployment Plan and Redis Retirement
 
-## Goal
-To safely deploy the SQLite-based persistence layer, transition all application data from Redis to SQLite, and subsequently retire Redis instances.
-
-## Strategy
-A phased deployment approach will be used to minimize downtime and ensure data integrity.
-
-## Phases
 
 ### Phase 1: Pre-Deployment Checks
 
-1.  **Code Completion & Testing**:
-    *   Ensure all SQLite migration tasks (infrastructure, subscriber, checkpointer, feedback, throttling) are marked as `done`.
-    *   Verify that all unit and integration tests (especially those related to persistence) pass successfully against an in-memory SQLite database.
-    *   Ensure `npm run build:full` passes without errors.
-
 2.  **Data Migration Script Readiness**:
     *   Thoroughly test `backend/src/scripts/migrate-redis-to-sqlite.ts` in a staging environment.
-    *   Perform a dry-run against a production-like Redis dataset to identify potential issues and estimate migration time.
-    *   Confirm the script can successfully connect to both Redis and SQLite.
     *   Ensure the script handles all relevant data types (subscribers, checkpoints, etc.).
 
 3.  **Configuration Preparation**:

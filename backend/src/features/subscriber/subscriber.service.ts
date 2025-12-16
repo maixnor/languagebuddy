@@ -21,6 +21,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
     // Ensure signedUpAt is a valid Date object
     if (!subscriber.signedUpAt) {
         subscriber.signedUpAt = new Date();
+        if (!subscriber.status) { subscriber.status = "active"; }
         this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
     } else if (!(subscriber.signedUpAt instanceof Date)) {
         // Try to parse string (e.g. ISO string from Redis/JSON)
@@ -30,6 +31,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
         } else {
              logger.warn({ invalidDate: subscriber.signedUpAt, phone: subscriber.connections.phone }, "Invalid signedUpAt date string, resetting to now");
              subscriber.signedUpAt = new Date();
+             if (!subscriber.status) { subscriber.status = "active"; }
              this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after resetting invalid signedUpAt"));
         }
     }
@@ -255,6 +257,25 @@ export class SubscriberService {  private static instance: SubscriberService; //
       logger.trace({phoneNumber: sanitizedPhone, updates}, `Updated user with this info:`)
     } catch (error) {
       logger.error({ error, phoneNumber, updates }, "Error updating subscriber");
+      throw error;
+    }
+  }
+
+  async deleteSubscriber(phoneNumber: string): Promise<boolean> {
+    try {
+      const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+      const stmt = this.dbService.getDb().prepare('DELETE FROM subscribers WHERE phone_number = ?');
+      const result = stmt.run(sanitizedPhone);
+      
+      const success = result.changes > 0;
+      if (success) {
+        logger.info({ phoneNumber: sanitizedPhone }, "Subscriber deleted successfully");
+      } else {
+        logger.warn({ phoneNumber: sanitizedPhone }, "Attempted to delete non-existent subscriber");
+      }
+      return success;
+    } catch (error) {
+      logger.error({ err: error, phoneNumber }, "Error deleting subscriber");
       throw error;
     }
   }

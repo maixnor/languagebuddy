@@ -162,7 +162,7 @@ describe('LanguageBuddyAgent', () => {
 
     mockCheckpointer = new MockCheckpointer() as jest.Mocked<MockCheckpointer>;
 
-    mockLlm = {} as any; 
+    mockLlm = { invoke: jest.fn() } as unknown as jest.Mocked<ChatOpenAI>;
 
     mockAgentInvoke = jest.fn().mockResolvedValue({
 
@@ -487,6 +487,44 @@ describe('LanguageBuddyAgent', () => {
       const humanMessage = 'Test error';
       // processUserMessage currently throws on error, so we expect it to throw
       await expect(agent.processUserMessage(mockSubscriber, humanMessage)).rejects.toThrow('Agent error');
+    });
+  });
+
+  describe('oneShotMessage', () => {
+    it('should invoke llm directly and return the response content', async () => {
+      const systemPrompt = 'Test Question';
+      const language = 'English';
+      const phone = '123456';
+      
+      mockLlm.invoke.mockResolvedValueOnce({ content: 'Translated Question' } as any);
+
+      const response = await agent.oneShotMessage(systemPrompt, language, phone);
+
+      expect(mockLlm.invoke).toHaveBeenCalledTimes(1);
+      expect(mockLlm.invoke).toHaveBeenCalledWith([expect.any(SystemMessage)]);
+      
+      const invokeArg = (mockLlm.invoke.mock.calls[0][0] as any)[0];
+      expect(invokeArg.content).toContain('Test Question');
+      expect(invokeArg.content).toContain('English');
+      
+      expect(response).toBe('Translated Question');
+    });
+
+    it('should handle non-string content from llm', async () => {
+      const systemPrompt = 'Test Question';
+      mockLlm.invoke.mockResolvedValueOnce({ content: ['Block 1', 'Block 2'] } as any);
+
+      const response = await agent.oneShotMessage(systemPrompt, 'English', '123');
+      
+      expect(response).toBe('["Block 1","Block 2"]');
+    });
+
+    it('should handle errors gracefully', async () => {
+      mockLlm.invoke.mockRejectedValueOnce(new Error('LLM Error'));
+      
+      const response = await agent.oneShotMessage('Test', 'English', '123');
+      
+      expect(response).toBe('An error occurred while generating the message.');
     });
   });
 });

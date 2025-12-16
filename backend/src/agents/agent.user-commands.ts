@@ -132,7 +132,8 @@ export async function handleUserCommand(
 
     if (message.startsWith('!reset')) {
         await languageBuddyAgent.clearConversation(subscriber.connections.phone);
-        await whatsappService.sendMessage(subscriber.connections.phone, "Your conversation has been reset.");
+        await SubscriberService.getInstance().deleteSubscriber(subscriber.connections.phone);
+        await whatsappService.sendMessage(subscriber.connections.phone, "Your conversation history and profile have been deleted. Send any message to start fresh!");
         recordUserCommand('reset');
         return '!reset';
     }

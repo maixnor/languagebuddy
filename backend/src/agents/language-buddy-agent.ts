@@ -246,15 +246,23 @@ export class LanguageBuddyAgent {
   }
 
   async oneShotMessage(systemPrompt: string, language: string, phone: string): Promise<string> {
-    const prompt = `${systemPrompt}\nONLY RESPOND IN THE LANGUAGE ${language}.`;
+    // We use the LLM directly to avoid persisting this interaction in the agent's state/checkpointer.
+    const instruction = `You are a helpful assistant. Your task is to ask the user the following question in ${language}.
+If the text below is already in ${language}, output it exactly as is.
+If it is in a different language, translate it naturally into ${language}.
+Do not add any conversational filler, intro, or outro. Just output the question.
+
+Question to ask: "${systemPrompt}"`;
+
     try {
-      const result = await this.agent.invoke(
-        { messages: [new SystemMessage(prompt)] },
-        { configurable: { thread_id: phone } }
-      );
-      return result.messages[result.messages.length - 1].text || "oneShotMessage() failed";
+      const result = await this.llm.invoke([
+        new SystemMessage(instruction)
+      ]);
+      
+      const content = typeof result.content === 'string' ? result.content : JSON.stringify(result.content);
+      return content || "oneShotMessage() failed";
     } catch (error) {
-      logger.error({ err: error }, "Error in oneShotMessage");
+      logger.error({ err: error, phone }, "Error in oneShotMessage");
       return "An error occurred while generating the message.";
     }
   }

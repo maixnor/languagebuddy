@@ -97,9 +97,18 @@ export class DatabaseService {
 
       const exists = this.db.prepare('SELECT 1 FROM migrations WHERE name = ?').get(migrationName);
       if (!exists) {
-        this.db.exec(migration);
-        this.db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
-        console.log(`Applied migration: ${migrationName}`);
+        try {
+          this.db.exec(migration);
+          this.db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
+          console.log(`Applied migration: ${migrationName}`);
+        } catch (error: any) {
+          if (error.message.includes('duplicate column name')) {
+            console.warn(`Migration ${migrationName} skipped (column already exists). Marking as applied.`);
+            this.db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
+          } else {
+            throw error;
+          }
+        }
       }
     }
   }

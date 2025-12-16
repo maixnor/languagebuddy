@@ -105,4 +105,22 @@ describe('SubscriberService (CRUD Integration - SQLite)', () => {
     expect(fetched?.signedUpAt).toBeInstanceOf(Date);
     expect(fetched?.lastActiveAt).toBeInstanceOf(Date);
   });
+
+  it('should delete a subscriber', async () => {
+    await subscriberService.createSubscriber(phoneNumber);
+    let subscriber = await subscriberService.getSubscriber(phoneNumber);
+    expect(subscriber).not.toBeNull();
+
+    const result = await subscriberService.deleteSubscriber(phoneNumber);
+    expect(result).toBe(true);
+
+    subscriber = await subscriberService.getSubscriber(phoneNumber);
+    expect(subscriber).toBeNull();
+  });
+
+  it('should return false when deleting a non-existent subscriber', async () => {
+    const nonExistentPhone = '+19998887777';
+    const result = await subscriberService.deleteSubscriber(nonExistentPhone);
+    expect(result).toBe(false);
+  });
 });

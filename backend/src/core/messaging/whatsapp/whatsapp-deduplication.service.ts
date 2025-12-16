@@ -43,4 +43,28 @@ export class WhatsappDeduplicationService {
     }
   }
 
+  async isThrottled(phoneNumber: string): Promise<boolean> {
+    const minIntervalMs = 2000; // 2 seconds
+    const db = this.db.getDb();
+    
+    // Get the last 2 messages to compare their timestamps
+    // distinct from the current message if it was just inserted
+    const rows = db.prepare(`
+      SELECT created_at 
+      FROM processed_messages 
+      WHERE phone_number = ? 
+      ORDER BY created_at DESC 
+      LIMIT 2
+    `).all(phoneNumber) as { created_at: string }[];
+
+    if (rows.length < 2) {
+      return false; // Not enough history to throttle
+    }
+
+    const currentMsgTime = new Date(rows[0].created_at).getTime();
+    const prevMsgTime = new Date(rows[1].created_at).getTime();
+
+    return (currentMsgTime - prevMsgTime) < minIntervalMs;
+  }
+
 }

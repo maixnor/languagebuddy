@@ -34,7 +34,7 @@ const mockWhatsappService = {
 };
 
 const mockWhatsappDeduplicationService = {
-  isDuplicateMessage: jest.fn(),
+  recordMessageProcessed: jest.fn(),
   isThrottled: jest.fn(),
 };
 
@@ -54,7 +54,7 @@ const mockServiceContainer: ServiceContainer = {
   schedulingService: {} as any, // Not used in this test
   feedbackService: {} as any, // Not used in this test
   subscriptionService: {} as any, // Not used in this test
-  stripeWebhookService: {} as any,
+  subscriptionWebhookService: {} as any,
 };
 
 describe('MessagingService', () => {
@@ -63,6 +63,67 @@ describe('MessagingService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     messagingService = new MessagingService(mockServiceContainer as any);
+  });
+
+  describe('handleWebhookMessage', () => {
+    const mockRes = {
+      sendStatus: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      send: jest.fn(),
+    };
+
+    it('should ignore duplicate messages', async () => {
+      const body = {
+        entry: [{
+          changes: [{
+            value: {
+              messages: [{
+                id: 'msg-id',
+                from: '1234567890',
+                type: 'text',
+                text: { body: 'Hello' }
+              }]
+            }
+          }]
+        }]
+      };
+
+      mockWhatsappDeduplicationService.recordMessageProcessed.mockResolvedValue(true); // Duplicate
+
+      await messagingService.handleWebhookMessage(body, mockRes);
+
+      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id', '1234567890');
+      expect(mockRes.sendStatus).toHaveBeenCalledWith(200);
+      // Should NOT call processTextMessage logic (which would trigger other mocks)
+      expect(mockSubscriberService.getSubscriber).not.toHaveBeenCalled();
+    });
+
+    it('should process new messages', async () => {
+      const body = {
+        entry: [{
+          changes: [{
+            value: {
+              messages: [{
+                id: 'msg-id',
+                from: '1234567890',
+                type: 'text',
+                text: { body: 'Hello' }
+              }]
+            }
+          }]
+        }]
+      };
+
+      mockWhatsappDeduplicationService.recordMessageProcessed.mockResolvedValue(false); // Not duplicate
+      mockSubscriberService.getSubscriber.mockResolvedValue(null); // Triggers new user logic
+
+      await messagingService.handleWebhookMessage(body, mockRes);
+
+      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id', '1234567890');
+      expect(mockRes.sendStatus).toHaveBeenCalledWith(200);
+      // verify it proceeded to processing
+      expect(mockLanguageBuddyAgent.currentlyInActiveConversation).toHaveBeenCalled(); 
+    });
   });
 
   describe('processTextMessage', () => {

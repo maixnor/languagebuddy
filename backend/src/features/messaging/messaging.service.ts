@@ -74,14 +74,15 @@ export class MessagingService {
   async handleWebhookMessage(body: any, res: any): Promise<void> {
     const message: WebhookMessage = body.entry?.[0]?.changes[0]?.value?.messages?.[0];
 
-    // Check for duplicate messages
-    if (message && message.id && await this.services.whatsappDeduplicationService.isDuplicateMessage(message.id)) {
-      logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
+    if (!message || !message.from) {
       res.sendStatus(200);
       return;
     }
 
-    if (!message || !message.from) {
+    // Check for duplicate messages
+    // We use recordMessageProcessed which tries to insert and returns true if it was a duplicate
+    if (message.id && await this.services.whatsappDeduplicationService.recordMessageProcessed(message.id, message.from)) {
+      logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
       res.sendStatus(200);
       return;
     }
@@ -247,8 +248,20 @@ export class MessagingService {
         phone: phone.slice(-4), 
         missingField,
         subscriberProfile: subscriber.profile 
-      }, "🔧 Missing profile field detected, entering info gathering mode");
-      await this.handleMissingProfileInfo(subscriber, missingField);
+      }, "🔧 Missing profile field detected, instructing Agent to gather info");
+
+      const prompt = getPromptForField(missingField);
+      
+      const systemPromptOverride = `SYSTEM ALERT: The user's profile is incomplete. Field '${missingField}' is missing.
+YOUR GOAL: Obtain the '${missingField}' from the user.
+
+INSTRUCTIONS:
+1. ANALYZE the user's latest message ("${message.text?.body || ''}").
+2. If it contains the information for '${missingField}', USE the 'updateSubscriber' tool to save it immediately.
+3. If it does NOT contain the info, ASK the user: "${prompt}" (translate to user's language if needed).
+4. Do not change the topic until this field is filled.`;
+
+      await this.handleRegularConversation(subscriber, message, systemPromptOverride);
       return;
     }
 
@@ -285,36 +298,8 @@ export class MessagingService {
     recordConversationMessage('ai', subscriberType); // AI response
   }
 
-  private async handleMissingProfileInfo(subscriber: Subscriber, missingField: string): Promise<void> {
-    const phone = subscriber.connections.phone;
-    const language = subscriber.profile.speakingLanguages[0]?.languageName || "english";
-    
-    // Get subscriber type for metrics
-    const subscriberType = subscriber?.isPremium ? 'premium' :
-                           (this.services.subscriberService.getDaysSinceSignup(subscriber || {} as Subscriber) < config.subscription.trialDays ? 'trial' : 'free');
-
-    logger.info({ 
-      phone: phone.slice(-4), 
-      missingField, 
-      detectedLanguage: language,
-      profileSpeakingLanguages: subscriber.profile.speakingLanguages 
-    }, "🔧 Handling missing profile information - using one-shot message");
-    
-    const prompt = getPromptForField(missingField);
-    logger.info({ prompt, language }, "🔧 Using one-shot prompt");
-    
-    const response = await this.services.languageBuddyAgent.oneShotMessage(
-      prompt,
-      language,
-      phone
-    );
-    
-    logger.info({ response: response.slice(0, 100) + "..." }, "🔧 One-shot response generated");
-    await this.services.whatsappService.sendMessage(phone, response);
-    recordConversationMessage('ai', subscriberType); // AI response
-  }
-
-  private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage): Promise<void> {
+  
+  private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage, externalSystemPromptOverride?: string): Promise<void> {
     const phone = subscriber.connections.phone;
 
     // Wrap the entire conversation handling in a trace span
@@ -335,8 +320,9 @@ export class MessagingService {
                              (this.services.subscriberService.getDaysSinceSignup(subscriber || {} as Subscriber) < config.subscription.trialDays ? 'trial' : 'free');
 
       // Check if we need to inject a subscription warning
-      let systemPromptOverride: string | undefined;
-      if (this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
+      let systemPromptOverride: string | undefined = externalSystemPromptOverride;
+      
+      if (!systemPromptOverride && this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
         const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
         
         const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);

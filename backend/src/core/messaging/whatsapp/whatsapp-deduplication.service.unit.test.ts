@@ -35,6 +35,16 @@ class MockBetterSqlite3Database {
           return { changes: 1 };
         }),
       };
+    } else if (sql.includes('SELECT created_at')) {
+       return {
+         all: jest.fn((phoneNumber: string) => {
+           return this.store
+             .filter(entry => entry.phone_number === phoneNumber)
+             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+             .slice(0, 2)
+             .map(entry => ({ created_at: entry.created_at }));
+         })
+       };
     }
     return { run: jest.fn(), get: jest.fn(), all: jest.fn() };
   });
@@ -147,6 +157,56 @@ describe('WhatsappDeduplicationService', () => {
       mockBetterSqlite3Db.insertError = error;
 
       await expect(deduplicationService.recordMessageProcessed(messageId, phoneNumber)).rejects.toThrow('Database insert error');
+    });
+  });
+
+  describe('isThrottled', () => {
+    it('should return false if there are less than 2 messages', async () => {
+      const phoneNumber = '5551234567';
+      const isThrottled = await deduplicationService.isThrottled(phoneNumber);
+      expect(isThrottled).toBe(false);
+    });
+
+    it('should return false if messages are far apart', async () => {
+      const phoneNumber = '5551234567';
+      
+      // Add a message 5 seconds ago
+      mockBetterSqlite3Db.store.push({ 
+        message_id: 'msg-1', 
+        phone_number: phoneNumber, 
+        created_at: new Date(Date.now() - 5000).toISOString() 
+      });
+
+      // Add a message now
+      mockBetterSqlite3Db.store.push({ 
+        message_id: 'msg-2', 
+        phone_number: phoneNumber, 
+        created_at: new Date().toISOString() 
+      });
+
+      const isThrottled = await deduplicationService.isThrottled(phoneNumber);
+      expect(isThrottled).toBe(false);
+    });
+
+    it('should return true if messages are close together', async () => {
+      const phoneNumber = '5551234567';
+      
+      // Add a message 0.5 seconds ago
+      mockBetterSqlite3Db.store.push({ 
+        message_id: 'msg-1', 
+        phone_number: phoneNumber, 
+        created_at: new Date(Date.now() - 500).toISOString() 
+      });
+
+      // Add a message now
+      mockBetterSqlite3Db.store.push({ 
+        message_id: 'msg-2', 
+        phone_number: phoneNumber, 
+        created_at: new Date().toISOString() 
+      });
+
+      const isThrottled = await deduplicationService.isThrottled(phoneNumber);
+      expect(isThrottled).toBe(true);
     });
   });
 });
