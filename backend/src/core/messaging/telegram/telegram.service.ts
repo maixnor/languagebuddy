@@ -12,12 +12,11 @@ const SendMessageSchema = z.object({
 
 type SendMessagePayload = z.infer<typeof SendMessageSchema>;
 
-export class TelegramService extends BaseService {
+export class TelegramService {
   private static instance: TelegramService;
   private readonly telegramApiUrl: string;
 
   private constructor() {
-    super();
     const token = process.env.TELEGRAM_TOKEN;
     if (!token) {
       throw new Error('TELEGRAM_TOKEN environment variable not set.');
