@@ -122,6 +122,13 @@ export const getConfig = () => ({
   server: {
     port: process.env.PORT || 8080,
   },
+  publicBaseUrl: (() => {
+    const url = process.env.PUBLIC_BASE_URL;
+    if (!url) {
+      throw new Error('PUBLIC_BASE_URL environment variable not set. This is required for webhooks (e.g., Telegram).');
+    }
+    return url;
+  })(),
   fallbackTimezone: 'UTC',
 });
 

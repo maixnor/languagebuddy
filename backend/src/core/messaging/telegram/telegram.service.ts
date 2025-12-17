@@ -1,7 +1,7 @@
 import { TelegramUpdate } from './telegram.types';
 import { z } from 'zod';
 import axios from 'axios';
-import { BaseService } from '../../../services/base-service';
+
 import { logger } from '../../../core/observability/logging';
 
 const SendMessageSchema = z.object({
@@ -27,6 +27,7 @@ export class TelegramService {
   public static getInstance(): TelegramService {
     if (!TelegramService.instance) {
       TelegramService.instance = new TelegramService();
+      logger.info('TelegramService initialized.');
     }
     return TelegramService.instance;
   }

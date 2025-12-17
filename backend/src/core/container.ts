@@ -1,3 +1,4 @@
+import { TelegramService } from './messaging/telegram/telegram.service';
 import { StripeWebhookService } from '../features/subscription/subscription-webhook.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
 import { FeedbackService } from '../features/feedback/feedback.service';
@@ -81,5 +82,14 @@ export class ServiceContainer {
     this.whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
 
     this.telegramService = TelegramService.getInstance();
+
+    // Set Telegram webhook
+    try {
+      const telegramWebhookUrl = `${config.publicBaseUrl}/telegram/webhook`;
+      await this.telegramService.setWebhook(telegramWebhookUrl);
+      logger.info('Telegram webhook set successfully.', { url: telegramWebhookUrl });
+    } catch (error) {
+      logger.error('Failed to set Telegram webhook during initialization.', { error });
+    }
   }
 }
