@@ -113,6 +113,22 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
     }
   });
 
+  // Telegram webhook endpoint
+  app.post("/telegram/webhook", async (req: any, res: any) => {
+    try {
+      await messagingService.handleTelegramWebhookMessage(req.body, res);
+    } catch (error) {
+      logger.error({ err: error }, "Error in /telegram/webhook endpoint");
+      res.status(500).send("Internal server error while processing Telegram webhook.");
+    }
+  });
+
+  // Telegram webhook verification (Not strictly needed for Telegram, but good to have a placeholder)
+  app.get("/telegram/webhook", (req: any, res: any) => {
+    logger.info("Telegram webhook verification request received. No specific action needed as Telegram uses setWebhook API.");
+    res.sendStatus(200);
+  });
+
   // Root endpoint
   app.get("/", (req: any, res: any) => {
     logger.info("/");

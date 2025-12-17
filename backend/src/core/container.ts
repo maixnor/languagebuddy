@@ -31,6 +31,7 @@ export class ServiceContainer {
   public schedulerService!: SchedulerService;
   public whatsappDeduplicationService!: WhatsappDeduplicationService;
   public stripeWebhookService!: StripeWebhookService;
+  public telegramService!: TelegramService;
 
   async initialize(): Promise<void> {
 
@@ -78,5 +79,7 @@ export class ServiceContainer {
 
     this.whatsappService = WhatsAppService.getInstance();
     this.whatsappService.initialize(config.whatsapp.token!, config.whatsapp.phoneId!);
+
+    this.telegramService = TelegramService.getInstance();
   }
 }

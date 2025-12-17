@@ -10,9 +10,24 @@ import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
 import { DateTime } from "luxon";
 import { traceConversation } from '../../core/observability/tracing';
 import { recordThrottledMessage, recordConversationMessage } from '../../core/observability/metrics';
+import { TelegramUpdate } from '../../core/messaging/telegram/telegram.types';
+import { TelegramService } from '../../core/messaging/telegram/telegram.service';
 
 export class MessagingService {
   constructor(private services: ServiceContainer) {}
+
+  async handleTelegramWebhookMessage(body: any, res: any): Promise<void> {
+    try {
+      const update: TelegramUpdate = body;
+      logger.info('Received Telegram update', { update_id: update.update_id });
+      // For now, just pass the update to the telegramService to echo
+      await this.services.telegramService.processUpdate(update);
+      res.sendStatus(200);
+    } catch (error) {
+      logger.error('Failed to process Telegram webhook', { error, body });
+      res.sendStatus(400);
+    }
+  }
 
   async handleInitiateRequest(body: any, res: any): Promise<void> {
     const phone = sanitizePhoneNumber(body.phone);

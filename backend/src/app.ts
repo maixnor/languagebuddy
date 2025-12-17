@@ -40,6 +40,7 @@ export class Application {
       timestamp: new Date().toISOString(),
       services: {
         whatsapp: this.serviceContainer.whatsappService.isInitialized() ? "enabled" : "failed",
+        telegram: this.serviceContainer.telegramService ? "enabled" : "failed",
         openai: { 
           model: this.serviceContainer.llm.model, 
           temperature: this.serviceContainer.llm.temperature 
