@@ -1,4 +1,4 @@
- LanguageBuddy Project Context for Gemini
+LanguageBuddy Project Context for Gemini
 
 ## 0. Git
 - **NEVER TOUCH GIT. NEVER!**
@@ -116,3 +116,11 @@ We are implementing a system to summarize conversations, update user profiles, a
 -   **Tools**: Always define schemas with Zod in `*.contracts.ts`.
 -   **Logs**: Use structured logging (Pino).
 -   **Profile Data**: Use `SubscriberProfileSchema` in `subscriber.contracts.ts` as the single source of truth for required profile fields. The `getMissingProfileFieldsReflective` utility uses this schema to automatically drive the Agent's information collection behavior.
+
+## 7. Telegram Service
+
+-   **Location**: `backend/src/core/messaging/telegram/telegram.service.ts`
+-   **Purpose**: Handles direct integration with the Telegram Bot API (sending messages, setting webhooks, etc.).
+-   **Design**: Implements a singleton pattern via `getInstance()` without requiring a `DatabaseService` dependency. This is because it primarily acts as a stateless API client and does not persist data directly.
+-   **Placement**: Located in `core/messaging` rather than a `feature` directory as it is a foundational messaging integration component, not tied to a specific business feature.
+-   **`processUpdate`**: Currently a placeholder with echo functionality; will be expanded to delegate to the main agent for complex message processing.
