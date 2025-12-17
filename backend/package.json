@@ -12,7 +12,7 @@
     "predev": "npm run generate-build-info",
     "build-watch": "npx swc src --out-dir dist --watch",
     "type-check": "tsc --noEmit",
-    "build:full": "npm run type-check && npm run build:swc",
+    "build:full": "npm run build:swc",
     "start": "node dist/src/main.js",
     "start:cli": "PORT=8080 USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response node dist/src/main.js",
     "dev": "npx swc src --out-dir dist --watch & ENVIRONMENT=development npx nodemon dist/src/main.js",

@@ -33,6 +33,7 @@ export class ServiceContainer {
   public whatsappDeduplicationService!: WhatsappDeduplicationService;
   public stripeWebhookService!: StripeWebhookService;
   public telegramService!: TelegramService;
+  public checkpointSaver!: SqliteCheckpointSaver;
 
   async initialize(): Promise<void> {
 
@@ -49,9 +50,11 @@ export class ServiceContainer {
     this.feedbackService = FeedbackService.getInstance(this.dbService);
     this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.dbService);
 
+    this.checkpointSaver = new SqliteCheckpointSaver(this.dbService);
+
     this.digestService = DigestService.getInstance(
       this.llm,
-      new SqliteCheckpointSaver(this.dbService),
+      this.checkpointSaver,
       this.subscriberService
     );
 
@@ -59,7 +62,7 @@ export class ServiceContainer {
 
 
     this.languageBuddyAgent = new LanguageBuddyAgent(
-      new SqliteCheckpointSaver(this.dbService), 
+      this.checkpointSaver, 
       this.llm, 
       this.digestService, 
       this.feedbackService
