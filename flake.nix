@@ -36,6 +36,7 @@
             SERVER="${server}"
             DEPLOY_PATH="${deployPath}"
             ENVIRONMENT="${environment}"
+            REPO_ROOT=$(pwd)
 
             echo "🚀 Starting $ENVIRONMENT deployment..."
 
@@ -70,6 +71,14 @@
                 git archive --format=tar "$COMMIT" | tar -x -C "$TEMP_BUILD_ROOT"
                 
                 BUILD_DIR="$TEMP_BUILD_ROOT/backend"
+            elif [ "$ENVIRONMENT" = "test" ]; then
+                # Ensure clean state for test deployment
+                if ! git diff-index --quiet HEAD --; then
+                    echo "❌ Error: Test deployment requires a clean git state. Please commit or stash your changes."
+                    exit 1
+                fi
+                COMMIT=$(git rev-parse --short HEAD)
+                echo "📌 Deploying HEAD commit: $COMMIT"
             fi
 
             # Build the backend
@@ -140,6 +149,13 @@
 
             echo "📍 Deployed to: $SERVER:$DEPLOY_PATH"
             echo "✅ $ENVIRONMENT deployment completed successfully!"
+
+            # Update git tag
+            if [ -n "$COMMIT" ]; then
+                TAG_NAME="deployed-$ENVIRONMENT"
+                echo "🏷️  Updating git tag: $TAG_NAME -> $COMMIT"
+                git -C "$REPO_ROOT" tag -f "$TAG_NAME" "$COMMIT"
+            fi
           '';
         };
 

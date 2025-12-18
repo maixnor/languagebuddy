@@ -174,8 +174,15 @@ just clean                    # Clean build artifacts
 6. Rsync to server
 7. Restart systemd service
 8. Cleanup worktree
+9. Update `deployed-prod` git tag to the deployed commit
 
-### Frontend Deployment
+### Backend Test Deployment
+
+1. Ensure git working directory is clean (no uncommitted changes)
+2. Build from current HEAD
+3. Deploy to test server
+4. Restart test service
+5. Update `deployed-test` git tag to HEAD
 
 1. Build static site with Nix (`npm run build` → `dist/`)
 2. Copy all static files from Nix result
