@@ -54,14 +54,19 @@ graph TD
     subgraph "Main Agent"
         MainAgent --> Tools
         Tools --> MainAgent
-        MainAgent -- "User Intent: Give Feedback" --> SetModeFeedback[Set Mode = 'feedback']
+        MainAgent -- "User Intent / Schedule" --> SetModeFeedback[Set Mode = 'feedback']
         SetModeFeedback --> FeedbackGraph
     end
     
     subgraph "Feedback Graph"
-        FeedbackNode[Feedback Agent]
-        FeedbackNode -- "Ask Question" --> ReturnToUser([Wait for User])
-        FeedbackNode -- "Complete" --> SaveFeedback[Save & Summarize]
+        FeedbackStart{Check Type}
+        FeedbackStart -- "Rapid (Emotion)" --> RapidFlow
+        FeedbackStart -- "Survey (Scheduled)" --> SurveyFlow
+        
+        RapidFlow -- "Capture Sentiment" --> SaveFeedback
+        SurveyFlow -- "Ask Q1...Qn" --> SaveFeedback
+        
+        SaveFeedback[Save & Summarize]
     end
 
     subgraph "Onboarding Graph"
@@ -77,67 +82,76 @@ graph TD
 ```
 
 ### 2.4. Mechanism: The "Collapse"
-When `FeedbackGraph` finishes:
-1.  It constructs a **Summary Message**: *"User completed a feedback session. Rating: 5/5. Comment: 'Great job!'."*
-2.  It appends this Summary Message to the parent `messages` array.
-3.  It **discards** the `subgraphState.messages`.
-4.  It resets `activeMode` to `'conversation'`.
+(Same as before: Subgraph history is discarded, only summary remains.)
 
-This ensures the Main Agent "remembers" that feedback happened, but isn't distracted by the specific "What is your rating?" ... "5" ... "Why?" ... questions.
+## 3. Expanded Features
 
-## 3. Implementation Plan
+### 3.1. Feedback Variants
+The `FeedbackGraph` will support an input configuration to determine its behavior:
+1.  **Rapid Feedback (Emotion-Triggered)**:
+    -   **Trigger**: User expresses strong emotion (Euphoria/Frustration). Detected by Main Agent logic/Sentiment analysis.
+    -   **Flow**: Single-turn or 2-turn interaction. "I see you're frustrated. What happened?" -> Save -> Resume.
+2.  **Structured Survey (Scheduled)**:
+    -   **Trigger**: Bi-weekly/Monthly schedule (checked by `SchedulerService`).
+    -   **Flow**: Iterates through a configured list of questions (e.g., "Voice vs. Images?").
+    -   **Config**: Admin can define the question set for that specific period.
+
+### 3.2. Special Events (The "Viking" Scenario)
+To support "Special Weekends" where the persona changes (e.g., Maya -> Viking), we will introduce an **Event Context Layer** to the Main Agent.
+
+-   **`EventService`**: Checks if the current date matches a configured "Special Event".
+-   **System Prompt Injection**:
+    -   Standard: "You are Maya, a helpful tutor..."
+    -   Event Override: "It is Viking Weekend! You are Ragnar. You scream battle cries between grammar explanations."
+-   **Implementation**: 
+    -   This is primarily handled in the `MainAgent` node's `generateSystemPrompt` logic.
+    -   It does *not* require a separate Subgraph unless the *interaction mechanics* change fundamentally (e.g., a Choose-Your-Own-Adventure game). For persona swaps, prompt injection is sufficient.
+
+## 4. Implementation Plan
 
 ### Phase 1: Feature Refactor (Feedback)
 Create a standalone Graph for the Feedback feature.
 - **File**: `src/features/feedback/feedback.graph.ts`
-- **Definition**: A `StateGraph` that manages the feedback interview flow (Sentiment check -> Rating -> Details -> Categorization).
+- **Definition**: A `StateGraph` that manages the feedback interview flow.
+- **Internal Logic**: Logic to branch between `Rapid` and `Survey` flows based on initialization arguments.
 - **Output**: Returns a `FeedbackSummary`.
 
-### Phase 2: Onboarding Refactor (New)
+### Phase 2: Onboarding Refactor
 Migrate the implicit onboarding logic into a dedicated Graph.
 - **File**: `src/features/onboarding/onboarding.graph.ts`
-- **Definition**: A `StateGraph` that:
-    1.  **Profile Collection**: Iteratively collects Name, Timezone, Languages.
-    2.  **Skill Assessment**: Ramps up conversation difficulty until failure/ceiling is detected.
-    3.  **Finalization**: Creates the `Subscriber` record in the database.
-- **Trigger**: The Router checks if the `subscriber` record exists. If not, it routes to `OnboardingGraph`.
-- **Output**: A new Subscriber profile and an initial difficulty level.
+... (Rest of Onboarding Plan) ...
 
 ### Phase 3: Core Agent Refactor
-Refactor `LanguageBuddyAgent` to use `StateGraph` instead of `createReactAgent`.
-- **Node**: `main_conversation` (The existing ReAct agent logic).
-- **Node**: `feedback_subgraph` (Invokes the graph from Phase 1).
-- **Node**: `onboarding_subgraph` (Invokes the graph from Phase 2).
-- **Router**: Logic in `processUserMessage` (or a dedicated Router node) to direct traffic based on `state.activeMode` or Subscriber existence.
+... (Rest of Core Agent Plan) ...
 
-### Phase 4: Tooling
-- Update `tools` to include state-transition capabilities (e.g., `startFeedbackSession` tool that sets `state.activeMode = 'feedback'`).
+### Phase 4: Event System
+- **File**: `src/features/events/event.service.ts`
+- **Logic**: Define start/end times and System Prompt overrides for events.
+- **Integration**: Update `LanguageBuddyAgent.generateSystemPrompt` to pull from `EventService`.
 
-## 4. Example Flow
+### Phase 5: Tooling & Scheduling
+- **Tools**: `startFeedbackSession(type: 'rapid' | 'survey')`.
+- **Scheduler**: Logic to trigger `startFeedbackSession('survey')` on specific weeks.
 
-### Feedback Flow
-1.  **User**: "I want to complain."
-2.  **Main Agent**: Calls `startFeedbackSession()`. State becomes `mode='feedback'`.
-3.  **Router**: Directs next turn to `FeedbackGraph`.
-4.  **Feedback Agent**: "I'm sorry to hear that. What went wrong?" (stored in `subgraphState`).
-5.  **User**: "The bot is too slow." (stored in `subgraphState`).
-6.  **Feedback Agent**: Saves feedback. Returns summary: "User reported latency issues."
-7.  **System**:
-    - `subgraphState` wiped.
-    - `messages`: [..., User: "I want to complain.", System: "User reported latency issues."]
-8.  **Main Agent**: "Thank you for letting us know. We'll look into the speed issues."
+## 5. Example Flow
 
-### Onboarding Flow
-1.  **New User**: "Hello!"
-2.  **Router**: No Subscriber found. Routes to `OnboardingGraph`.
-3.  **Onboarding Agent**: "Hi! I'm LanguageBuddy. What's your name?"
-4.  **User**: "Max."
-5.  **Onboarding Agent**: "Nice to meet you, Max! What language do you want to learn?"
-... (Assessment ensues) ...
-6.  **Onboarding Agent**: Determines C1 level. Creates Subscriber.
-7.  **System**:
-    - `subgraphState` wiped.
-    - `messages`: [System: "User Max onboarded. Level: C1. Languages: German -> English."]
-8.  **Main Agent**: "Great Max, let's start practicing English at a C1 level!"
+### Structured Survey Flow
+1.  **System (Scheduler)**: Detects "Feedback Tuesday". Inject "Please start a feedback survey" into Main Agent instructions.
+2.  **Main Agent**: "Hi Max! It's that time of the month. Do you have a minute to help us improve?"
+3.  **User**: "Sure."
+4.  **Main Agent**: Calls `startFeedbackSession(type='survey')`.
+5.  **Router**: Routes to `FeedbackGraph`.
+6.  **Feedback Agent**: "Great! Question 1: Would you prefer Voice Messages or Image Reading next?"
+7.  **User**: "Voice messages."
+8.  **Feedback Agent**: "Noted. Question 2: ..."
+...
+9.  **Feedback Agent**: Saves all answers. Returns summary.
+10. **Main Agent**: "Thanks for the input! Now back to German..."
+
+### Viking Weekend Flow
+1.  **User**: "Hello."
+2.  **Main Agent**: Checks `EventService`. Finds `Event: VikingWeekend`.
+3.  **Main Agent**: Generates Prompt with Viking Persona.
+4.  **Main Agent**: "SKÅL! I AM RAGNAR! Today we conquer the Dative case! ARE YOU READY?"
 
 This approach provides the **Structure** of a rigid process (Feedback) with the **Flexibility** of the LLM, without polluting the long-term context.
