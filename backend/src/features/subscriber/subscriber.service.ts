@@ -1,5 +1,5 @@
 import { DatabaseService } from '../../core/database';
-import { Subscriber } from './subscriber.types';
+import { Subscriber, Language } from './subscriber.types';
 import { logger, config } from '../../core/config';
 import { getMissingProfileFieldsReflective, validateTimezone, ensureValidTimezone, isTestPhoneNumber, sanitizePhoneNumber } from './subscriber.utils';
 import { DateTime } from 'luxon';
@@ -7,24 +7,38 @@ import { generateRegularSystemPromptForSubscriber, generateDefaultSystemPromptFo
 import { recordNewSubscriber } from '../../core/observability/metrics';
 
 
-export class SubscriberService {  private static instance: SubscriberService; // Declare the static instance property
+export class SubscriberService {
+  private static instance: SubscriberService;
+  private dbService: DatabaseService;
+
+  private constructor(dbService: DatabaseService) {
+    this.dbService = dbService;
+  }
+
+  static getInstance(dbService?: DatabaseService): SubscriberService {
+    if (!SubscriberService.instance) {
+      if (!dbService) {
+        throw new Error("DatabaseService instance required for first initialization");
+      }
+      SubscriberService.instance = new SubscriberService(dbService);
+    }
+    return SubscriberService.instance;
+  }
+
   private _getTodayInSubscriberTimezone(subscriber: Subscriber | null): string {
     const timezone = ensureValidTimezone(subscriber?.profile.timezone);
     return DateTime.now().setZone(timezone).toISODate();
   }
 
-
   /**
    * Returns the number of days since the user signed up.
    */
   public getDaysSinceSignup(subscriber: Subscriber): number {
-    // Ensure signedUpAt is a valid Date object
     if (!subscriber.signedUpAt) {
         subscriber.signedUpAt = new Date();
         if (!subscriber.status) { subscriber.status = "active"; }
         this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
     } else if (!(subscriber.signedUpAt instanceof Date)) {
-        // Try to parse string (e.g. ISO string from SQLite/JSON)
         const parsed = new Date(subscriber.signedUpAt);
         if (!isNaN(parsed.getTime())) {
             subscriber.signedUpAt = parsed;
@@ -37,15 +51,9 @@ export class SubscriberService {  private static instance: SubscriberService; //
     }
     
     const timezone = ensureValidTimezone(subscriber.profile.timezone);
-
-    // Parse signedUpAt and set its zone to the user's timezone
-    // @ts-ignore - Luxon handles Dates, but to be safe we use fromJSDate if it is a date
     const signedUpInUserTimezone = DateTime.fromJSDate(subscriber.signedUpAt).setZone(timezone);
-
-    // Get the current time in the user's timezone
     const nowInUserTimezone = DateTime.now().setZone(timezone);
 
-    // Calculate the difference in full days based on 24-hour periods
     return Math.floor(nowInUserTimezone.diff(signedUpInUserTimezone, 'days').toObject().days || 0);
   }
 
@@ -62,7 +70,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
 
   public async getPremiumSubscribersCount(): Promise<number> {
     try {
-      const stmt = this.dbService.getDb().prepare("SELECT COUNT(*) as count FROM subscribers WHERE json_extract(data, '$.isPremium') = TRUE");
+      const stmt = this.dbService.getDb().prepare("SELECT COUNT(*) as count FROM subscribers WHERE is_premium = 1");
       const row = stmt.get() as { count: number };
       return row.count;
     } catch (error) {
@@ -102,12 +110,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
     }
   }
 
-  /**
-   * Returns true if the user should see a subscription warning (days 6-7, not premium).
-   * Note: "Day 6 and 7" corresponds to indices 5 and 6 (since day 1 is index 0).
-   */
   public shouldShowSubscriptionWarning(subscriber: Subscriber): boolean {
-    // If stripe check is skipped or it's a test phone number, never show warning
     if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
         return false;
     }
@@ -115,12 +118,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
     return !subscriber.isPremium && days >= 5 && days < 7;
   }
 
-  /**
-   * Returns true if the user should be throttled (after day 7, not premium).
-   * Note: "After 7 days" corresponds to index 7 and above.
-   */
   public shouldThrottle(subscriber: Subscriber): boolean {
-    // If stripe check is skipped or it's a test phone number, never throttle
     if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
         return false;
     }
@@ -128,32 +126,12 @@ export class SubscriberService {  private static instance: SubscriberService; //
     return !subscriber.isPremium && days >= 7;
   }
 
-  /**
-   * Returns true if the user should be prompted to subscribe (after day 7, not premium).
-   */
   public shouldPromptForSubscription(subscriber: Subscriber): boolean {
-    // If stripe check is skipped or it's a test phone number, never prompt for subscription
     if (config.test.skipStripeCheck || isTestPhoneNumber(subscriber.connections.phone) || config.test.phoneNumbers.includes(subscriber.connections.phone)) {
         return false;
     }
     const days = this.getDaysSinceSignup(subscriber);
     return !subscriber.isPremium && days >= 7;
-  }
-
-  private dbService: DatabaseService;
-
-  private constructor(dbService: DatabaseService) {
-    this.dbService = dbService;
-  }
-
-  static getInstance(dbService?: DatabaseService): SubscriberService {
-    if (!SubscriberService.instance) {
-      if (!dbService) {
-        throw new Error("DatabaseService instance required for first initialization");
-      }
-      SubscriberService.instance = new SubscriberService(dbService);
-    }
-    return SubscriberService.instance;
   }
 
   public hydrateSubscriber(subscriber: any): Subscriber {
@@ -162,8 +140,12 @@ export class SubscriberService {  private static instance: SubscriberService; //
     if (subscriber.signedUpAt) subscriber.signedUpAt = toDate(subscriber.signedUpAt);
     if (subscriber.lastActiveAt) subscriber.lastActiveAt = toDate(subscriber.lastActiveAt);
     if (subscriber.nextPushMessageAt) subscriber.nextPushMessageAt = toDate(subscriber.nextPushMessageAt);
+    if (subscriber.lastMessageSentAt) subscriber.lastMessageSentAt = toDate(subscriber.lastMessageSentAt);
     if (subscriber.metadata?.lastNightlyDigestRun) {
       subscriber.metadata.lastNightlyDigestRun = toDate(subscriber.metadata.lastNightlyDigestRun);
+    }
+    if (subscriber.metadata?.streakData?.lastIncrement) {
+      subscriber.metadata.streakData.lastIncrement = toDate(subscriber.metadata.streakData.lastIncrement);
     }
 
     const hydrateLanguages = (languages: any[]) => {
@@ -197,25 +179,130 @@ export class SubscriberService {  private static instance: SubscriberService; //
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
       const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
-      const stmt = this.dbService.getDb().prepare('SELECT phone_number, status, created_at, last_active_at, data FROM subscribers WHERE phone_number = ?');
-      const row = stmt.get(sanitizedPhone) as { phone_number: string, status: string, created_at: string, last_active_at: string | null, data: string } | undefined;
+      
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT 
+          phone_number, status, created_at, last_active_at, data,
+          name, timezone, is_premium, is_test_user, last_nightly_digest_run,
+          streak_current, streak_longest, streak_last_increment
+        FROM subscribers 
+        WHERE phone_number = ?
+      `);
+      const row = stmt.get(sanitizedPhone) as any;
 
-      if (row) {
-        const subscriberPartial = JSON.parse(row.data);
-        const subscriber: Subscriber = {
-          ...subscriberPartial,
-          connections: {
-            ...subscriberPartial.connections,
-            phone: row.phone_number, // Ensure the phone number from the column is used
-          },
-          status: row.status,
-          signedUpAt: row.created_at ? new Date(row.created_at) : undefined,
-          lastActiveAt: row.last_active_at ? new Date(row.last_active_at) : undefined,
+      if (!row) return null;
+
+      // Fetch languages
+      const langStmt = this.dbService.getDb().prepare(`
+        SELECT language_name, type, level, confidence_score, data
+        FROM subscriber_languages
+        WHERE subscriber_phone = ?
+      `);
+      const languages = langStmt.all(sanitizedPhone) as any[];
+
+      const speakingLanguages = languages
+        .filter(l => l.type === 'speaking')
+        .map(l => {
+             const data = JSON.parse(l.data);
+             return data; 
+        });
+
+      const learningLanguages = languages
+        .filter(l => l.type === 'learning')
+        .map(l => {
+             const data = JSON.parse(l.data);
+             return data;
+        });
+
+      // Fetch digests (Updated with normalized schema)
+      const digestStmt = this.dbService.getDb().prepare(`
+        SELECT 
+          id, timestamp, topic, summary, 
+          vocabulary_json, phrases_json, grammar_json, user_memos_json,
+          metric_messages_exchanged, metric_avg_response_time, metric_avg_msg_length,
+          metric_sentence_complexity, metric_punctuation_accuracy, metric_capitalization_accuracy,
+          metric_text_coherence_score, metric_emoji_usage, metric_user_initiated_topics,
+          metric_topics_json, metric_abbreviations_json
+        FROM digests
+        WHERE subscriber_phone = ?
+        ORDER BY timestamp ASC
+      `);
+      const digestRows = digestStmt.all(sanitizedPhone) as any[];
+
+      // Fetch mistakes for each digest (could be optimized with a join, but N+1 is acceptable for small user digest history)
+      const mistakesStmt = this.dbService.getDb().prepare(`
+        SELECT original_text, correction, reason
+        FROM digest_assistant_mistakes
+        WHERE digest_id = ?
+      `);
+
+      const digests = digestRows.map(d => {
+        const assistantMistakes = mistakesStmt.all(d.id).map((m: any) => ({
+            originalText: m.original_text,
+            correction: m.correction,
+            reason: m.reason
+        }));
+
+        return {
+            timestamp: d.timestamp,
+            topic: d.topic,
+            summary: d.summary,
+            vocabulary: JSON.parse(d.vocabulary_json),
+            phrases: JSON.parse(d.phrases_json),
+            grammar: JSON.parse(d.grammar_json),
+            // Reconstruct the conversationMetrics object from flattened columns
+            conversationMetrics: {
+                messagesExchanged: d.metric_messages_exchanged,
+                averageResponseTime: d.metric_avg_response_time,
+                averageMessageLength: d.metric_avg_msg_length,
+                sentenceComplexity: d.metric_sentence_complexity,
+                punctuationAccuracy: d.metric_punctuation_accuracy,
+                capitalizationAccuracy: d.metric_capitalization_accuracy,
+                textCoherenceScore: d.metric_text_coherence_score,
+                emojiUsage: d.metric_emoji_usage,
+                userInitiatedTopics: d.metric_user_initiated_topics,
+                topicsDiscussed: d.metric_topics_json ? JSON.parse(d.metric_topics_json) : [],
+                abbreviationUsage: d.metric_abbreviations_json ? JSON.parse(d.metric_abbreviations_json) : []
+            },
+            assistantMistakes: assistantMistakes,
+            userMemos: d.user_memos_json ? JSON.parse(d.user_memos_json) : []
         };
-        this.hydrateSubscriber(subscriber);
-        return subscriber;
-      }
-      return null;
+      });
+
+      const legacyData = JSON.parse(row.data);
+      
+      const subscriber: Subscriber = {
+        ...legacyData,
+        status: row.status,
+        connections: {
+            ...legacyData.connections,
+            phone: row.phone_number,
+        },
+        profile: {
+            ...legacyData.profile,
+            name: row.name || legacyData.profile?.name,
+            timezone: row.timezone || legacyData.profile?.timezone,
+            speakingLanguages,
+            learningLanguages
+        },
+        metadata: {
+            ...legacyData.metadata,
+            digests,
+            lastNightlyDigestRun: row.last_nightly_digest_run ? new Date(row.last_nightly_digest_run) : legacyData.metadata?.lastNightlyDigestRun,
+            streakData: {
+                currentStreak: row.streak_current || 0,
+                longestStreak: row.streak_longest || 0,
+                lastIncrement: row.streak_last_increment ? new Date(row.streak_last_increment) : legacyData.metadata?.streakData?.lastIncrement
+            }
+        },
+        isPremium: !!row.is_premium,
+        isTestUser: !!row.is_test_user,
+        signedUpAt: row.created_at ? new Date(row.created_at) : undefined,
+        lastActiveAt: row.last_active_at ? new Date(row.last_active_at) : undefined,
+      };
+
+      this.hydrateSubscriber(subscriber);
+      return subscriber;
     } catch (error) {
       logger.error({ err: error, phoneNumber }, "Error getting subscriber");
       return null;
@@ -249,15 +336,11 @@ export class SubscriberService {  private static instance: SubscriberService; //
       isPremium: false,
       lastActiveAt: new Date(),
       nextPushMessageAt: DateTime.now().plus({ hours: 24 }).toUTC().toJSDate(),
-      isTestUser: isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone), // Set test user flag
-      status: "onboarding", // Initialize status explicitly
+      isTestUser: isTestPhoneNumber(sanitizedPhone) || config.test.phoneNumbers.includes(sanitizedPhone),
+      status: "onboarding",
       ...initialData
     };
 
-
-
-    // If initialData explicitly sets isPremium, respect it.
-    // Otherwise, apply test-specific overrides.
     if (initialData?.isPremium !== undefined) {
       subscriber.isPremium = initialData.isPremium;
     } else if (config.test.skipStripeCheck || subscriber.isTestUser) {
@@ -265,13 +348,11 @@ export class SubscriberService {  private static instance: SubscriberService; //
       logger.info({ phoneNumber: sanitizedPhone }, "Subscriber created as premium due to test configuration or being a test user.");
     }
 
-    // Validate timezone in initialData if present
     if (subscriber.profile.timezone) {
       const validatedTz = validateTimezone(subscriber.profile.timezone);
       subscriber.profile.timezone = validatedTz || undefined;
     }
 
-    // Check if profile is missing required fields (reflection-based)
     const missingFields = getMissingProfileFieldsReflective(subscriber.profile!);
     if (missingFields.length > 0) {
       logger.info({ missingFields, phoneNumber: sanitizedPhone }, "Subscriber created with missing profile fields");
@@ -291,7 +372,6 @@ export class SubscriberService {  private static instance: SubscriberService; //
         subscriber = await this.createSubscriber(sanitizedPhone);
       }
 
-      // Validate timezone if it's being updated
       if (updates.profile && updates.profile.timezone) {
         const validatedTz = validateTimezone(updates.profile.timezone);
         updates.profile.timezone = validatedTz || undefined;
@@ -301,7 +381,6 @@ export class SubscriberService {  private static instance: SubscriberService; //
       subscriber.lastActiveAt = new Date();
       await this.saveSubscriber(subscriber);
 
-      // Re-check missing fields after update (reflection-based)
       const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
       if (missingFields.length > 0) {
         logger.info({ missingFields, phoneNumber: sanitizedPhone }, "Subscriber updated with missing profile fields");
@@ -335,15 +414,14 @@ export class SubscriberService {  private static instance: SubscriberService; //
 
   async getAllSubscribers(): Promise<Subscriber[]> {
     try {
-      const stmt = this.dbService.getDb().prepare('SELECT data FROM subscribers');
-      const rows = stmt.all() as { data: string }[];
+      const stmt = this.dbService.getDb().prepare('SELECT phone_number FROM subscribers');
+      const rows = stmt.all() as { phone_number: string }[];
 
       const subscribers: Subscriber[] = [];
       for (const row of rows) {
-        if (row && row.data) {
-          const subscriber = JSON.parse(row.data);
-          this.hydrateSubscriber(subscriber);
-          subscribers.push(subscriber);
+        const sub = await this.getSubscriber(row.phone_number);
+        if (sub) {
+          subscribers.push(sub);
         }
       }
 
@@ -356,40 +434,178 @@ export class SubscriberService {  private static instance: SubscriberService; //
   }
 
   private async saveSubscriber(subscriber: Subscriber): Promise<void> {
-    try {
-      const sanitizedPhone = sanitizePhoneNumber(subscriber.connections.phone);
-      subscriber.connections.phone = sanitizedPhone; // Ensure the object itself has the sanitized phone number
+    const sanitizedPhone = sanitizePhoneNumber(subscriber.connections.phone);
+    subscriber.connections.phone = sanitizedPhone;
 
-      const status = subscriber.status;
-      // Ensure signedUpAt is a Date object before converting to ISO string
-      let signedUpAtDate: Date | undefined;
-      if (subscriber.signedUpAt instanceof Date) {
-        signedUpAtDate = subscriber.signedUpAt;
-      } else if (typeof subscriber.signedUpAt === 'string') {
-        const parsedDate = new Date(subscriber.signedUpAt);
-        if (!isNaN(parsedDate.getTime())) {
-          signedUpAtDate = parsedDate;
+    const status = subscriber.status;
+    
+    let signedUpAtDate: Date | undefined;
+    if (subscriber.signedUpAt instanceof Date) {
+      signedUpAtDate = subscriber.signedUpAt;
+    } else if (typeof subscriber.signedUpAt === 'string') {
+        const parsed = new Date(subscriber.signedUpAt);
+        if (!isNaN(parsed.getTime())) signedUpAtDate = parsed;
+    }
+    const createdAtISO = signedUpAtDate ? signedUpAtDate.toISOString() : new Date().toISOString();
+
+    const lastActiveAt = subscriber.lastActiveAt;
+    const lastActiveAtISO = (lastActiveAt instanceof Date && !isNaN(lastActiveAt.getTime())) ? lastActiveAt.toISOString() : null;
+
+    const rest: Partial<Subscriber> = { ...subscriber };
+    delete rest.status;
+    delete rest.signedUpAt;
+    delete rest.lastActiveAt;
+    
+    if (rest.profile) {
+        const p = { ...rest.profile };
+        delete p.name;
+        delete p.timezone;
+        delete p.speakingLanguages;
+        delete p.learningLanguages;
+        rest.profile = p;
+    }
+    if (rest.metadata) {
+        const m = { ...rest.metadata };
+        delete m.digests;
+        delete m.streakData;
+        delete m.lastNightlyDigestRun;
+        rest.metadata = m;
+    }
+    delete rest.isPremium;
+    delete rest.isTestUser;
+
+    const data = JSON.stringify(rest);
+
+    const runTransaction = this.dbService.getDb().transaction(() => {
+        // 1. Update Subscribers Table
+        const stmt = this.dbService.getDb().prepare(`
+            INSERT OR REPLACE INTO subscribers (
+                phone_number, status, created_at, last_active_at, data,
+                name, timezone, is_premium, is_test_user, last_nightly_digest_run,
+                streak_current, streak_longest, streak_last_increment
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        
+        stmt.run(
+            sanitizedPhone,
+            status,
+            createdAtISO,
+            lastActiveAtISO,
+            data,
+            subscriber.profile.name,
+            subscriber.profile.timezone,
+            subscriber.isPremium ? 1 : 0,
+            subscriber.isTestUser ? 1 : 0,
+            subscriber.metadata.lastNightlyDigestRun ? subscriber.metadata.lastNightlyDigestRun.toISOString() : null,
+            subscriber.metadata.streakData?.currentStreak || 0,
+            subscriber.metadata.streakData?.longestStreak || 0,
+            subscriber.metadata.streakData?.lastIncrement ? subscriber.metadata.streakData.lastIncrement.toISOString() : null
+        );
+
+        // 2. Sync Languages
+        const deleteLangs = this.dbService.getDb().prepare('DELETE FROM subscriber_languages WHERE subscriber_phone = ?');
+        deleteLangs.run(sanitizedPhone);
+
+        const insertLang = this.dbService.getDb().prepare(`
+            INSERT INTO subscriber_languages (subscriber_phone, language_name, type, level, confidence_score, data)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `);
+
+        if (subscriber.profile.learningLanguages) {
+            for (const lang of subscriber.profile.learningLanguages) {
+                insertLang.run(sanitizedPhone, lang.languageName, 'learning', lang.overallLevel, lang.confidenceScore, JSON.stringify(lang));
+            }
         }
-      }
-      const createdAtISO = signedUpAtDate ? signedUpAtDate.toISOString() : new Date().toISOString();
+        if (subscriber.profile.speakingLanguages) {
+            for (const lang of subscriber.profile.speakingLanguages) {
+                insertLang.run(sanitizedPhone, lang.languageName, 'speaking', lang.overallLevel, lang.confidenceScore, JSON.stringify(lang));
+            }
+        }
 
-      const lastActiveAt = subscriber.lastActiveAt;
-      const lastActiveAtISO = (lastActiveAt instanceof Date && !isNaN(lastActiveAt.getTime())) ? lastActiveAt.toISOString() : null;
+        // 3. Sync Digests (Now with normalized fields)
+        const deleteDigests = this.dbService.getDb().prepare('DELETE FROM digests WHERE subscriber_phone = ?');
+        deleteDigests.run(sanitizedPhone);
 
-      const rest: Partial<Subscriber> = { ...subscriber };
-      delete rest.status;
-      delete rest.signedUpAt;
-      delete rest.lastActiveAt;
-      const data = JSON.stringify(rest);
+        // Prepare Insert for Digests
+        const insertDigest = this.dbService.getDb().prepare(`
+            INSERT INTO digests (
+                subscriber_phone, timestamp, topic, summary, 
+                vocabulary_json, phrases_json, grammar_json, user_memos_json,
+                metric_messages_exchanged, metric_avg_response_time, metric_avg_msg_length,
+                metric_sentence_complexity, metric_punctuation_accuracy, metric_capitalization_accuracy,
+                metric_text_coherence_score, metric_emoji_usage, metric_user_initiated_topics,
+                metric_topics_json, metric_abbreviations_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
 
-      const stmt = this.dbService.getDb().prepare(`
-        INSERT OR REPLACE INTO subscribers (phone_number, status, created_at, last_active_at, data)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      stmt.run(sanitizedPhone, status, createdAtISO, lastActiveAtISO, data);
+        // Prepare Insert for Assistant Mistakes (child table)
+        // Note: DELETE CASCADE on digests(id) means we don't need to manually delete from digest_assistant_mistakes if we delete digests,
+        // but since we are doing a full replace of digests, we rely on the `deleteDigests` command which removes the digest rows, 
+        // triggering CASCADE delete for mistakes.
+        // Wait, DELETE FROM digests triggers cascading deletes on digest_assistant_mistakes IF foreign keys are enabled.
+        // Better-sqlite3 usually enables foreign keys by default if configured, but let's be safe and verify.
+        // Actually, explicit deletion is safer if FKs aren't strictly enforced.
+        // But `deleteDigests` deletes by subscriber_phone. `digest_assistant_mistakes` doesn't have subscriber_phone.
+        // It has digest_id.
+        // So when we delete from digests, we need SQLite to cascade.
+        // Let's ensure foreign keys are on. DatabaseService enables WAL, but doesn't explicitly enable FKs in constructor.
+        // However, I will rely on standard behavior or just re-insert.
+        // To be safe against no-FK-enforcement: I should query the digest IDs being deleted and delete mistakes for them first.
+        // OR: Just execute `DELETE FROM digest_assistant_mistakes WHERE digest_id IN (SELECT id FROM digests WHERE subscriber_phone = ?)`
+        const deleteMistakes = this.dbService.getDb().prepare(`
+            DELETE FROM digest_assistant_mistakes 
+            WHERE digest_id IN (SELECT id FROM digests WHERE subscriber_phone = ?)
+        `);
+        deleteMistakes.run(sanitizedPhone);
+        
+        const insertMistake = this.dbService.getDb().prepare(`
+            INSERT INTO digest_assistant_mistakes (digest_id, original_text, correction, reason)
+            VALUES (?, ?, ?, ?)
+        `);
+
+        if (subscriber.metadata.digests) {
+            for (const digest of subscriber.metadata.digests) {
+                const metrics = digest.conversationMetrics;
+                const result = insertDigest.run(
+                    sanitizedPhone,
+                    digest.timestamp,
+                    digest.topic,
+                    digest.summary,
+                    JSON.stringify(digest.vocabulary),
+                    JSON.stringify(digest.phrases),
+                    JSON.stringify(digest.grammar),
+                    JSON.stringify(digest.userMemos || []),
+                    metrics.messagesExchanged || 0,
+                    metrics.averageResponseTime || 0,
+                    metrics.averageMessageLength || 0,
+                    metrics.sentenceComplexity || 0,
+                    metrics.punctuationAccuracy || 0,
+                    metrics.capitalizationAccuracy || 0,
+                    metrics.textCoherenceScore || 0,
+                    metrics.emojiUsage || 0,
+                    metrics.userInitiatedTopics || 0,
+                    JSON.stringify(metrics.topicsDiscussed || []),
+                    JSON.stringify(metrics.abbreviationUsage || [])
+                );
+                
+                const digestId = result.lastInsertRowid;
+
+                if (digest.assistantMistakes) {
+                    for (const mistake of digest.assistantMistakes) {
+                        insertMistake.run(digestId, mistake.originalText, mistake.correction, mistake.reason);
+                    }
+                }
+            }
+        }
+    });
+
+    try {
+        runTransaction();
     } catch (error) {
-      logger.error({ err: error, phone: subscriber.connections.phone }, "Error saving subscriber");
-      throw error;
+        logger.error({ err: error, phone: subscriber.connections.phone }, "Error saving subscriber (transaction)");
+        throw error;
     }
   }
 
@@ -398,12 +614,12 @@ export class SubscriberService {  private static instance: SubscriberService; //
       const DigestService = await import('../digest/digest.service'); // Will be updated
       const digestService = DigestService.DigestService.getInstance();
       
-      // Create the digest
       const digest = await digestService.createConversationDigest(subscriber);
       if (!digest) {
         logger.info({ phone: subscriber.connections.phone }, "No conversation history available for digest creation");
         return false;
       }
+      
       await digestService.saveDigestToSubscriber(subscriber, digest);
       
       logger.info({ phone: subscriber.connections.phone }, "Digest created successfully");
@@ -459,7 +675,6 @@ export class SubscriberService {  private static instance: SubscriberService; //
         if (subscriber && subscriber.profile.timezone) {
            usageDate = DateTime.now().setZone(subscriber.profile.timezone).toISODate();
         } else {
-           // Fallback if no subscriber or timezone found (shouldn't happen for active users)
            usageDate = DateTime.now().toUTC().toISODate(); 
         }
       }
@@ -507,16 +722,11 @@ export class SubscriberService {  private static instance: SubscriberService; //
     const today = DateTime.now().setZone(timezone).toISODate();
 
     if (isBypassedUser) {
-        // For bypassed users, we always increment
         await this.incrementConversationCount(phoneNumber, today);
         return true;
     }
 
     try {
-      // Atomic check-and-increment:
-      // Try to insert with count=1.
-      // If conflict (row exists), try to increment ONLY IF count is 0.
-      // If count is > 0, the WHERE clause fails, and changes will be 0.
       const stmt = this.dbService.getDb().prepare(`
         INSERT INTO daily_usage (phone_number, usage_date, conversation_start_count)
         VALUES (?, ?, 1)
@@ -571,7 +781,6 @@ TASK: INITIATE NEW DAY CONVERSATION
         throw new Error(`Subscriber with phone ${phoneNumber} not found`);
       }
 
-      // 1. Manage the learningLanguages array
       let languageFound = false;
       if (!subscriber.profile.learningLanguages) {
         subscriber.profile.learningLanguages = [];
@@ -588,10 +797,9 @@ TASK: INITIATE NEW DAY CONVERSATION
       });
 
       if (!languageFound) {
-        // Add new language if not found
         subscriber.profile.learningLanguages.push({
-          languageName: languageCode.charAt(0).toUpperCase() + languageCode.slice(1).toLowerCase(), // Capitalize first letter
-          overallLevel: "A1", // Default level for new language
+          languageName: languageCode.charAt(0).toUpperCase() + languageCode.slice(1).toLowerCase(),
+          overallLevel: "A1",
           skillAssessments: [],
           deficiencies: [],
           firstEncountered: new Date(),
@@ -621,24 +829,20 @@ TASK: INITIATE NEW DAY CONVERSATION
         throw new Error(`Subscriber with phone ${phoneNumber} not found`);
       }
 
-      // Find the language in speaking or learning languages
       let targetLanguage = subscriber.profile.learningLanguages?.find(lang => lang.languageName === languageName);
 
       if (!targetLanguage) {
         throw new Error(`Language ${languageName} not found in subscriber's profile`);
       }
 
-      // Create the complete deficiency object
       const completeDeficiency = {
         ...deficiency,
         firstDetected: new Date(),
         lastOccurrence: new Date()
       };
 
-      // Add the deficiency
       targetLanguage.deficiencies.push(completeDeficiency);
 
-      // Update the subscriber
       await this.saveSubscriber(subscriber);
       logger.info({ phoneNumber, languageName, deficiency: completeDeficiency }, "Added language deficiency to subscriber");
     } catch (error) {
@@ -653,11 +857,7 @@ TASK: INITIATE NEW DAY CONVERSATION
         SELECT COUNT(*) as count
         FROM subscribers
         WHERE 
-          CASE 
-            WHEN json_extract(data, '$.lastMessageSentAt') IS NOT NULL 
-            THEN datetime(json_extract(data, '$.lastMessageSentAt'))
-            ELSE datetime(created_at)
-          END <= datetime('now', '-' || ? || ' days')
+            datetime(COALESCE(last_active_at, created_at)) <= datetime('now', '-' || ? || ' days')
       `);
       const row = stmt.get(days) as { count: number };
       return row.count;
@@ -680,7 +880,7 @@ TASK: INITIATE NEW DAY CONVERSATION
       const stmt = this.dbService.getDb().prepare(`
         SELECT COUNT(*) as count
         FROM subscribers
-        WHERE json_extract(data, '$.isPremium') = FALSE
+        WHERE is_premium = 0
           AND datetime(created_at) >= datetime('now', '-' || ? || ' days')
       `);
       const row = stmt.get(trialDays) as { count: number };
@@ -696,7 +896,7 @@ TASK: INITIATE NEW DAY CONVERSATION
       const stmt = this.dbService.getDb().prepare(`
         SELECT COUNT(*) as count
         FROM subscribers
-        WHERE json_extract(data, '$.isPremium') = FALSE
+        WHERE is_premium = 0
           AND datetime(created_at) < datetime('now', '-' || ? || ' days')
       `);
       const row = stmt.get(trialDays) as { count: number };
@@ -713,7 +913,7 @@ TASK: INITIATE NEW DAY CONVERSATION
         SELECT COUNT(*) as count
         FROM subscribers
         WHERE phone_number IS NULL OR phone_number = ''
-          OR json_extract(data, '$.profile.name') IS NULL OR json_extract(data, '$.profile.name') = ''
+          OR name IS NULL OR name = ''
       `);
       const row = stmt.get() as { count: number };
       return row.count;

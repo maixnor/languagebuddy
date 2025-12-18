@@ -27,7 +27,14 @@ export const DigestAnalysisSchema = z.object({
     correction: z.string().describe("The corrected version"),
     reason: z.string().describe("Why it was incorrect (e.g., 'Hallucination', 'Grammar', 'Factually incorrect')")
   })).default([]).describe("Mistakes made by the AI assistant during the conversation that need to be corrected for the user"),
-  userMemos: z.array(z.string()).default([]).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)")
+  userMemos: z.array(z.string()).default([]).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)"),
+  metrics: z.object({
+    sentenceComplexity: z.number().describe("Score 0-10 based on vocabulary richness and sentence structure"),
+    punctuationAccuracy: z.number().describe("Percentage 0-100 of correct punctuation usage by the user"),
+    capitalizationAccuracy: z.number().describe("Percentage 0-100 of correct capitalization usage by the user"),
+    abbreviationUsage: z.array(z.string()).default([]).describe("List of abbreviations used by the user (e.g. 'lol', 'idk')"),
+    topicsDiscussed: z.array(z.string()).default([]).describe("List of main topics discussed")
+  }).describe("Qualitative metrics about the user's language usage")
 });
 
 export type DigestAnalysis = z.infer<typeof DigestAnalysisSchema>;

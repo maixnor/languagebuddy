@@ -414,6 +414,8 @@ Extract actionable learning insights that will help personalize future conversat
         newWordsCount: analysisData.vocabulary?.newWords?.length || 0
       }, "LLM structured output analysis completed");
       
+      const metrics = this.calculateConversationMetrics(conversationHistory, analysisData);
+
       const digest = {
         timestamp: new Date().toISOString(),
         topic: analysisData.topic,
@@ -423,19 +425,7 @@ Extract actionable learning insights that will help personalize future conversat
         vocabulary: analysisData.vocabulary,
         phrases: analysisData.phrases,
         grammar: analysisData.grammar,
-        conversationMetrics: {
-          messagesExchanged: conversationHistory.length,
-          averageResponseTime: 0,
-          topicsDiscussed: [],
-          userInitiatedTopics: 0,
-          averageMessageLength: 0,
-          sentenceComplexity: 0,
-          punctuationAccuracy: 0,
-          capitalizationAccuracy: 0,
-          textCoherenceScore: 0,
-          emojiUsage: 0,
-          abbreviationUsage: []
-        },
+        conversationMetrics: metrics,
         assistantMistakes: analysisData.assistantMistakes,
         userMemos: analysisData.userMemos
       };
@@ -482,6 +472,38 @@ Extract actionable learning insights that will help personalize future conversat
       // Re-throw the error so tests can see it
       throw error;
     }
+  }
+
+  private calculateConversationMetrics(history: any[], llmData: any): Digest['conversationMetrics'] {
+    const userMessages = history.filter(m => m.type === 'human');
+    const totalMessages = history.length;
+    
+    // 1. Average Message Length
+    const totalLength = history.reduce((acc, msg) => acc + (msg.content?.length || 0), 0);
+    const averageMessageLength = totalMessages > 0 ? totalLength / totalMessages : 0;
+
+    // 2. Emoji Usage (Simple count of emoji characters)
+    // Regex for emoji range (simplified, covers most common emojis)
+    const emojiRegex = /[\u{1F300}-\u{1F9FF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu;
+    let emojiCount = 0;
+    userMessages.forEach(msg => {
+        const matches = msg.content?.match(emojiRegex);
+        if (matches) emojiCount += matches.length;
+    });
+
+    return {
+        messagesExchanged: totalMessages,
+        averageResponseTime: 0, // Requires timestamps
+        topicsDiscussed: llmData.metrics?.topicsDiscussed || [],
+        userInitiatedTopics: 0, 
+        averageMessageLength,
+        sentenceComplexity: llmData.metrics?.sentenceComplexity || 0,
+        punctuationAccuracy: llmData.metrics?.punctuationAccuracy || 0,
+        capitalizationAccuracy: llmData.metrics?.capitalizationAccuracy || 0,
+        textCoherenceScore: 0,
+        emojiUsage: emojiCount,
+        abbreviationUsage: llmData.metrics?.abbreviationUsage || []
+    };
   }
 
   /**

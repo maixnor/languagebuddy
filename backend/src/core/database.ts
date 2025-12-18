@@ -89,7 +89,137 @@ export class DatabaseService {
       `,
       `
       ALTER TABLE daily_usage ADD COLUMN last_interaction_at TEXT;
+      `,
+      // New Migrations for Schema Refactor
       `
+      CREATE TABLE IF NOT EXISTS subscriber_languages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subscriber_phone TEXT NOT NULL,
+        language_name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('speaking', 'learning')),
+        level TEXT,
+        confidence_score INTEGER,
+        data JSON,
+        FOREIGN KEY (subscriber_phone) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );`,
+      `
+      CREATE TABLE IF NOT EXISTS digests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subscriber_phone TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        topic TEXT,
+        summary TEXT,
+        vocabulary_json JSON,
+        phrases_json JSON,
+        grammar_json JSON,
+        conversation_metrics_json JSON,
+        assistant_mistakes_json JSON,
+        user_memos_json JSON,
+        FOREIGN KEY (subscriber_phone) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );`,
+      `ALTER TABLE subscribers ADD COLUMN name TEXT;`,
+      `ALTER TABLE subscribers ADD COLUMN timezone TEXT;`,
+      `ALTER TABLE subscribers ADD COLUMN is_premium INTEGER DEFAULT 0;`,
+      `ALTER TABLE subscribers ADD COLUMN is_test_user INTEGER DEFAULT 0;`,
+      `ALTER TABLE subscribers ADD COLUMN last_nightly_digest_run TEXT;`,
+      `ALTER TABLE subscribers ADD COLUMN streak_current INTEGER DEFAULT 0;`,
+      `ALTER TABLE subscribers ADD COLUMN streak_longest INTEGER DEFAULT 0;`,
+      `ALTER TABLE subscribers ADD COLUMN streak_last_increment TEXT;`,
+      `
+      UPDATE subscribers SET
+        name = json_extract(data, '$.profile.name'),
+        timezone = json_extract(data, '$.profile.timezone'),
+        is_premium = COALESCE(json_extract(data, '$.isPremium'), 0),
+        is_test_user = COALESCE(json_extract(data, '$.isTestUser'), 0),
+        last_nightly_digest_run = json_extract(data, '$.metadata.lastNightlyDigestRun'),
+        streak_current = COALESCE(json_extract(data, '$.metadata.streakData.currentStreak'), 0),
+        streak_longest = COALESCE(json_extract(data, '$.metadata.streakData.longestStreak'), 0),
+        streak_last_increment = json_extract(data, '$.metadata.streakData.lastIncrement');
+      `,
+      `
+      INSERT INTO subscriber_languages (subscriber_phone, language_name, type, level, confidence_score, data)
+      SELECT
+        subscribers.phone_number,
+        json_extract(value, '$.languageName'),
+        'learning',
+        json_extract(value, '$.overallLevel'),
+        json_extract(value, '$.confidenceScore'),
+        value
+      FROM subscribers, json_each(subscribers.data, '$.profile.learningLanguages');
+      `,
+      `
+      INSERT INTO subscriber_languages (subscriber_phone, language_name, type, level, confidence_score, data)
+      SELECT
+        subscribers.phone_number,
+        json_extract(value, '$.languageName'),
+        'speaking',
+        json_extract(value, '$.overallLevel'),
+        json_extract(value, '$.confidenceScore'),
+        value
+      FROM subscribers, json_each(subscribers.data, '$.profile.speakingLanguages');
+      `,
+      `
+      INSERT INTO digests (subscriber_phone, timestamp, topic, summary, vocabulary_json, phrases_json, grammar_json, conversation_metrics_json, assistant_mistakes_json, user_memos_json)
+      SELECT
+        subscribers.phone_number,
+        json_extract(value, '$.timestamp'),
+        json_extract(value, '$.topic'),
+        json_extract(value, '$.summary'),
+        json_extract(value, '$.vocabulary'),
+        json_extract(value, '$.phrases'),
+        json_extract(value, '$.grammar'),
+        json_extract(value, '$.conversationMetrics'),
+        json_extract(value, '$.assistantMistakes'),
+        json_extract(value, '$.userMemos')
+      FROM subscribers, json_each(subscribers.data, '$.metadata.digests');
+      `,
+      // New Migrations for Digest Normalization
+      `
+      CREATE TABLE IF NOT EXISTS digest_assistant_mistakes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        digest_id INTEGER NOT NULL,
+        original_text TEXT,
+        correction TEXT,
+        reason TEXT,
+        FOREIGN KEY (digest_id) REFERENCES digests(id) ON DELETE CASCADE
+      );`,
+      `ALTER TABLE digests ADD COLUMN metric_messages_exchanged INTEGER DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_avg_response_time REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_avg_msg_length REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_sentence_complexity REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_punctuation_accuracy REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_capitalization_accuracy REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_text_coherence_score REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_emoji_usage REAL DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_user_initiated_topics INTEGER DEFAULT 0;`,
+      `ALTER TABLE digests ADD COLUMN metric_topics_json JSON;`,
+      `ALTER TABLE digests ADD COLUMN metric_abbreviations_json JSON;`,
+      `
+      INSERT INTO digest_assistant_mistakes (digest_id, original_text, correction, reason)
+      SELECT
+        digests.id,
+        json_extract(value, '$.originalText'),
+        json_extract(value, '$.correction'),
+        json_extract(value, '$.reason')
+      FROM digests, json_each(digests.assistant_mistakes_json)
+      WHERE digests.assistant_mistakes_json IS NOT NULL;
+      `,
+      `
+      UPDATE digests SET
+        metric_messages_exchanged = COALESCE(json_extract(conversation_metrics_json, '$.messagesExchanged'), 0),
+        metric_avg_response_time = COALESCE(json_extract(conversation_metrics_json, '$.averageResponseTime'), 0),
+        metric_avg_msg_length = COALESCE(json_extract(conversation_metrics_json, '$.averageMessageLength'), 0),
+        metric_sentence_complexity = COALESCE(json_extract(conversation_metrics_json, '$.sentenceComplexity'), 0),
+        metric_punctuation_accuracy = COALESCE(json_extract(conversation_metrics_json, '$.punctuationAccuracy'), 0),
+        metric_capitalization_accuracy = COALESCE(json_extract(conversation_metrics_json, '$.capitalizationAccuracy'), 0),
+        metric_text_coherence_score = COALESCE(json_extract(conversation_metrics_json, '$.textCoherenceScore'), 0),
+        metric_emoji_usage = COALESCE(json_extract(conversation_metrics_json, '$.emojiUsage'), 0),
+        metric_user_initiated_topics = COALESCE(json_extract(conversation_metrics_json, '$.userInitiatedTopics'), 0),
+        metric_topics_json = json_extract(conversation_metrics_json, '$.topicsDiscussed'),
+        metric_abbreviations_json = json_extract(conversation_metrics_json, '$.abbreviationUsage');
+      `,
+      `ALTER TABLE digests DROP COLUMN assistant_mistakes_json;`,
+      `ALTER TABLE digests DROP COLUMN conversation_metrics_json;`
     ];
 
     for (const migration of migrations) {
