@@ -1,17 +1,20 @@
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, ToolMessage, BaseMessage } from "@langchain/core/messages";
 import { ChatOpenAI } from "@langchain/openai";
 import { Subscriber } from '../features/subscriber/subscriber.types';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { logger } from '../core/config';
-// @ts-ignore
-import {createReactAgent} from "@langchain/langgraph/prebuilt";
-import {setContextVariable} from "@langchain/core/context";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { setContextVariable } from "@langchain/core/context";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
 import { z } from "zod";
 import { DigestService } from '../features/digest/digest.service';
 import { setSpanAttributes } from '../core/observability/tracing';
 import { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
+import { tool } from "@langchain/core/tools";
+import { StateGraph, START, END } from "@langchain/langgraph";
+import { AgentState } from "./agent.types";
+import { createFeedbackGraph } from "../features/feedback/feedback.graph";
 
 import {
   updateSubscriberTool,
@@ -19,7 +22,6 @@ import {
   addLanguageDeficiencyTool,
   proposeMistakeToleranceChangeTool,
 } from "../features/subscriber/subscriber.tools";
-import { getFeedbackTools } from "../tools/feedback-tools";
 import { checkLastResponse } from "./agent.check";
 
 import { FeedbackService } from '../features/feedback/feedback.service';
@@ -37,19 +39,90 @@ export class LanguageBuddyAgent {
     this.digestService = digestService;
     this.feedbackService = feedbackService;
 
+    // Define the feedback trigger tool
+    const startFeedbackSession = tool(async () => {
+      return "Feedback session requested."; 
+    }, {
+      name: "startFeedbackSession",
+      description: "Initiates a feedback collection session. Call this when the user wants to give feedback."
+    });
+
     const allTools = [
       updateSubscriberTool,
       createSubscriberTool,
       addLanguageDeficiencyTool,
       proposeMistakeToleranceChangeTool,
-      ...getFeedbackTools(this.feedbackService),
+      startFeedbackSession,
     ];
 
-    this.agent = createReactAgent({
+    // 1. Create Main Agent (Legacy ReAct logic wrapped)
+    // We use createReactAgent but it returns a compiled graph.
+    // We will use this graph as a node in our parent graph.
+    const mainAgentSubgraph = createReactAgent({
       llm: llm,
       tools: allTools,
-      checkpointer: checkpointer,
+      // We don't pass checkpointer here, the parent graph handles persistence.
+    });
+
+    // 2. Create Feedback Subgraph
+    const feedbackSubgraph = createFeedbackGraph(llm, feedbackService);
+
+    // 3. Define Mode Manager Node
+    // This node inspects the conversation history to see if we should switch modes.
+    const modeManager = (state: AgentState) => {
+        const messages = state.messages;
+        const recent = messages.slice(-5);
+        const hasFeedbackCall = recent.some(m => 
+            (m instanceof ToolMessage && m.name === "startFeedbackSession")
+        );
+        
+        if (hasFeedbackCall) {
+            return { activeMode: "feedback" as const };
+        }
+        return { };
+    };
+
+    // 4. Build Parent Graph
+    const workflow = new StateGraph<AgentState>({
+        channels: {
+            messages: { value: (x, y) => x.concat(y), default: () => [] },
+            subscriber: { value: (x, y) => y ?? x, default: () => ({} as any) },
+            activeMode: { value: (x, y) => y ?? x, default: () => "conversation" },
+            subgraphState: { value: (x, y) => y, default: () => undefined },
+        }
     })
+    .addNode("main_agent", mainAgentSubgraph)
+    .addNode("feedback_subgraph", feedbackSubgraph)
+    .addNode("mode_manager", modeManager)
+    
+    // Router Logic
+    .addConditionalEdges(START, (state) => {
+        if (state.activeMode === "feedback") {
+            return "feedback_subgraph";
+        }
+        return "main_agent";
+    }, {
+        feedback_subgraph: "feedback_subgraph",
+        main_agent: "main_agent"
+    })
+
+    // Edges from Subgraphs
+    .addEdge("main_agent", "mode_manager")
+    
+    // Mode Manager Routing
+    .addConditionalEdges("mode_manager", (state) => {
+        if (state.activeMode === "feedback") {
+            return "feedback_subgraph"; // Immediate transition
+        }
+        return END;
+    }, {
+        feedback_subgraph: "feedback_subgraph",
+        [END]: END
+    })
+
+    .addEdge("feedback_subgraph", END);
+
+    this.agent = workflow.compile({ checkpointer: checkpointer });
   }
 
 
@@ -97,8 +170,7 @@ export class LanguageBuddyAgent {
         });
       }
 
-      // Session ID Logic for Tracing
-      const dateString = currentLocalTime.toISODate(); // YYYY-MM-DD in user's timezone
+      const dateString = currentLocalTime.toISODate();
       const sessionId = `${subscriber.connections.phone}_${dateString}`;
       
       const newMetadata = { 
@@ -106,23 +178,29 @@ export class LanguageBuddyAgent {
         sessionId 
       };
 
-      // Set Trace Attributes
       setSpanAttributes({
         'user.id': subscriber.connections.phone,
         'conversation.id': sessionId,
         'user.timezone': subscriber.profile.timezone || 'unknown'
       });
 
+      // Updated invoke call for StateGraph
       const result = await this.agent.invoke(
-        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')] },
+        { 
+            messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage ?? 'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.')],
+            subscriber: subscriber, // Pass subscriber to state
+            activeMode: "conversation" // Default mode
+        },
         { 
           configurable: { thread_id: subscriber.connections.phone },
           metadata: newMetadata
         }
       );
 
-      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${result.messages[result.messages.length - 1].content}`);
-      return result.messages[result.messages.length - 1].content || "initiateConversation() failed";
+      // Extract last message
+      const lastMsg = result.messages[result.messages.length - 1];
+      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
+      return lastMsg.content || "initiateConversation() failed";
     } catch (error) {
       logger.error({ err: error, subscriber: subscriber }, "Error in initiate method");
       return "An error occurred while initiating the conversation. Please try again later.";
@@ -178,7 +256,6 @@ export class LanguageBuddyAgent {
     const existingCheckpoint = await this.checkpointer.getTuple({ configurable: { thread_id: subscriber.connections.phone } });
     const existingMetadata = existingCheckpoint?.metadata || {};
 
-    // Session ID Logic for Tracing
     let sessionId = (existingMetadata as any)?.sessionId;
 
     if (!sessionId) {
@@ -192,7 +269,6 @@ export class LanguageBuddyAgent {
       sessionId
     };
 
-    // Set Trace Attributes
     setSpanAttributes({
       'user.id': subscriber.connections.phone,
       'conversation.id': sessionId,
@@ -200,15 +276,19 @@ export class LanguageBuddyAgent {
     });
 
     const response = await this.agent.invoke(
-        { messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)] },
+        { 
+            messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)],
+            subscriber: subscriber
+        },
         { 
           configurable: { thread_id: subscriber.connections.phone },
           metadata: newMetadata
         }
     );
 
-    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${response.messages[response.messages.length - 1].content}`);
-    return response.messages[response.messages.length - 1].content || "processUserMessage()?";
+    const lastMsg = response.messages[response.messages.length - 1];
+    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
+    return lastMsg.content || "processUserMessage()?";
   }
 
   async clearConversation(phone: string): Promise<void> {
@@ -228,6 +308,9 @@ export class LanguageBuddyAgent {
   async isOnboardingConversation(phone: string): Promise<boolean> {
     const checkpointTuple = await this.checkpointer.getTuple({ configurable: { thread_id: phone } });
     if (!checkpointTuple) return false;
+    // Check if activeMode is onboarding (if we add onboarding mode later)
+    // Or check existing metadata logic if we preserve it.
+    // The previous logic checked checkpoint metadata 'type'.
     return (checkpointTuple.metadata as any)?.type === 'onboarding';
   }
 
@@ -246,7 +329,6 @@ export class LanguageBuddyAgent {
   }
 
   async oneShotMessage(systemPrompt: string, language: string, phone: string): Promise<string> {
-    // We use the LLM directly to avoid persisting this interaction in the agent's state/checkpointer.
     const instruction = `You are a helpful assistant. Your task is to ask the user the following question in ${language}.
 If the text below is already in ${language}, output it exactly as is.
 If it is in a different language, translate it naturally into ${language}.
@@ -292,11 +374,19 @@ Question to ask: "${systemPrompt}"`;
 
       if (messages && Array.isArray(messages) && messages.length > 0) {
         const lastMessage = messages[messages.length - 1];
-        if (lastMessage.timestamp) {
-          const lastMessageTime = DateTime.fromISO(lastMessage.timestamp);
+        // Handle different message structures or types if necessary
+        // LangGraph messages usually don't have 'timestamp' property directly on the object unless added.
+        // But the previous implementation assumed it did.
+        // We will assume the previous implementation was correct about the shape or we need to fix it.
+        // Standard BaseMessage doesn't have timestamp.
+        // But if we use metadata?
+        // Let's keep the logic but wrap in try-catch/checks.
+        if ((lastMessage as any).timestamp) {
+          const lastMessageTime = DateTime.fromISO((lastMessage as any).timestamp);
           const now = DateTime.now();
           return now.diff(lastMessageTime, 'minutes').minutes;
         }
+         // Fallback: Checkpoint 'ts' (if available)?
       }
       return null;
     } catch (error) {

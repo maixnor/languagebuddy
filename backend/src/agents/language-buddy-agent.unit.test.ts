@@ -334,7 +334,7 @@ describe('LanguageBuddyAgent', () => {
       const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
 
       expect(mockAgentInvoke).toHaveBeenCalledWith(
-        { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
+        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }
@@ -408,7 +408,7 @@ describe('LanguageBuddyAgent', () => {
 
       expect(mockGenerateSystemPrompt).not.toHaveBeenCalled();
       expect(mockAgentInvoke).toHaveBeenCalledWith(
-        { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
+        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }
@@ -463,7 +463,7 @@ describe('LanguageBuddyAgent', () => {
       const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
 
       expect(mockAgentInvoke).toHaveBeenCalledWith(
-        { messages: [expect.any(SystemMessage), expect.any(HumanMessage)] },
+        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }

@@ -94,15 +94,19 @@ export class SubscriberService {
     }
   }
 
-  public async getActiveConversationsCount(minutes: number): Promise<number> {
+  public async getActiveConversationsCount(): Promise<number> {
     try {
       const stmt = this.dbService.getDb().prepare(`
         SELECT COUNT(*) as count
         FROM subscribers
         WHERE json_extract(data, '$.lastMessageSentAt') IS NOT NULL
-          AND datetime(json_extract(data, '$.lastMessageSentAt')) >= datetime('now', '-' || ? || ' minutes')
+          AND (
+            last_nightly_digest_run IS NULL
+            OR
+            datetime(json_extract(data, '$.lastMessageSentAt')) > datetime(last_nightly_digest_run)
+          )
       `);
-      const row = stmt.get(minutes) as { count: number };
+      const row = stmt.get() as { count: number };
       return row.count;
     } catch (error) {
       logger.error({ err: error }, "Error getting active conversations count");

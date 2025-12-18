@@ -41,7 +41,7 @@ export class MetricsService {
       // Use optimized SQL queries to get counts directly
       const total = await this.services.subscriberService.getTotalSubscribersCount();
       const active24h = await this.services.subscriberService.getActiveSubscribers24hCount();
-      const activeConvos = await this.services.subscriberService.getActiveConversationsCount(30); // 30 minutes
+      const activeConvos = await this.services.subscriberService.getActiveConversationsCount();
       const inactive3d = await this.services.subscriberService.getInactiveSubscribersCount(3); // 3 days
       const churned = await this.services.subscriberService.getChurnedSubscribersCount(7); // 7 days
       const premium = await this.services.subscriberService.getPremiumSubscribersCount();

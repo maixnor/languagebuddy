@@ -109,7 +109,7 @@ export const activeSubscribers24h = new Gauge({
 
 export const activeConversations = new Gauge({
   name: 'languagebuddy_conversations_active',
-  help: 'Number of currently active conversations (users active in last 30m)',
+  help: 'Number of currently active conversations (at least one user message since the last nightly reset)',
   registers: [metricsRegistry]
 });
 
