@@ -49,7 +49,8 @@ graph TD
     Router -- 'conversation' --> MainAgent
     Router -- 'feedback' --> FeedbackGraph
     Router -- 'quiz' --> QuizGraph
-    
+    Router -- 'onboarding' --> OnboardingGraph
+
     subgraph "Main Agent"
         MainAgent --> Tools
         Tools --> MainAgent
@@ -62,8 +63,16 @@ graph TD
         FeedbackNode -- "Ask Question" --> ReturnToUser([Wait for User])
         FeedbackNode -- "Complete" --> SaveFeedback[Save & Summarize]
     end
+
+    subgraph "Onboarding Graph"
+        OnboardingNode[Onboarding Agent]
+        OnboardingNode -- "Collect Info" --> ReturnToUser
+        OnboardingNode -- "Assess Skill" --> ReturnToUser
+        OnboardingNode -- "Complete" --> CreateSubscriber[Create Profile]
+    end
     
     SaveFeedback -- "Summary Message" --> ClearMode[Set Mode = 'conversation']
+    CreateSubscriber -- "Profile Created" --> ClearMode
     ClearMode --> MainAgent
 ```
 
@@ -84,17 +93,29 @@ Create a standalone Graph for the Feedback feature.
 - **Definition**: A `StateGraph` that manages the feedback interview flow (Sentiment check -> Rating -> Details -> Categorization).
 - **Output**: Returns a `FeedbackSummary`.
 
-### Phase 2: Core Agent Refactor
+### Phase 2: Onboarding Refactor (New)
+Migrate the implicit onboarding logic into a dedicated Graph.
+- **File**: `src/features/onboarding/onboarding.graph.ts`
+- **Definition**: A `StateGraph` that:
+    1.  **Profile Collection**: Iteratively collects Name, Timezone, Languages.
+    2.  **Skill Assessment**: Ramps up conversation difficulty until failure/ceiling is detected.
+    3.  **Finalization**: Creates the `Subscriber` record in the database.
+- **Trigger**: The Router checks if the `subscriber` record exists. If not, it routes to `OnboardingGraph`.
+- **Output**: A new Subscriber profile and an initial difficulty level.
+
+### Phase 3: Core Agent Refactor
 Refactor `LanguageBuddyAgent` to use `StateGraph` instead of `createReactAgent`.
 - **Node**: `main_conversation` (The existing ReAct agent logic).
 - **Node**: `feedback_subgraph` (Invokes the graph from Phase 1).
-- **Router**: Logic in `processUserMessage` (or a dedicated Router node) to direct traffic based on `state.activeMode`.
+- **Node**: `onboarding_subgraph` (Invokes the graph from Phase 2).
+- **Router**: Logic in `processUserMessage` (or a dedicated Router node) to direct traffic based on `state.activeMode` or Subscriber existence.
 
-### Phase 3: Tooling
+### Phase 4: Tooling
 - Update `tools` to include state-transition capabilities (e.g., `startFeedbackSession` tool that sets `state.activeMode = 'feedback'`).
 
 ## 4. Example Flow
 
+### Feedback Flow
 1.  **User**: "I want to complain."
 2.  **Main Agent**: Calls `startFeedbackSession()`. State becomes `mode='feedback'`.
 3.  **Router**: Directs next turn to `FeedbackGraph`.
@@ -105,5 +126,18 @@ Refactor `LanguageBuddyAgent` to use `StateGraph` instead of `createReactAgent`.
     - `subgraphState` wiped.
     - `messages`: [..., User: "I want to complain.", System: "User reported latency issues."]
 8.  **Main Agent**: "Thank you for letting us know. We'll look into the speed issues."
+
+### Onboarding Flow
+1.  **New User**: "Hello!"
+2.  **Router**: No Subscriber found. Routes to `OnboardingGraph`.
+3.  **Onboarding Agent**: "Hi! I'm LanguageBuddy. What's your name?"
+4.  **User**: "Max."
+5.  **Onboarding Agent**: "Nice to meet you, Max! What language do you want to learn?"
+... (Assessment ensues) ...
+6.  **Onboarding Agent**: Determines C1 level. Creates Subscriber.
+7.  **System**:
+    - `subgraphState` wiped.
+    - `messages`: [System: "User Max onboarded. Level: C1. Languages: German -> English."]
+8.  **Main Agent**: "Great Max, let's start practicing English at a C1 level!"
 
 This approach provides the **Structure** of a rigid process (Feedback) with the **Flexibility** of the LLM, without polluting the long-term context.
