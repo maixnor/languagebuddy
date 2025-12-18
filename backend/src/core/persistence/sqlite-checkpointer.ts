@@ -113,7 +113,7 @@ export class SqliteCheckpointSaver extends BaseCheckpointSaver {
       const createdAt = new Date().toISOString();
 
       // First, delete any existing checkpoint for this thread_id if we're saving a new one
-      // This implements a "latest checkpoint only" strategy similar to the Redis version's overwrite
+      // This implements a "latest checkpoint only" strategy
       this.dbService.getDb().prepare(`DELETE FROM checkpoints WHERE thread_id = ?`).run(threadId);
 
       const stmt = this.dbService.getDb().prepare(`
@@ -144,7 +144,6 @@ export class SqliteCheckpointSaver extends BaseCheckpointSaver {
       // This means we need to associate writes with the LATEST checkpoint for the thread
       // or derive checkpoint_id from 'config'. For now, let's assume we can query the latest checkpoint
       // or that the writes are implicitly linked to the current "active" checkpoint for the thread.
-      // The Redis implementation stored writes with a separate key that included taskId, with an expiry.
       // For SQLite, we should store them in `checkpoint_writes` table.
       // If no checkpoint_id is directly available, we might need to fetch the latest for the thread.
       // However, the `checkpoint_writes` schema requires `checkpoint_id`.
@@ -296,7 +295,7 @@ export class SqliteCheckpointSaver extends BaseCheckpointSaver {
         params.push(checkpointId);
       } else {
         // If no specific checkpointId, delete the latest one.
-        // This mirrors the Redis behavior where `deleteCheckpoint` was effectively deleting the single stored checkpoint.
+        // This effectively deletes the single stored checkpoint.
         query = `
           DELETE FROM checkpoints
           WHERE thread_id = ? AND checkpoint_id = (
@@ -317,10 +316,8 @@ export class SqliteCheckpointSaver extends BaseCheckpointSaver {
       // If more granular deletion of writes/blobs per *specific* checkpoint_id is needed, this logic needs refinement.
       // For now, if checkpointId is provided, delete writes/blobs for that specific checkpoint.
       // If not, and we deleted the latest, then corresponding writes/blobs are likely also gone with the thread.
-      // Given how Redis version treated it (deleting all for phone), `deleteThread` is more robust.
-      // The `deleteCheckpoint` from Redis was really deleting the entire thread's checkpoint.
-      // Let's make `deleteCheckpoint` in SQLite effectively delete the thread if no checkpointId is given,
-      // aligning with the Redis-saver's behavior, which had only one checkpoint per thread anyway.
+      // Use `deleteThread` if you want to ensure everything is wiped.
+      // Let's make `deleteCheckpoint` in SQLite effectively delete the thread if no checkpointId is given.
 
       if (!checkpointId) { // If deleting the "latest" implicitly means clearing the thread's active checkpoint
         this.dbService.getDb().prepare(`DELETE FROM checkpoint_writes WHERE thread_id = ?`).run(threadId);

@@ -6,14 +6,14 @@ sequenceDiagram
     participant WhatsApp
     participant Backend
     participant LLM
-    participant Redis
+    participant SQLite
 
     User->>WhatsApp: Sends message
     WhatsApp->>Backend: Forwards message (webhook)
-    Backend->>Redis: Check conversation state
+    Backend->>SQLite: Check conversation state
     Backend->>LLM: Send user message + context
     LLM-->>Backend: LLM response
-    Backend->>Redis: Update conversation state
+    Backend->>SQLite: Update conversation state
     Backend->>WhatsApp: Send reply to user
     WhatsApp-->>User: Delivers reply
 ```

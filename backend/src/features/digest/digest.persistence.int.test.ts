@@ -115,7 +115,7 @@ describe('Conversation Persistence & Clearance Bug', () => {
   });
 
   it('should fully clear conversation and start fresh without "resurrection"', async () => {
-    // 1. Seed a conversation state directly into Redis
+    // 1. Seed a conversation state directly into SQLite
     // This simulates a conversation having taken place
     const messages = [
       new HumanMessage("Hello"),
@@ -150,7 +150,7 @@ describe('Conversation Persistence & Clearance Bug', () => {
     // 2. Execute clear command
     await agent.clearConversation(testPhone);
 
-    // 3. Verify state is gone from Redis
+    // 3. Verify state is gone from SQLite
     const existsAfter = await checkpointer.get({ configurable: { thread_id: testPhone } });
     expect(existsAfter).toBeUndefined();
     expect(await agent.currentlyInActiveConversation(testPhone)).toBe(false);
@@ -164,7 +164,7 @@ describe('Conversation Persistence & Clearance Bug', () => {
     // const lastCallArgs = mockLlm.bindTools.mock.calls[0] || mockLlm.invoke.mock.calls[0]; 
     
     // Since we can't easily spy on the internal compiled graph's calls to the LLM without deep mocking,
-    // let's verify the NEW checkpoint state in Redis.
+    // let's verify the NEW checkpoint state in SQLite.
     
     // checkpointer.get() returns the Checkpoint object directly, not the Tuple
     const newCheckpoint = await checkpointer.get({ configurable: { thread_id: testPhone } });

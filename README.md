@@ -14,7 +14,7 @@ git clone https://github.com/maixnor/tours.git && cd tours
 
 Use this mode for testing the backend. The Whatsapp API can only be configured to one endpoint at a time, so the CLI simulates a bad Whatsapp Server where the 
 backend then sends the messages to the CLI instead of Whatsapp. This way you can test the backend without having to set up a Whatsapp API.
-It still saves into the same redis cache. Be aware of that.
+It saves into SQLite. Be aware of that.
 
 In the CLI you can change the user phone number on the fly and test different users, if possible don't use live phone numbers to not alter the real users' conversations.
 

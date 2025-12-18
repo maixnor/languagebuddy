@@ -24,7 +24,7 @@ export class SubscriberService {  private static instance: SubscriberService; //
         if (!subscriber.status) { subscriber.status = "active"; }
         this.saveSubscriber(subscriber).catch(err => logger.error({ err }, "Error caching subscriber after setting signedUpAt"));
     } else if (!(subscriber.signedUpAt instanceof Date)) {
-        // Try to parse string (e.g. ISO string from Redis/JSON)
+        // Try to parse string (e.g. ISO string from SQLite/JSON)
         const parsed = new Date(subscriber.signedUpAt);
         if (!isNaN(parsed.getTime())) {
             subscriber.signedUpAt = parsed;

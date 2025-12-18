@@ -8,6 +8,7 @@
 
   outputs = { self, nixpkgs }:
     let
+      lib = nixpkgs.lib; # Define lib here
       # Systems supported
       allSystems = [
         "x86_64-linux" # 64-bit Intel/AMD Linux
@@ -31,7 +32,7 @@
             nodejs_22
           ];
 
-          src = self;
+          src = lib.cleanSource ./.; # Use lib.cleanSource
 
           npmDeps = pkgs.importNpmLock {
             npmRoot = ./.;
@@ -40,7 +41,9 @@
           npmConfigHook = pkgs.importNpmLock.npmConfigHook;
 
           buildPhase = ''
+            node scripts/generate-build-info.js # Run script first
             npm run build:full
+            ls -F dist/src/ # Add this line to list contents
           '';
 
           installPhase = ''

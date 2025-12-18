@@ -8,18 +8,16 @@ stream-logs instance:
   ssh wb.maixnor.com 'journalctl -u languagebuddy-api-{{instance}}.service -n 50 -f' | grep --line-buffered "msg\":\"" | sed -u -n "s/.*\"msg\":\"\([^\"]*\)\".*/\1/p"
 
 deploy-prod:
-  cd .. && nix run .#deploy-prod
+  cd .. && just deploy-backend-prod
 
 deploy-test:
-  cd .. && nix run .#deploy-test
-
-checkpoint phone:
-  sh redis-connect.sh get checkpoint:{{phone}} | jq '.checkpoint.channel_values.messages[].kwargs.content' 
+  cd .. && just deploy-backend-test
 
 db-clean:
   @echo "Cleaning SQLite database..."
   @rm -f data/languagebuddy.sqlite
 
-db-migrate: db-clean
-  @echo "Running data migration..."
-  npm run migrate:data
+db-download:
+  @echo "Downloading Test database from server"
+  scp wb.maixnor.com:/var/lib/languagebuddy-api-test/test.sqlite data/languagebuddy.sqlite
+

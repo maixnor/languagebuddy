@@ -1,7 +1,7 @@
 /**
  * Integration tests focused on conversation count tracking
  * Tests with REAL SQLite to catch bugs in:
- * - Redis key expiration timing
+ * - Concurrent modification timing
  * - Daily increments across timezone boundaries
  * - Race conditions on concurrent messages
  * - SET vs INCR logic bugs
