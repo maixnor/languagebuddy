@@ -99,15 +99,6 @@ export function generateRegularSystemPromptForSubscriber(
   - Personality preference: ${subscriber.metadata.personality}
   - Mistake tolerance: ${mistakeTolerance}`;
 
-  const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
-  if (missingFields.length > 0) {
-      prompt += `\n\n  SPECIAL TASK: COLLECT MISSING INFORMATION
-  The following profile information is missing: ${missingFields.join(', ')}.
-  PROACTIVELY ask the user for this information. Weave it naturally into the conversation, or ask directly if appropriate.
-  For example, if 'timezone' is missing, ask: "By the way, what time zone are you in or which city is closest to you? I want to make sure I don't message you too late at night."
-  Use the 'update_subscriber_profile' tool to save their answer.`;
-  }
-
   if (
     subscriber.metadata?.digests?.length === 1 &&
     !subscriber.metadata.mistakeTolerance

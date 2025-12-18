@@ -15,6 +15,7 @@ import { tool } from "@langchain/core/tools";
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { AgentState } from "./agent.types";
 import { createFeedbackGraph } from "../features/feedback/feedback.graph";
+import { createOnboardingGraph } from "../features/onboarding/onboarding.graph";
 
 import {
   updateSubscriberTool,
@@ -67,7 +68,11 @@ export class LanguageBuddyAgent {
     // 2. Create Feedback Subgraph
     const feedbackSubgraph = createFeedbackGraph(llm, feedbackService);
 
-    // 3. Define Mode Manager Node
+    // 3. Create Onboarding Subgraph
+    // Assuming SubscriberService is already initialized by ServiceContainer
+    const onboardingSubgraph = createOnboardingGraph(llm, SubscriberService.getInstance());
+
+    // 4. Define Mode Manager Node
     // This node inspects the conversation history to see if we should switch modes.
     const modeManager = (state: AgentState) => {
         const messages = state.messages;
@@ -82,7 +87,7 @@ export class LanguageBuddyAgent {
         return { };
     };
 
-    // 4. Build Parent Graph
+    // 5. Build Parent Graph
     const workflow = new StateGraph<AgentState>({
         channels: {
             messages: { value: (x, y) => x.concat(y), default: () => [] },
@@ -93,15 +98,20 @@ export class LanguageBuddyAgent {
     })
     .addNode("main_agent", mainAgentSubgraph)
     .addNode("feedback_subgraph", feedbackSubgraph)
+    .addNode("onboarding_subgraph", onboardingSubgraph)
     .addNode("mode_manager", modeManager)
     
     // Router Logic
     .addConditionalEdges(START, (state) => {
+        if (state.subscriber?.status === 'onboarding') {
+            return "onboarding_subgraph";
+        }
         if (state.activeMode === "feedback") {
             return "feedback_subgraph";
         }
         return "main_agent";
     }, {
+        onboarding_subgraph: "onboarding_subgraph",
         feedback_subgraph: "feedback_subgraph",
         main_agent: "main_agent"
     })
@@ -120,7 +130,8 @@ export class LanguageBuddyAgent {
         [END]: END
     })
 
-    .addEdge("feedback_subgraph", END);
+    .addEdge("feedback_subgraph", END)
+    .addEdge("onboarding_subgraph", END);
 
     this.agent = workflow.compile({ checkpointer: checkpointer });
   }

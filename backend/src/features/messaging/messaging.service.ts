@@ -128,85 +128,26 @@ export class MessagingService {
 
   private async processTextMessage(message: WebhookMessage): Promise<void> {
     const phone = sanitizePhoneNumber(message.from);
-    let existingSubscriber = await this.services.subscriberService.getSubscriber(phone);
+    let subscriber = await this.services.subscriberService.getSubscriber(phone);
+
+    // If subscriber doesn't exist, create one in 'onboarding' status
+    if (!subscriber) {
+      subscriber = await this.services.subscriberService.createSubscriber(phone);
+      logger.info({ phone }, "Created new subscriber for onboarding");
+    }
 
     // Get subscriber type for metrics
-    // If existingSubscriber is null, assume 'free' for initial message or calculate based on potential future subscriber
-    const subscriberType = existingSubscriber?.isPremium ? 'premium' :
-                           (existingSubscriber && this.services.subscriberService.getDaysSinceSignup(existingSubscriber) < config.subscription.trialDays ? 'trial' : 'free');
+    const subscriberType = subscriber.isPremium ? 'premium' :
+                           (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
 
     // Record user message
     recordConversationMessage('user', subscriberType);
-
-    // 1. Handle New/Onboarding Users (No Subscriber Profile)
-    if (!existingSubscriber) {
-      const hasActiveConversation = await this.services.languageBuddyAgent.currentlyInActiveConversation(phone);
-      
-      if (!hasActiveConversation) {
-         // Start Onboarding
-         await this.startNewUserOnboarding(phone, message.text!.body);
-      } else {
-         // Continue Onboarding
-         await this.continueOnboarding(phone, message.text!.body);
-      }
-      return;
-    }
-
-    // 2. Handle Transition from Onboarding to Regular Subscriber
-    // If a subscriber exists but the conversation is still tagged as 'onboarding', we need to reset.
-    if (await this.services.languageBuddyAgent.isOnboardingConversation(phone)) {
-      await this.services.languageBuddyAgent.clearConversation(existingSubscriber.connections.phone);
-
-      // 1. Send profile created confirmation message
-      await this.services.whatsappService.sendMessage(
-        phone,
-        "🎉 Great! Your Language Buddy profile has been successfully created."
-      );
-      recordConversationMessage('ai', subscriberType); // AI response
-
-      // 2. Initiate a new conversation (like a daily proactive start)
-      const currentLocalTime = DateTime.local().setZone(existingSubscriber.profile.timezone || config.fallbackTimezone);
-      const lastDigestTopic = existingSubscriber.metadata?.digests?.[0]?.topic || null;
-
-      let systemPromptForNewConversation = generateSystemPrompt({
-        subscriber: existingSubscriber,
-        conversationDurationMinutes: null,
-        timeSinceLastMessageMinutes: null,
-        currentLocalTime,
-        lastDigestTopic,
-      });
-
-      systemPromptForNewConversation += `\n\nTASK: INITIATE NEW DAY CONVERSATION
-    - This is a fresh start after a nightly reset (or in this case, after onboarding).
-    - Initiate a conversation naturally.
-    - If there's a topic from the last digest, you might reference it or start something new.
-    - Don't ask "Do you want to practice?". Just start talking.
-    - Disguise your conversation starters as trying to find out more information about the user if appropriate.
-    `;
-
-      const initialConversationMessage = await this.services.languageBuddyAgent.initiateConversation(
-        existingSubscriber,
-        'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
-        systemPromptForNewConversation, // The prompt was in the wrong order. This is a fix.
-        { type: 'regular' }
-      );
-
-      if (initialConversationMessage) {
-        await this.services.whatsappService.sendMessage(phone, initialConversationMessage);
-        recordConversationMessage('ai', subscriberType); // AI response
-      } else {
-        logger.error({ phone }, "Failed to initiate first conversation after onboarding completion.");
-      }
-
-      // Exit early, as the conversation has been re-initiated by the agent
-      return;
-    }
-
-    const subscriber = existingSubscriber;
     
-    // Update lastMessageSentAt to mark user activity (strictly for user replies)
+    // Update lastMessageSentAt (for active subscribers)
     try {
-      await this.services.subscriberService.updateSubscriber(phone, { lastMessageSentAt: new Date() });
+      if (subscriber.status === 'active') {
+          await this.services.subscriberService.updateSubscriber(phone, { lastMessageSentAt: new Date() });
+      }
     } catch (error) {
       logger.error({ err: error, phone }, "Failed to update lastMessageSentAt");
     }
@@ -229,13 +170,13 @@ export class MessagingService {
         phone, 
         "You are sending messages too quickly. Please wait a few seconds between messages."
       );
-      recordThrottledMessage(); // Increment throttled message metric
-      recordConversationMessage('ai', subscriberType); // AI response (throttling message)
+      recordThrottledMessage();
+      recordConversationMessage('ai', subscriberType);
       return;
     }
 
-    // Check throttling and subscription limits
-    if (this.services.subscriberService.shouldThrottle(subscriber)) {
+    // Check throttling and subscription limits (skip for onboarding)
+    if (subscriber.status === 'active' && this.services.subscriberService.shouldThrottle(subscriber)) {
       const hasPaid = await this.services.subscriptionService.checkSubscription(phone);
       if (hasPaid) {
         if (!subscriber.isPremium) {
@@ -250,67 +191,14 @@ export class MessagingService {
           phone, 
           `⏳ Your 7-day trial has ended. To continue your language journey with unlimited conversations, please subscribe here: ${paymentLink}`
         );
-        recordConversationMessage('ai', subscriberType); // AI response (throttling message)
-        recordThrottledMessage(); // Increment throttled message metric
+        recordConversationMessage('ai', subscriberType);
+        recordThrottledMessage();
         return;
       }
     }
 
-    // Handle missing profile information
-    const missingField = getNextMissingField(subscriber);
-    if (missingField != null) {
-      logger.info({ 
-        phone: phone.slice(-4), 
-        missingField,
-        subscriberProfile: subscriber.profile 
-      }, "🔧 Missing profile field detected, instructing Agent to gather info");
-
-      const prompt = getPromptForField(missingField);
-      
-      const systemPromptOverride = `SYSTEM ALERT: The user's profile is incomplete. Field '${missingField}' is missing.
-YOUR GOAL: Obtain the '${missingField}' from the user.
-
-INSTRUCTIONS:
-1. ANALYZE the user's latest message ("${message.text?.body || ''}").
-2. If it contains the information for '${missingField}', USE the 'updateSubscriber' tool to save it immediately.
-3. If it does NOT contain the info, ASK the user: "${prompt}" (translate to user's language if needed).
-4. Do not change the topic until this field is filled.`;
-
-      await this.handleRegularConversation(subscriber, message, systemPromptOverride);
-      return;
-    }
-
-    // Process regular conversation
+    // Process regular conversation (or onboarding via agent router)
     await this.handleRegularConversation(subscriber, message);
-  }
-
-  private async startNewUserOnboarding(phone: string, messageBody: string): Promise<void> {
-    const subscriberForPrompt = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
-    // Get subscriber type for metrics (for new users, assume free/trial depending on days since signup)
-    const subscriberType = 'free'; // New user starts as free/trial
-    const systemPrompt = generateOnboardingSystemPrompt();
-    const welcomeMessage = await this.services.languageBuddyAgent.initiateConversation(
-      subscriberForPrompt,
-      messageBody, // User's actual message
-      systemPrompt, // Actual system prompt
-      { type: 'onboarding' }
-    );
-    await this.services.whatsappService.sendMessage(phone, welcomeMessage);
-    recordConversationMessage('ai', subscriberType); // AI response
-  }
-
-  private async continueOnboarding(phone: string, messageBody: string): Promise<void> {
-    const tempSubscriber = { connections: { phone }, profile: { name: "", speakingLanguages: [], learningLanguages: [] }, metadata: {} } as Subscriber;
-    // Get subscriber type for metrics (for new users, assume free/trial depending on days since signup)
-    const subscriberType = 'free'; // New user continues as free/trial
-    const systemPrompt = generateOnboardingSystemPrompt();
-    const response = await this.services.languageBuddyAgent.processUserMessage(
-      tempSubscriber,
-      messageBody,
-      systemPrompt
-    );
-    await this.services.whatsappService.sendMessage(phone, response);
-    recordConversationMessage('ai', subscriberType); // AI response
   }
 
   
