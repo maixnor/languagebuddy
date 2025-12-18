@@ -761,7 +761,27 @@ export class SubscriberService {
 
     let prompt = generateRegularSystemPromptForSubscriber(subscriber, targetLanguage);
 
-    prompt += `
+    const daysSinceLastUserMessage = subscriber.lastMessageSentAt
+        ? Math.floor(DateTime.now().startOf('day').diff(DateTime.fromJSDate(subscriber.lastMessageSentAt).startOf('day'), 'days').days)
+        : 0;
+
+    const isReEngagementDay = daysSinceLastUserMessage > 0 && daysSinceLastUserMessage % 3 === 0;
+
+    if (isReEngagementDay) {
+        prompt += `
+
+TASK: RE-ENGAGEMENT (USER HAS BEEN INACTIVE FOR ${daysSinceLastUserMessage} DAYS)
+    - The user hasn't written back in ${daysSinceLastUserMessage} days. Life gets in the way!
+    - GOAL: Get a response. DO NOT focus on practice or learning today.
+    - Make the conversation EASY and low-pressure.
+    - Ask a simple, personal question or share something interesting to spark curiosity.
+    - Avoid correcting mistakes unless they are incomprehensible.
+    - Be warm and welcoming, acknowledging "life gets in the way".
+    - DO NOT ask "Do you want to practice?".
+    - CRITICAL: Check the "RECENT CONVERSATION HISTORY" section for "YOUR PREVIOUS MISTAKES". If any are listed, apologize for them briefly.
+    `;
+    } else {
+        prompt += `
 
 TASK: INITIATE NEW DAY CONVERSATION
     - This is a fresh start after a nightly reset.
@@ -771,6 +791,7 @@ TASK: INITIATE NEW DAY CONVERSATION
     - Don't ask "Do you want to practice?". Just start talking.
     - Disguise your conversation starters as trying to find out more information about the user if appropriate.
     `;
+    }
     return prompt;
   }
 
