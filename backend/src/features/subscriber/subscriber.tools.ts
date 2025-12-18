@@ -66,6 +66,9 @@ export const updateSubscriberTool: DynamicStructuredTool =
           if (updates.profile.timezone) {
             domainUpdates.profile.timezone = updates.profile.timezone;
           }
+          if (updates.profile.referralSource) {
+            domainUpdates.profile.referralSource = updates.profile.referralSource;
+          }
         }
 
         if (updates.metadata) {
@@ -117,6 +120,7 @@ export const createSubscriberTool: DynamicStructuredTool =
         .string()
         .describe("The language the user wants to learn"),
       timezone: z.string().describe("The user's timezone (e.g., 'America/New_York', 'London', 'UTC-5')"),
+      referralSource: z.string().describe("How the user heard about the service. Options: friends, maixnor, discord, reddit, advertisements, or other (specify details)."),
       assessedLevel: z
         .enum(["A1", "A2", "B1", "B2", "C1", "C2"])
         .describe("The assessed language level from the conversation"),
@@ -222,6 +226,7 @@ export const createSubscriberTool: DynamicStructuredTool =
               },
             ],
             timezone: input.timezone,
+            referralSource: input.referralSource,
           },
         };
 

@@ -11,6 +11,7 @@ export const ProfileUpdateContract = z.object({
   speakingLanguages: z.array(LanguageContract).optional().nullable(),
   learningLanguages: z.array(LanguageContract).optional().nullable(),
   timezone: z.string().optional().nullable(),
+  referralSource: z.string().optional().nullable(),
 });
 
 export const MessagingPreferencesContract = z.object({
@@ -39,6 +40,7 @@ export const SubscriberProfileSchema = z.object({
   learningLanguages: z.array(LanguageContract),
   timezone: z.string(),
   messagingPreferences: MessagingPreferencesContract.optional().nullable(),
+  referralSource: z.string().optional(),
 });
 
 export type SubscriberProfile = z.infer<typeof SubscriberProfileSchema>;

@@ -80,6 +80,7 @@ export interface Subscriber {
       times?: string[]; // for fixed
       fuzzinessMinutes?: number;
     };
+    referralSource?: string;
     // favoriteColor?: string;
   };
   signedUpAt?: Date;

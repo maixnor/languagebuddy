@@ -123,4 +123,35 @@ describe('SubscriberService (CRUD Integration - SQLite)', () => {
     const result = await subscriberService.deleteSubscriber(nonExistentPhone);
     expect(result).toBe(false);
   });
+
+  it('should save and retrieve referralSource', async () => {
+    await subscriberService.createSubscriber(phoneNumber);
+    
+    // Test updating with referral source
+    await subscriberService.updateSubscriber(phoneNumber, {
+        profile: {
+            name: 'Test User',
+            speakingLanguages: [],
+            learningLanguages: [],
+            referralSource: 'reddit'
+        }
+    });
+
+    let subscriber = await subscriberService.getSubscriber(phoneNumber);
+    expect(subscriber?.profile.referralSource).toBe('reddit');
+
+    // Test creating with referral source (simulating onboarding completion)
+    const phone2 = `+1${Math.floor(Math.random() * 10000000000)}`;
+    await subscriberService.createSubscriber(phone2, {
+        profile: {
+            name: 'Another User',
+            speakingLanguages: [],
+            learningLanguages: [],
+            referralSource: 'maixnor'
+        }
+    });
+    
+    subscriber = await subscriberService.getSubscriber(phone2);
+    expect(subscriber?.profile.referralSource).toBe('maixnor');
+  });
 });
