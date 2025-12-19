@@ -137,7 +137,7 @@ export class LanguageBuddyAgent {
   }
 
 
-  async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string, metadata?: Record<string, any>): Promise<string> {
+  async initiateConversation(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string, metadata?: Record<string, any>): Promise<{ response: string; updatedSubscriber: Subscriber }> {
     try {
       SubscriberService.getInstance().hydrateSubscriber(subscriber);
 
@@ -150,7 +150,7 @@ export class LanguageBuddyAgent {
 
       if ((hour >= 22 || hour < 6) && (timeSinceLastMessageMinutes !== null && timeSinceLastMessageMinutes >= 6 * 60)) {
         logger.info(`🌙 (${subscriber.connections.phone.slice(-4)}) Pre-empting conversation: Night time for user.`);
-        return `It's getting late for you (${currentLocalTime.toFormat('hh:mm a')}), ${subscriber.profile.name}. Perhaps we should continue our English practice tomorrow? Have a good night!`;
+        return { response: `It's getting late for you (${currentLocalTime.toFormat('hh:mm a')}), ${subscriber.profile.name}. Perhaps we should continue our English practice tomorrow? Have a good night!`, updatedSubscriber: subscriber };
       }
 
       let systemPrompt: string;
@@ -218,7 +218,7 @@ export class LanguageBuddyAgent {
     }
   }
 
-  async processUserMessage(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<string> {
+  async processUserMessage(subscriber: Subscriber, humanMessage: string, systemPromptOverride?: string): Promise<{ response: string; updatedSubscriber: Subscriber }> {
     if (!subscriber) {
         logger.error("Subscriber is required to process user message");
         throw new Error("Subscriber is required to process user message");

@@ -50,6 +50,13 @@ const mockWhatsappDeduplicationService = {
   isThrottled: jest.fn(),
 };
 
+const mockTelegramService = {
+  processUpdate: jest.fn(),
+  sendMessage: jest.fn(),
+  setWebhook: jest.fn(),
+  getMe: jest.fn(),
+};
+
 const mockStripeService = {
   checkSubscription: jest.fn(),
   getPaymentLink: jest.fn(),
@@ -61,6 +68,7 @@ const mockServiceContainer: ServiceContainer = {
   languageBuddyAgent: mockLanguageBuddyAgent as any,
   whatsappService: mockWhatsappService as any,
   whatsappDeduplicationService: mockWhatsappDeduplicationService as any,
+  telegramService: mockTelegramService as any,
   stripeService: mockStripeService as any,
   digestService: {} as any, // Not used in this test
   schedulingService: {} as any, // Not used in this test
@@ -76,8 +84,91 @@ describe('MessagingService', () => {
     jest.clearAllMocks();
     jest.restoreAllMocks(); // Restore mocks to original implementation/state
     messagingService = new MessagingService(mockServiceContainer as any);
+    // Add getSubscriberByTelegramChatId mock which was missing
+    (mockSubscriberService as any).getSubscriberByTelegramChatId = jest.fn();
   }); // <--- Added missing closing brace
 
+
+  describe('handleTelegramWebhookMessage', () => {
+      const mockRes = {
+          sendStatus: jest.fn(),
+      };
+
+      it('should create new subscriber if not found and process message', async () => {
+          const body = {
+              update_id: 12345,
+              message: {
+                  chat: { id: 999 },
+                  text: "Hello Telegram",
+                  from: { username: "tg_user" }
+              }
+          };
+
+          (mockSubscriberService as any).getSubscriberByTelegramChatId.mockResolvedValue(null);
+          mockSubscriberService.createSubscriber.mockResolvedValue({
+              connections: { phone: '+999', telegram: { chatId: 999, username: '@tg_user' } },
+              profile: { timezone: 'UTC' },
+              status: 'active'
+          });
+          mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(false);
+          mockLanguageBuddyAgent.initiateConversation.mockResolvedValue({
+              response: "Telegram Reply",
+              updatedSubscriber: {}
+          });
+
+          await messagingService.handleTelegramWebhookMessage(body, mockRes);
+
+          expect(mockSubscriberService.createSubscriber).toHaveBeenCalledWith('+999', expect.objectContaining({
+              connections: {
+                  phone: '+999',
+                  telegram: { chatId: 999, username: '@tg_user' }
+              }
+          }));
+          expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalled();
+          expect(mockTelegramService.sendMessage).toHaveBeenCalledWith({
+              chat_id: 999,
+              text: "Telegram Reply"
+          });
+          expect(mockRes.sendStatus).toHaveBeenCalledWith(200);
+      });
+
+      it('should use existing subscriber and update username if changed', async () => {
+          const body = {
+              update_id: 12345,
+              message: {
+                  chat: { id: 888 },
+                  text: "Hello Again",
+                  from: { username: "new_username" }
+              }
+          };
+
+          const existingSubscriber = {
+              connections: { phone: '+888', telegram: { chatId: 888, username: '@old_username' } },
+              profile: { timezone: 'UTC' },
+              status: 'active'
+          };
+
+          (mockSubscriberService as any).getSubscriberByTelegramChatId.mockResolvedValue(existingSubscriber);
+          mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(true);
+          mockLanguageBuddyAgent.processUserMessage.mockResolvedValue({
+              response: "Reply Back",
+              updatedSubscriber: existingSubscriber
+          });
+
+          await messagingService.handleTelegramWebhookMessage(body, mockRes);
+
+          expect(mockSubscriberService.updateSubscriber).toHaveBeenCalledWith('+888', expect.objectContaining({
+              connections: expect.objectContaining({
+                  telegram: { chatId: 888, username: '@new_username' }
+              })
+          }));
+          expect(mockLanguageBuddyAgent.processUserMessage).toHaveBeenCalled();
+          expect(mockTelegramService.sendMessage).toHaveBeenCalledWith({
+              chat_id: 888,
+              text: "Reply Back"
+          });
+      });
+  });
 
   describe('handleWebhookMessage', () => {
     const mockRes = {

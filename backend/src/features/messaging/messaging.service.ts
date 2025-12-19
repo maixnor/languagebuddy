@@ -20,13 +20,102 @@ export class MessagingService {
     try {
       const update: TelegramUpdate = body;
       logger.info('Received Telegram update', { update_id: update.update_id });
-      // For now, just pass the update to the telegramService to echo
-      await this.services.telegramService.processUpdate(update);
+
+      if (!update.message || !update.message.text || !update.message.chat) {
+         res.sendStatus(200);
+         return;
+      }
+
+      const chatId = update.message.chat.id;
+      const text = update.message.text;
+      const username = update.message.from?.username ? `@${update.message.from.username}` : undefined;
+
+      // 1. Find or Create Subscriber
+      let subscriber = await this.services.subscriberService.getSubscriberByTelegramChatId(chatId);
+      
+      if (!subscriber) {
+          // Create new subscriber with pseudo-phone
+          // Using a prefix to avoid collision with real numbers, though sanitizePhoneNumber enforces +digits.
+          // We use the Chat ID directly if possible.
+          const pseudoPhone = `+${chatId}`; 
+          
+          subscriber = await this.services.subscriberService.createSubscriber(pseudoPhone, {
+              connections: {
+                  phone: pseudoPhone,
+                  telegram: {
+                      chatId: chatId,
+                      username: username
+                  }
+              }
+          });
+      } else {
+          // Update username if changed
+          if (subscriber.connections.telegram?.username !== username) {
+             const updatedConnections = {
+                 ...subscriber.connections,
+                 telegram: {
+                     chatId,
+                     username
+                 }
+             };
+             await this.services.subscriberService.updateSubscriber(subscriber.connections.phone, {
+                 connections: updatedConnections
+             });
+             subscriber.connections = updatedConnections;
+          }
+      }
+
+      await this.handleTelegramConversation(subscriber, text, chatId);
       res.sendStatus(200);
     } catch (error) {
       logger.error('Failed to process Telegram webhook', { error, body });
       res.sendStatus(400);
     }
+  }
+
+  private async handleTelegramConversation(subscriber: Subscriber, text: string, chatId: number): Promise<void> {
+    const phone = subscriber.connections.phone;
+    
+    // Determine subscriber type for metrics
+    let subscriberType: 'premium' | 'trial' | 'free' = 'trial';
+    if (subscriber) {
+      subscriberType = subscriber.isPremium ? 'premium' :
+                       (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
+    }
+
+    recordConversationMessage('user', subscriberType);
+
+    await traceConversation('process_telegram_message', phone, async (span) => {
+        let agentResult: { response: string; updatedSubscriber: Subscriber };
+
+        // Check for active conversation
+        if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
+             agentResult = await this.services.languageBuddyAgent.initiateConversation(
+                 subscriber,
+                 text
+             );
+        } else {
+             agentResult = await this.services.languageBuddyAgent.processUserMessage(
+                 subscriber,
+                 text
+             );
+        }
+        
+        const response = agentResult.response;
+        
+        if (response && response.trim() !== "") {
+            await this.services.telegramService.sendMessage({
+                chat_id: chatId,
+                text: response
+            });
+            
+            recordConversationMessage('ai', subscriberType);
+            trackEvent("telegram_response_sent", {
+                userPhone: phone, // using pseudo-phone
+                responseLength: response.length
+            });
+        }
+    });
   }
 
   async handleInitiateRequest(body: any, res: any): Promise<void> {
@@ -137,7 +226,7 @@ export class MessagingService {
     }
 
     // Get subscriber type for metrics
-    let subscriberType: 'premium' | 'trial' | 'free' | 'new' = 'new';
+    let subscriberType: 'premium' | 'trial' | 'free' = 'trial';
     if (subscriber) {
       subscriberType = subscriber.isPremium ? 'premium' :
                        (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
@@ -208,7 +297,13 @@ export class MessagingService {
   private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage, externalSystemPromptOverride?: string): Promise<void> {
     const phone = subscriber.connections.phone;
     const startTime = Date.now();
-    let subscriberType: 'premium' | 'trial' | 'free' | 'new' = 'new'; // Declared here
+    
+    // Determine subscriber type for metrics (re-calculate as it might change or to ensure availability)
+    let subscriberType: 'premium' | 'trial' | 'free' = 'trial';
+    if (subscriber) {
+      subscriberType = subscriber.isPremium ? 'premium' :
+                       (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
+    }
 
     // Wrap the entire conversation handling in a trace span
     await traceConversation('process_message', phone, async (span) => {

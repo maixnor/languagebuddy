@@ -67,7 +67,10 @@ export interface Subscriber {
   connections: {
     phone: string;
     // discord: string;
-    // telegram: string;
+    telegram?: {
+      chatId: number;
+      username?: string;
+    };
     // instagram: string;
   };
   profile: {

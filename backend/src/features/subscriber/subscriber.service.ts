@@ -180,6 +180,26 @@ export class SubscriberService {
     return subscriber as Subscriber;
   }
 
+  async getSubscriberByTelegramChatId(chatId: number): Promise<Subscriber | null> {
+    try {
+      // Query using JSON extraction to find the subscriber with the matching telegram chatId
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT phone_number 
+        FROM subscribers 
+        WHERE json_extract(data, '$.connections.telegram.chatId') = ?
+      `);
+      
+      const row = stmt.get(chatId) as { phone_number: string } | undefined;
+
+      if (!row) return null;
+
+      return await this.getSubscriber(row.phone_number);
+    } catch (error) {
+      logger.error({ err: error, chatId }, "Error getting subscriber by Telegram Chat ID");
+      return null;
+    }
+  }
+
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
       const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
