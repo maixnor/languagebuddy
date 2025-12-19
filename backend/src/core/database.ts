@@ -322,6 +322,16 @@ export class DatabaseService {
         expires_at DATETIME NOT NULL,
         FOREIGN KEY (subscriber_phone) REFERENCES subscribers(phone_number) ON DELETE CASCADE
       );
+      `,
+      `
+      DROP TABLE IF EXISTS processed_messages_new;
+      CREATE TABLE IF NOT EXISTS processed_messages_new (
+        message_id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO processed_messages_new (message_id, created_at) SELECT message_id, created_at FROM processed_messages;
+      DROP TABLE processed_messages;
+      ALTER TABLE processed_messages_new RENAME TO processed_messages;
       `
     ];
 

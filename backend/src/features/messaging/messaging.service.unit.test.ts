@@ -47,7 +47,6 @@ const mockWhatsappService = {
 
 const mockWhatsappDeduplicationService = {
   recordMessageProcessed: jest.fn(),
-  isThrottled: jest.fn(),
 };
 
 const mockTelegramService = {
@@ -197,7 +196,7 @@ describe('MessagingService', () => {
 
       await messagingService.handleWebhookMessage(body, mockRes);
 
-      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id', '1234567890');
+      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id');
       expect(mockRes.sendStatus).toHaveBeenCalledWith(200);
       // Should NOT call processTextMessage logic (which would trigger other mocks)
       expect(mockSubscriberService.getSubscriber).not.toHaveBeenCalled();
@@ -245,7 +244,7 @@ describe('MessagingService', () => {
 
       await messagingService.handleWebhookMessage(body, mockRes);
 
-      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id', '1234567890');
+      expect(mockWhatsappDeduplicationService.recordMessageProcessed).toHaveBeenCalledWith('msg-id');
       expect(mockRes.sendStatus).toHaveBeenCalledWith(200);
       // verify it proceeded to processing
       expect(mockLanguageBuddyAgent.currentlyInActiveConversation).toHaveBeenCalled(); 

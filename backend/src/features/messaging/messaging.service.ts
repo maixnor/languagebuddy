@@ -206,7 +206,7 @@ export class MessagingService {
 
     // Check for duplicate messages
     // We use recordMessageProcessed which tries to insert and returns true if it was a duplicate
-    if (message.id && await this.services.whatsappDeduplicationService.recordMessageProcessed(message.id, message.from)) {
+    if (message.id && await this.services.whatsappDeduplicationService.recordMessageProcessed(message.id)) {
       logger.trace({ messageId: message.id }, 'Duplicate webhook event ignored.');
       res.sendStatus(200);
       return;
@@ -273,18 +273,6 @@ export class MessagingService {
       this.services.languageBuddyAgent
     ) !== 'nothing') {
       await this.services.whatsappService.markMessageAsRead(message.id);
-      return;
-    }
-
-    // Check rate limiting (spam protection)
-    if (await this.services.whatsappDeduplicationService.isThrottled(phone)) {
-      logger.info({ phone }, 'User is throttled (rate limit), message ignored.');
-      await this.services.whatsappService.sendMessage(
-        phone, 
-        "You are sending messages too quickly. Please wait a few seconds between messages."
-      );
-      recordThrottledMessage();
-      recordConversationMessage('ai', subscriberType);
       return;
     }
 
