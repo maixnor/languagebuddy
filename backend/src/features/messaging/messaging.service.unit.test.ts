@@ -1,7 +1,7 @@
 import { MessagingService } from './messaging.service';
 import { ServiceContainer } from '../../core/container';
 import { Subscriber } from '../features/subscriber/subscriber.types';
-import { generateDefaultSystemPromptForSubscriber } from '../util/system-prompts';
+import { generateDefaultSystemPromptForSubscriber, generateSystemPrompt } from '../subscriber/subscriber.prompts';
 import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
 
 // Mock the ServiceContainer and its services
@@ -13,10 +13,22 @@ const mockOnboardingService = {
 
 const mockSubscriberService = {
   getSubscriber: jest.fn(),
-  createSubscriber: jest.fn(),
+  createSubscriber: jest.fn().mockResolvedValue({
+    connections: { phone: '+1234567890' },
+    profile: { timezone: 'UTC' },
+    metadata: {},
+    status: 'onboarding',
+    isPremium: false,
+    signedUpAt: new Date()
+  }),
   getDaysSinceSignup: jest.fn().mockReturnValue(10), // Default > trialDays
   shouldThrottle: jest.fn().mockReturnValue(false),
   shouldShowSubscriptionWarning: jest.fn().mockReturnValue(false),
+  updateSubscriber: jest.fn(),
+  canStartConversationToday: jest.fn().mockResolvedValue(true),
+  incrementConversationCount: jest.fn(),
+  getDailySystemPrompt: jest.fn().mockReturnValue('System Prompt'),
+  shouldPromptForSubscription: jest.fn().mockReturnValue(false)
 };
 
 const mockLanguageBuddyAgent = {
@@ -62,8 +74,10 @@ describe('MessagingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks(); // Restore mocks to original implementation/state
     messagingService = new MessagingService(mockServiceContainer as any);
-  });
+  }); // <--- Added missing closing brace
+
 
   describe('handleWebhookMessage', () => {
     const mockRes = {
@@ -116,6 +130,27 @@ describe('MessagingService', () => {
 
       mockWhatsappDeduplicationService.recordMessageProcessed.mockResolvedValue(false); // Not duplicate
       mockSubscriberService.getSubscriber.mockResolvedValue(null); // Triggers new user logic
+      mockSubscriberService.createSubscriber.mockResolvedValue({
+        connections: { phone: '+1234567890' },
+        profile: { timezone: 'UTC' },
+        metadata: {},
+        status: 'onboarding',
+        isPremium: false,
+        signedUpAt: new Date()
+      });
+      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue({
+        response: "Mock onboarding message",
+        updatedSubscriber: { 
+          connections: { phone: '+1234567890' }, 
+          profile: { name: 'Test User', speakingLanguages: [], learningLanguages: [], timezone: 'UTC', }, 
+          status: 'onboarding', // Still onboarding
+          isPremium: false,
+          metadata: { digests: [], personality: 'friendly', streakData: { currentStreak: 0, longestStreak: 0, lastIncrement: new Date() }, predictedChurnRisk: 0, engagementScore: 50, mistakeTolerance: 'normal' },
+          signedUpAt: new Date(),
+        }
+      });
+      mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(false);
+
 
       await messagingService.handleWebhookMessage(body, mockRes);
 
@@ -138,9 +173,23 @@ describe('MessagingService', () => {
     it('should start new user onboarding if subscriber does not exist and not in active conversation', async () => {
       mockSubscriberService.getSubscriber.mockResolvedValue(null);
       mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(false);
-      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Welcome message');
+      
+      const mockNewSubscriber = { // Create a mock subscriber for the scenario
+        connections: { phone: mockMessage.from },
+        profile: { name: '', speakingLanguages: [], learningLanguages: [], timezone: undefined },
+        metadata: {},
+        status: 'onboarding',
+        isPremium: false,
+        signedUpAt: new Date(),
+      };
+      mockSubscriberService.createSubscriber.mockResolvedValue(mockNewSubscriber);
 
-      const expectedSystemPrompt = generateOnboardingSystemPrompt();
+      const expectedSystemPrompt = generateOnboardingSystemPrompt(mockNewSubscriber);
+
+      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue({
+        response: 'Welcome message',
+        updatedSubscriber: { ...mockNewSubscriber, status: 'onboarding' } // Still onboarding
+      });
 
       await (messagingService as any).processTextMessage(mockMessage);
 
@@ -152,8 +201,7 @@ describe('MessagingService', () => {
           profile: expect.any(Object)
         }),
         mockMessage.text!.body,
-        expectedSystemPrompt,
-        { type: 'onboarding' } // Expect metadata
+        expectedSystemPrompt
       );
       expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(mockMessage.from, 'Welcome message');
     });
@@ -161,8 +209,23 @@ describe('MessagingService', () => {
     it('should continue onboarding if subscriber does not exist but is in active conversation', async () => {
       mockSubscriberService.getSubscriber.mockResolvedValue(null);
       mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(true);
-      mockLanguageBuddyAgent.processUserMessage.mockResolvedValue('Next onboarding step');
-      const expectedSystemPrompt = generateOnboardingSystemPrompt();
+      
+      const mockNewSubscriber = { // Create a mock subscriber for the scenario
+        connections: { phone: mockMessage.from },
+        profile: { name: '', speakingLanguages: [], learningLanguages: [], timezone: undefined },
+        metadata: {},
+        status: 'onboarding',
+        isPremium: false,
+        signedUpAt: new Date(),
+      };
+      mockSubscriberService.createSubscriber.mockResolvedValue(mockNewSubscriber);
+
+      const expectedSystemPrompt = generateOnboardingSystemPrompt(mockNewSubscriber);
+
+      mockLanguageBuddyAgent.processUserMessage.mockResolvedValue({
+        response: 'Next onboarding step', // Expected response
+        updatedSubscriber: { ...mockNewSubscriber, status: 'onboarding' } // Still onboarding
+      });
 
       await (messagingService as any).processTextMessage(mockMessage);
 
@@ -181,13 +244,35 @@ describe('MessagingService', () => {
     it('should complete onboarding and initiate new conversation if subscriber exists and is tagged as onboarding conversation', async () => {
       const mockSubscriber = { 
         connections: { phone: mockMessage.from }, 
-        profile: { timezone: 'UTC' },
-        metadata: {} 
+        profile: { 
+          name: 'Test User', 
+          speakingLanguages: [], 
+          learningLanguages: [], 
+          timezone: 'UTC', 
+        }, 
+        metadata: { digests: [], personality: 'friendly', streakData: { currentStreak: 0, longestStreak: 0, lastIncrement: new Date() }, predictedChurnRisk: 0, engagementScore: 50, mistakeTolerance: 'normal' },
+        status: 'onboarding', // This subscriber is initially onboarding
+        isPremium: false,
+        signedUpAt: new Date(),
       };
       mockSubscriberService.getSubscriber.mockResolvedValue(mockSubscriber);
-      mockLanguageBuddyAgent.isOnboardingConversation.mockResolvedValue(true);
+      mockLanguageBuddyAgent.currentlyInActiveConversation.mockResolvedValue(true); // Assuming it's an active conversation in onboarding phase
+      mockLanguageBuddyAgent.isOnboardingConversation.mockResolvedValue(true); // This tells the MessagingService that the conversation is of type 'onboarding'
       
-      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue('Hello! Ready to chat?');
+      // Agent response indicating onboarding is complete and subscriber is now active
+      mockLanguageBuddyAgent.processUserMessage.mockResolvedValue({ // Assuming processUserMessage is called after first message in onboarding
+        response: 'Hello! Ready to chat?',
+        updatedSubscriber: { ...mockSubscriber, status: 'active' } // Onboarding complete -> active
+      });
+
+      // The MessagingService will call initiateConversation after clearing the checkpoint.
+      // This is for the "new conversation initiation" part.
+      mockLanguageBuddyAgent.initiateConversation.mockResolvedValue({
+        response: 'Hello! Ready to chat?', // The actual message from agent after new convo starts
+        updatedSubscriber: { ...mockSubscriber, status: 'active' } // Subscriber is now active
+      });
+      // Mock getDailySystemPrompt which is used when initiating a new regular conversation
+      mockSubscriberService.getDailySystemPrompt.mockReturnValue('TASK: INITIATE NEW DAY CONVERSATION');
 
       await (messagingService as any).processTextMessage(mockMessage);
 
@@ -202,10 +287,9 @@ describe('MessagingService', () => {
 
       // 2. New conversation initiation
       expect(mockLanguageBuddyAgent.initiateConversation).toHaveBeenCalledWith(
-        mockSubscriber,
+        expect.objectContaining({ ...mockSubscriber, status: 'active' }), // Expect an object with active status
         'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
-        expect.stringContaining('TASK: INITIATE NEW DAY CONVERSATION'), // Partial match for the system prompt
-        { type: 'regular' } // Expect metadata
+        expect.stringContaining('TASK: INITIATE NEW DAY CONVERSATION') // Partial match for the system prompt
       );
 
       // 3. Sending the new conversation message

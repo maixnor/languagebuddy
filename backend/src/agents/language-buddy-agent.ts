@@ -12,7 +12,7 @@ import { DigestService } from '../features/digest/digest.service';
 import { setSpanAttributes } from '../core/observability/tracing';
 import { BaseCheckpointSaver } from "@langchain/langgraph-checkpoint";
 import { tool } from "@langchain/core/tools";
-import { StateGraph, START, END } from "@langchain/langgraph";
+import { StateGraph, START, END, addMessages } from "@langchain/langgraph";
 import { AgentState } from "./agent.types";
 import { createFeedbackGraph } from "../features/feedback/feedback.graph";
 import { createOnboardingGraph } from "../features/onboarding/onboarding.graph";
@@ -90,7 +90,7 @@ export class LanguageBuddyAgent {
     // 5. Build Parent Graph
     const workflow = new StateGraph<AgentState>({
         channels: {
-            messages: { value: (x, y) => x.concat(y), default: () => [] },
+            messages: { value: addMessages, default: () => [] },
             subscriber: { value: (x, y) => y ?? x, default: () => ({} as any) },
             activeMode: { value: (x, y) => y ?? x, default: () => "conversation" },
             subgraphState: { value: (x, y) => y, default: () => undefined },
@@ -211,10 +211,10 @@ export class LanguageBuddyAgent {
       // Extract last message
       const lastMsg = result.messages[result.messages.length - 1];
       logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
-      return lastMsg.content || "initiateConversation() failed";
+      return { response: lastMsg.content || "initiateConversation() failed", updatedSubscriber: result.subscriber };
     } catch (error) {
       logger.error({ err: error, subscriber: subscriber }, "Error in initiate method");
-      return "An error occurred while initiating the conversation. Please try again later.";
+      return { response: "An error occurred while initiating the conversation. Please try again later.", updatedSubscriber: subscriber };
     }
   }
 
@@ -299,7 +299,7 @@ export class LanguageBuddyAgent {
 
     const lastMsg = response.messages[response.messages.length - 1];
     logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
-    return lastMsg.content || "processUserMessage()?";
+    return { response: lastMsg.content || "processUserMessage()?", updatedSubscriber: response.subscriber };
   }
 
   async clearConversation(phone: string): Promise<void> {

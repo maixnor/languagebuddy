@@ -2,13 +2,29 @@ import { logger } from './observability/logging';
 import Database from 'better-sqlite3';
 import path from 'path';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
 
 export class DatabaseService {
   private db: Database.Database;
 
-  constructor(dbPath: string = path.join(process.cwd(), 'data', 'languagebuddy.sqlite')) {
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
+  constructor(dbPath?: string) {
+    let finalDbPath = dbPath;
+    const defaultFallbackPath = path.join(process.cwd(), 'data', 'languagebuddy.sqlite');
+
+    if (finalDbPath) {
+      if (!fs.existsSync(finalDbPath) && finalDbPath !== ':memory:') {
+        logger.warn(`Provided database path "${finalDbPath}" does not exist. Falling back to "${defaultFallbackPath}".`);
+        finalDbPath = defaultFallbackPath;
+      }
+    } else {
+      finalDbPath = defaultFallbackPath;
+    }
+
+    this.db = new Database(finalDbPath);
+    // Apply WAL mode only if it's not an in-memory database
+    if (finalDbPath !== ':memory:') {
+      this.db.pragma('journal_mode = WAL');
+    }
     this.migrate();
   }
 

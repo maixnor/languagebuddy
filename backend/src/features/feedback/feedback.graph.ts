@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage, RemoveMessage } from "@langchain/core/messages";
-import { StateGraph, END, START } from "@langchain/langgraph";
+import { StateGraph, END, START, addMessages } from "@langchain/langgraph";
 import { AgentState } from "../../agents/agent.types";
 import { FeedbackService } from "./feedback.service";
 import { logger } from "../../core/observability/logging";
@@ -152,7 +152,7 @@ Do not persist the feedback yourself, just call the tool.`;
 
     const graph = new StateGraph<AgentState>({ 
         channels: {
-            messages: { value: (x, y) => x.concat(y), default: () => [] },
+            messages: { value: addMessages, default: () => [] },
             subscriber: { value: (x, y) => y ?? x, default: () => ({} as any) },
             activeMode: { value: (x, y) => y ?? x, default: () => "conversation" },
             subgraphState: { value: (x, y) => y, default: () => undefined },

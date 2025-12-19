@@ -258,6 +258,19 @@ ${digest.summary}
 
 Use the available tools to update their profile or collect feedback when appropriate.`;
 
+  prompt += `
+- If the user explicitly states they want to provide feedback (e.g., "I want to give feedback", "I have some thoughts on our conversation"), immediately call the \`startFeedbackSession\` tool. Do not try to process the feedback yourself; let the dedicated feedback system handle it.`;
+
+  const missingFields = getMissingProfileFieldsReflective(subscriber.profile);
+  if (missingFields.length > 0) {
+    prompt += `\n\nSPECIAL TASK: COLLECT MISSING INFORMATION`;
+    for (const field of missingFields) {
+      prompt += `\n- ${field}`;
+    }
+    prompt += `\nPROACTIVELY ask the user for this information, one piece at a time, in a natural conversational flow. Do not ask for all information at once.`;
+    prompt += `\nUse the 'update_subscriber_profile' tool to save each piece of information as soon as you collect it.`;
+  }
+
   return prompt;
 }
 

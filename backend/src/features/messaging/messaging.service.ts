@@ -137,8 +137,11 @@ export class MessagingService {
     }
 
     // Get subscriber type for metrics
-    const subscriberType = subscriber.isPremium ? 'premium' :
-                           (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
+    let subscriberType: 'premium' | 'trial' | 'free' | 'new' = 'new';
+    if (subscriber) {
+      subscriberType = subscriber.isPremium ? 'premium' :
+                       (this.services.subscriberService.getDaysSinceSignup(subscriber) < config.subscription.trialDays ? 'trial' : 'free');
+    }
 
     // Record user message
     recordConversationMessage('user', subscriberType);
@@ -176,7 +179,7 @@ export class MessagingService {
     }
 
     // Check throttling and subscription limits (skip for onboarding)
-    if (subscriber.status === 'active' && this.services.subscriberService.shouldThrottle(subscriber)) {
+    if (subscriber && subscriber.status === 'active' && this.services.subscriberService.shouldThrottle(subscriber)) {
       const hasPaid = await this.services.subscriptionService.checkSubscription(phone);
       if (hasPaid) {
         if (!subscriber.isPremium) {
@@ -204,6 +207,8 @@ export class MessagingService {
   
   private async handleRegularConversation(subscriber: Subscriber, message: WebhookMessage, externalSystemPromptOverride?: string): Promise<void> {
     const phone = subscriber.connections.phone;
+    const startTime = Date.now();
+    let subscriberType: 'premium' | 'trial' | 'free' | 'new' = 'new'; // Declared here
 
     // Wrap the entire conversation handling in a trace span
     await traceConversation('process_message', phone, async (span) => {
@@ -215,17 +220,15 @@ export class MessagingService {
         timestamp: new Date().toISOString()
       });
 
-      const startTime = Date.now();
-      let response: string;
+      const originalSubscriberStatus = subscriber.status;
+      let agentResult: { response: string; updatedSubscriber: Subscriber };
 
-      // Get subscriber type for metrics
-      const subscriberType = subscriber?.isPremium ? 'premium' :
-                             (this.services.subscriberService.getDaysSinceSignup(subscriber || {} as Subscriber) < config.subscription.trialDays ? 'trial' : 'free');
-
-      // Check if we need to inject a subscription warning
       let systemPromptOverride: string | undefined = externalSystemPromptOverride;
       
-      if (!systemPromptOverride && this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
+      // If subscriber is in onboarding status, use the onboarding system prompt
+      if (subscriber && subscriber.status === 'onboarding') {
+        systemPromptOverride = generateOnboardingSystemPrompt(subscriber);
+      } else if (!systemPromptOverride && this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
         const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
         
         const currentLocalTime = DateTime.local().setZone(subscriber.profile.timezone || config.fallbackTimezone);
@@ -247,26 +250,49 @@ export class MessagingService {
   The user's free trial is ending soon (Day 6 or 7).
   At the end of your response, you MUST explain in the user's target language that their trial is ending soon and they should subscribe to keep using the service.
   Payment Link: ${paymentLink}
-  Make it sound natural, encouraging, and helpful. Do not be aggressive.`;
+  Make it sound natural, encouraging, and helpful. Do not be aggressive;`;
       }
 
       if (!await this.services.languageBuddyAgent.currentlyInActiveConversation(phone)) {
         logger.info({ userPhone: phone }, "No active conversation found, initiating new conversation");
         
-        // Fix: Correct argument order (subscriber, humanMessage, systemPromptOverride)
-        response = await this.services.languageBuddyAgent.initiateConversation(
+        agentResult = await this.services.languageBuddyAgent.initiateConversation(
           subscriber, 
           message.text!.body, 
           systemPromptOverride
         );
       } else {
-        response = await this.services.languageBuddyAgent.processUserMessage(
+        agentResult = await this.services.languageBuddyAgent.processUserMessage(
           subscriber, 
           message.text!.body,
           systemPromptOverride
         );
       }
 
+      // If onboarding completed, clear the conversation checkpoint
+      if (originalSubscriberStatus === 'onboarding' && agentResult.updatedSubscriber.status === 'active') {
+        logger.info({ phone }, "Onboarding completed. Clearing conversation checkpoint.");
+        await this.services.languageBuddyAgent.clearConversation(phone);
+        subscriber = agentResult.updatedSubscriber; // Update subscriber to reflect active status
+
+        // Send a confirmation message that onboarding is complete
+        await this.services.whatsappService.sendMessage(
+          phone,
+          "🎉 Great! Your Language Buddy profile has been successfully created."
+        );
+
+        // Now initiate a new regular conversation after onboarding completion
+        const selectedPrompt = this.services.subscriberService.getDailySystemPrompt(subscriber);
+        const newConversationAgentResult = await this.services.languageBuddyAgent.initiateConversation(
+          subscriber,
+          'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.',
+          selectedPrompt
+        );
+        agentResult.response = newConversationAgentResult.response; // Use response from new conversation
+        agentResult.updatedSubscriber = newConversationAgentResult.updatedSubscriber; // Update subscriber again
+      }
+
+      const response = agentResult.response;
       const processingTime = Date.now() - startTime;
       trackMetric("message_processing_time_ms", processingTime, {
         userPhone: phone.slice(-4),

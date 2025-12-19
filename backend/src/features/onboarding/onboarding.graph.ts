@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ChatOpenAI } from "@langchain/openai";
-import { BaseMessage, HumanMessage, SystemMessage, AIMessage, RemoveMessage } from "@langchain/core/messages";
-import { StateGraph, END, START } from "@langchain/langgraph";
+import { BaseMessage, HumanMessage, SystemMessage, AIMessage, RemoveMessage, ToolMessage } from "@langchain/core/messages";
+import { StateGraph, END, START, addMessages } from "@langchain/langgraph";
 import { AgentState } from "../../agents/agent.types";
 import { SubscriberService } from "../subscriber/subscriber.service";
 import { logger } from "../../core/observability/logging";
@@ -108,10 +108,16 @@ Start by introducing yourself if you haven't yet.`;
 
         const updates = toolCall.args;
         const currentContext = subgraphState?.context || {};
+
+        // Create tool response message to satisfy LLM history
+        const toolMessage = new ToolMessage({
+            tool_call_id: toolCall.id!,
+            content: "Context updated successfully."
+        });
         
         return {
             subgraphState: {
-                messages: subMessages, // Keep history
+                messages: [...subMessages, toolMessage], // Append tool result
                 context: { ...currentContext, ...updates }
             }
         };
@@ -197,7 +203,7 @@ Start by introducing yourself if you haven't yet.`;
 
     const graph = new StateGraph<AgentState>({ 
         channels: {
-            messages: { value: (x, y) => x.concat(y), default: () => [] },
+            messages: { value: addMessages, default: () => [] },
             subscriber: { value: (x, y) => y ?? x, default: () => ({} as any) },
             activeMode: { value: (x, y) => y ?? x, default: () => "conversation" },
             subgraphState: { value: (x, y) => y, default: () => undefined },

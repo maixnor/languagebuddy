@@ -1,7 +1,7 @@
 import { createOnboardingGraph } from "./onboarding.graph";
 import { ChatOpenAI } from "@langchain/openai";
 import { SubscriberService } from "../subscriber/subscriber.service";
-import { HumanMessage, AIMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, AIMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { AgentState } from "../../agents/agent.types";
 
 jest.mock("@langchain/openai");
@@ -52,13 +52,15 @@ describe("Onboarding Subgraph", () => {
         
         expect(result.subgraphState).toBeDefined();
         expect(result.subgraphState?.context).toEqual({ nativeLanguage: "English" });
-        // Messages: Human -> AI(Tool) -> AI(Text)
-        // Wait, 'update_context' node preserves history? 
-        // onboarding_agent adds the tool response.
-        // Then it loops.
-        // Next onboarding_agent call adds text response.
-        // So subgraphState.messages should have length 3 (Human, AI-Tool, AI-Text)
-        expect(result.subgraphState?.messages).toHaveLength(3); 
+        
+        // Messages: Human -> AI(Tool) -> ToolMessage -> AI(Text)
+        expect(result.subgraphState?.messages).toHaveLength(4);
+        
+        // Verify ToolMessage was passed to the second LLM call
+        const secondCallArgs = mockLlm.invoke.mock.calls[1][0];
+        const lastMsgInHistory = secondCallArgs[secondCallArgs.length - 1];
+        expect(lastMsgInHistory).toBeInstanceOf(ToolMessage);
+        expect((lastMsgInHistory as ToolMessage).tool_call_id).toBe("call_1");
     });
 
     it("should finalize onboarding when complete", async () => {

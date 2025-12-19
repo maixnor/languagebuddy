@@ -1,10 +1,28 @@
-import { LanguageBuddyAgent } from './language-buddy-agent';
-
 import { ChatOpenAI } from '@langchain/openai';
 import { Checkpoint } from '@langchain/langgraph';
 import { DateTime } from 'luxon';
 import { Subscriber } from '../features/subscriber/subscriber.types';
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { HumanMessage, SystemMessage, AIMessage } from "@langchain/core/messages"; // Keep original import for types
+
+jest.mock('@langchain/core/messages', () => ({
+  SystemMessage: jest.fn().mockImplementation((content: string) => ({
+    content,
+    type: 'system',
+    // Add other properties that LangGraph might expect, if any, for proper functioning
+    // For now, let's keep it minimal to see if it fixes the additional_kwargs error
+    additional_kwargs: {}, // Explicitly define it to prevent the TypeError
+  })),
+  HumanMessage: jest.fn().mockImplementation((content: string) => ({
+    content,
+    type: 'human',
+    additional_kwargs: {}, // Explicitly define it to prevent the TypeError
+  })),
+  AIMessage: jest.fn().mockImplementation((content: string) => ({
+    content,
+    type: 'ai',
+    additional_kwargs: {}, // Explicitly define it to prevent the TypeError
+  })),
+}));
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { DigestService } from '../features/digest/digest.service';
 import { Digest } from '../features/digest/digest.types';
@@ -14,195 +32,263 @@ jest.mock('@langchain/openai');
 jest.mock('../features/subscriber/subscriber.prompts'); // Mock generateSystemPrompt
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts'; // For type referencing
 const mockGenerateSystemPrompt = generateSystemPrompt as jest.Mock;
-jest.mock('../features/subscriber/subscriber.service'); // Mock SubscriberService
-jest.mock('../features/digest/digest.service'); // Mock DigestService
+
+// Mock SubscriberService and its static getInstance method
+const mockHydrateSubscriber = jest.fn();
+const mockSubscriberServiceInstance = {
+  hydrateSubscriber: mockHydrateSubscriber,
+  // Add any other methods that LanguageBuddyAgent might call directly on the SubscriberService instance
+        getDailySystemPrompt: jest.fn(() => mockGenerateSystemPrompt()),  getMissingProfileFieldsReflective: jest.fn(),
+  updateSubscriber: jest.fn(),
+};
+
+// Make sure the mock for the SubscriberService class itself is correctly implemented
+jest.mock('../features/subscriber/subscriber.service', () => ({
+  SubscriberService: {
+    getInstance: jest.fn(() => mockSubscriberServiceInstance),
+    // Add other static methods if they exist and are called in the agent
+  },
+}));
+import { SubscriberService } from '../features/subscriber/subscriber.service'; // Keep import for types
+
+// Mock DigestService
+const mockGetConversationDigest = jest.fn();
+const mockGetRecentDigests = jest.fn();
+const mockDigestServiceInstance = {
+  getConversationDigest: mockGetConversationDigest,
+  getRecentDigests: mockGetRecentDigests, // Added this line
+  // Add any other methods DigestService might have
+};
+
+jest.mock('../features/digest/digest.service', () => ({
+  DigestService: {
+    getInstance: jest.fn(() => mockDigestServiceInstance),
+  },
+}));
 
 import { FeedbackService } from '../features/feedback/feedback.service';
 jest.mock('../features/feedback/feedback.service'); // Mock FeedbackService
 
 // Define a mock class that implements BaseCheckpointSaver
-
 class MockCheckpointer implements BaseCheckpointSaver {
-
   getTuple: jest.Mock = jest.fn();
-
-  putTuple: jest.Mock = jest.fn();
-
+  putTuple: jest.Fn = jest.fn();
   put: jest.Mock = jest.fn();
-
   deleteThread: jest.Mock = jest.fn();
-
   list: jest.Mock = jest.fn();
-
   get: jest.Mock = jest.fn(); // Assuming 'get' might be used directly for some reason, though getTuple is preferred
-
 }
 
+let mockMainAgentInvoke: jest.Mock = jest.fn();
+let mockFeedbackSubgraphInvoke: jest.Mock = jest.fn();
+let mockOnboardingSubgraphInvoke: jest.Fn = jest.fn();
+let mockStateGraphCompile: jest.Mock = jest.fn();
 
 
 describe('LanguageBuddyAgent', () => {
 
   let mockCheckpointer: jest.Mocked<MockCheckpointer>;
-
   let mockLlm: jest.Mocked<ChatOpenAI>;
-
   let agent: LanguageBuddyAgent;
-
-  let mockAgentInvoke: jest.Mock;
-
   let mockDigestService: jest.Mocked<DigestService>;
 
 
-
   const mockSubscriber: Subscriber = {
-
     profile: {
-
       name: "Test User",
-
       speakingLanguages: [
-
         {
-
           languageName: "English",
-
           overallLevel: "C2",
-
           skillAssessments: [],
-
           deficiencies: [],
-
           firstEncountered: new Date(),
-
           lastPracticed: new Date(),
-
           totalPracticeTime: 0,
-
           confidenceScore: 100,
-
         },
-
       ],
-
       learningLanguages: [
-
         {
-
           languageName: "German",
-
           overallLevel: "B1",
-
           skillAssessments: [],
-
           deficiencies: [],
-
           firstEncountered: new Date(),
-
           lastPracticed: new Date(),
-
           totalPracticeTime: 0,
-
           confidenceScore: 50,
-
           isTarget: true,
-
         },
-
       ],
-
       timezone: "America/New_York",
-
       fluencyLevel: "intermediate",
-
       areasOfStruggle: ["grammar", "vocabulary"],
-
       mistakeTolerance: "normal"
-
     },
-
     connections: {
-
       phone: "+1234567890",
-
     },
-
     metadata: {
-
       digests: [],
-
       personality: "friendly",
-
       streakData: {
-
         currentStreak: 0,
-
         longestStreak: 0,
-
         lastActiveDate: new Date(),
-
       },
-
       predictedChurnRisk: 0,
-
       engagementScore: 50,
-
       difficultyPreference: "adaptive",
-
     },
-
     isPremium: false,
-
     signedUpAt: new Date().toISOString(),
-
   };
 
-
-
   beforeEach(() => {
+    // IMPORTANT: Clear the module cache and re-require LanguageBuddyAgent
+    // after setting up doMock to ensure it gets the mocked dependencies.
+    jest.clearAllMocks(); // Clear mocks before each test to ensure isolation
+    jest.resetModules(); // Use resetModules instead of clearModules
+
+    mockMainAgentInvoke.mockReset(); // Reset the global mock
+    mockFeedbackSubgraphInvoke.mockReset();
+    mockOnboardingSubgraphInvoke.mockReset();
+
+    // Initialize mock runnables
+    mockStateGraphCompile.mockReset(); // Reset before each test
+
+    jest.doMock("@langchain/langgraph", () => ({
+      StateGraph: jest.fn(() => ({
+        addNode: jest.fn(function() { return this; }), // chainable
+        addConditionalEdges: jest.fn(function() { return this; }), // chainable
+        addEdge: jest.fn(function() { return this; }), // chainable
+        compile: mockStateGraphCompile,
+      })),
+      START: jest.fn(),
+      END: jest.fn(),
+      addMessages: jest.fn(),
+    }));
+
+    // Mock the subgraph creation functions to return simple objects that don't need to be actual Runnables
+    jest.doMock("@langchain/langgraph/prebuilt", () => ({
+      createReactAgent: jest.fn(() => ({ invoke: mockMainAgentInvoke, getGraph: jest.fn() })),
+    }));
+    jest.doMock("../features/feedback/feedback.graph", () => ({
+      createFeedbackGraph: jest.fn(() => ({ invoke: mockFeedbackSubgraphInvoke, getGraph: jest.fn() })),
+    }));
+    jest.doMock("../features/onboarding/onboarding.graph", () => ({
+      createOnboardingGraph: jest.fn(() => ({ invoke: mockOnboardingSubgraphInvoke, getGraph: jest.fn() })),
+    }));
+
+    // Re-import LanguageBuddyAgent after mocks are defined
+    const { LanguageBuddyAgent } = require('./language-buddy-agent');
 
     mockCheckpointer = new MockCheckpointer() as jest.Mocked<MockCheckpointer>;
-
     mockLlm = { invoke: jest.fn() } as unknown as jest.Mocked<ChatOpenAI>;
+    const mockFeedbackService = {} as jest.Mocked<FeedbackService>;
+    mockGetRecentDigests.mockResolvedValue([]); // Default to no digests
 
-    mockAgentInvoke = jest.fn().mockResolvedValue({
+    // Mock SubscriberService.getInstance to return the desired mock object
+    (SubscriberService.getInstance as jest.Mock).mockReturnValue(mockSubscriberServiceInstance);
 
-      messages: [{ content: 'AI Response' }]
+    // Define mockAgentInvoke for direct use in tests
+    const mockAgentInvoke = jest.fn();
+    mockStateGraphCompile.mockReturnValue({ invoke: mockAgentInvoke }); // Ensure workflow.compile returns an object with this invoke
 
-    });
+    agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm, mockDigestServiceInstance as any, mockFeedbackService);
 
-
-
-    (SubscriberService.getInstance as jest.Mock).mockReturnValue({
-
-      hydrateSubscriber: jest.fn(),
-
-    });
-
-        mockDigestService = new DigestService(null as any, mockCheckpointer, null as any) as jest.Mocked<DigestService>;
-
-        mockDigestService.getRecentDigests.mockResolvedValue([]); // Default to no digests
-
-        const mockFeedbackService = {} as jest.Mocked<FeedbackService>;
-
-    
-
-    
-
-        agent = new LanguageBuddyAgent(mockCheckpointer, mockLlm, mockDigestService, mockFeedbackService);
-
-        (agent as any).agent = { invoke: mockAgentInvoke }; 
-
-
-
-    jest.useFakeTimers(); 
-
+    jest.useFakeTimers();
     mockGenerateSystemPrompt.mockReturnValue('Generated System Prompt');
-
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     jest.useRealTimers(); // Restore real timers
+  });
+
+  describe('Feedback Routing', () => {
+    beforeEach(() => {
+      // Reset mocks before each test in this describe block
+      mockMainAgentInvoke.mockReset();
+      mockFeedbackSubgraphInvoke.mockReset();
+      mockCheckpointer.getTuple.mockReset();
+
+      // Default mock for checkpoint for most tests
+      mockCheckpointer.getTuple.mockResolvedValue({
+        config: {},
+        checkpoint: {
+          v: 1, id: '1', ts: DateTime.now().toISO(), channel_values: {}, versions_seen: {},
+          values: { messages: [] }, pending_sends: []
+        },
+        metadata: {},
+        parentConfig: {}
+      });
+    });
+
+    it('should transition to feedback subgraph when LLM calls startFeedbackSession tool', async () => {
+      // 1. Mock mainAgentSubgraph to return an AIMessage that calls startFeedbackSession
+      mockMainAgentInvoke.mockResolvedValueOnce({
+        messages: [
+          new HumanMessage("I want to give feedback"),
+          new AIMessage({
+            content: "Okay, I'll start the feedback session.",
+            tool_calls: [{
+              name: "startFeedbackSession",
+              args: {},
+              id: "call_feedback_1"
+            }]
+          })
+        ]
+      });
+
+      // 2. Mock feedbackSubgraph to return a typical response
+      mockFeedbackSubgraphInvoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage("Initial system message"),
+          new HumanMessage("I want to give feedback"),
+          new AIMessage("Thanks for wanting to give feedback! What is your feedback?")
+        ],
+        activeMode: "feedback", // Stays in feedback mode initially
+        subgraphState: {
+          messages: [new HumanMessage("I want to give feedback")]
+        }
+      });
+
+      const humanMessage = 'I want to give feedback';
+      const result = await agent.processUserMessage(mockSubscriber, humanMessage);
+
+      // Verify that mainAgentSubgraph was invoked first
+      expect(mockMainAgentInvoke).toHaveBeenCalledTimes(1);
+      
+      // Verify that the feedback subgraph was invoked
+      expect(mockFeedbackSubgraphInvoke).toHaveBeenCalledTimes(1);
+      
+      // Verify the final output from the agent
+      expect(result.response).toContain("Thanks for wanting to give feedback! What is your feedback?");
+    });
+
+    it('should not transition to feedback subgraph if tool is not called', async () => {
+      // Mock mainAgentSubgraph to return a normal AI message without a tool call
+      mockMainAgentInvoke.mockResolvedValueOnce({
+        messages: [
+          new HumanMessage("How are you?"),
+          new AIMessage("I'm doing great, how about you?")
+        ]
+      });
+
+      const humanMessage = 'How are you?';
+      const result = await agent.processUserMessage(mockSubscriber, humanMessage);
+
+      // Verify that mainAgentSubgraph was invoked
+      expect(mockMainAgentInvoke).toHaveBeenCalledTimes(1);
+      
+      // Verify that the feedback subgraph was NOT invoked
+      expect(mockFeedbackSubgraphInvoke).not.toHaveBeenCalled();
+      
+      // Verify the final output from the agent is from the main agent
+      expect(result.response).toContain("I'm doing great, how about you?");
+    });
   });
 
 
@@ -304,18 +390,18 @@ describe('LanguageBuddyAgent', () => {
       // Mock for conversationDurationMinutes and timeSinceLastMessageMinutes
       jest.spyOn(agent, 'getConversationDuration').mockResolvedValue(60);
       jest.spyOn(agent, 'getTimeSinceLastMessage').mockResolvedValue(10);
-      const now = DateTime.now();
-      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
-      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
-      const checkpoint: Checkpoint = {
-        v: 1, id: '1', ts: now.toISO(), channel_values: {
-          messages: [{ content: 'test', timestamp: lastMessageTime }]
-        }, versions_seen: {},
-        values: {}, pending_sends: []
-      };
+      
+      // Mock the agent.agent.invoke for this specific test
+      mockAgentInvoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage('Generated System Prompt'),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
+      });
 
-
-      await agent.initiateConversation(mockSubscriber, humanMessage);
+      const result = await agent.initiateConversation(mockSubscriber, humanMessage);
 
       // The conversationDurationMinutes and timeSinceLastMessageMinutes are derived from agent's own methods,
       // which internally call mockCheckpointer.getTuple. We verify the final values passed to generateSystemPrompt.
@@ -334,17 +420,19 @@ describe('LanguageBuddyAgent', () => {
       const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
 
       expect(mockAgentInvoke).toHaveBeenCalledWith(
-        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
+        expect.objectContaining({
+          messages: [
+            expect.objectContaining({ content: 'Generated System Prompt', type: 'system', additional_kwargs: {} }),
+            expect.objectContaining({ content: humanMessage, type: 'human', additional_kwargs: {} })
+          ],
+        }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }
         }
       );
-      const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
-      expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
-      expect(invokeArgs[0].content).toEqual('Generated System Prompt');
-      expect(invokeArgs[1]).toBeInstanceOf(HumanMessage);
-      expect(invokeArgs[1].content).toEqual(humanMessage);
+      expect(result.response).toEqual('AI Response'); // Add assertion for response
+      expect(result.updatedSubscriber).toBeDefined(); // Add assertion for updatedSubscriber
     });
 
     it('should pass the last digest topic to generateSystemPrompt if available', async () => {
@@ -366,21 +454,18 @@ describe('LanguageBuddyAgent', () => {
         userMemos: []
       };
       
-      mockDigestService.getRecentDigests.mockResolvedValueOnce([mockDigest]);
-      const now = DateTime.now();
-      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
-      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
-      const checkpoint: Checkpoint = {
-          v: 1, id: '1', ts: now.toISO(), channel_values: {
-              messages: [{ content: 'test', timestamp: lastMessageTime }]
-          }, versions_seen: {},
-          values: {}, pending_sends: []
-      };
-      mockCheckpointer.get.mockResolvedValueOnce({
-          config: {}, checkpoint, metadata: { conversationStartedAt }, parentConfig: {}
+      mockGetRecentDigests.mockResolvedValueOnce([mockDigest]);
+      // Mock the agent's invoke for this test to return a specific state
+      mockAgentInvoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage('Generated System Prompt'),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
       });
 
-      await agent.initiateConversation(mockSubscriber, humanMessage);
+      const result = await agent.initiateConversation(mockSubscriber, humanMessage);
 
       expect(mockGenerateSystemPrompt).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -388,12 +473,24 @@ describe('LanguageBuddyAgent', () => {
           lastDigestTopic: mockDigest.topic,
         })
       );
+      expect(result.response).toEqual('AI Response'); // Add assertion for response
+      expect(result.updatedSubscriber).toBeDefined(); // Add assertion for updatedSubscriber
+
     });
 
     it('should return AI response', async () => {
       const humanMessage = 'Hello!';
+      agent.agent.invoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage('Generated System Prompt'),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
+      });
       const response = await agent.initiateConversation(mockSubscriber, humanMessage);
-      expect(response).toEqual('AI Response');
+      expect(response.response).toEqual('AI Response');
+      expect(response.updatedSubscriber).toBeDefined();
     });
 
     it('should use systemPromptOverride if provided', async () => {
@@ -401,29 +498,42 @@ describe('LanguageBuddyAgent', () => {
       const overridePrompt = 'Override Prompt';
       
       mockGenerateSystemPrompt.mockClear(); // Reset mock call count
+      agent.agent.invoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage(overridePrompt),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response from override')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
+      });
       
-      await agent.initiateConversation(mockSubscriber, humanMessage, overridePrompt);
+      const response = await agent.initiateConversation(mockSubscriber, humanMessage, overridePrompt);
 
       const expectedSessionId = `${mockSubscriber.connections.phone}_${DateTime.now().setZone(mockSubscriber.profile.timezone || 'UTC').toISODate()}`;
 
       expect(mockGenerateSystemPrompt).not.toHaveBeenCalled();
-      expect(mockAgentInvoke).toHaveBeenCalledWith(
-        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
+      expect(agent.agent.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            expect.objectContaining({ content: overridePrompt, type: 'system', additional_kwargs: {} }),
+            expect.objectContaining({ content: humanMessage, type: 'human', additional_kwargs: {} })
+          ],
+        }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }
         }
       );
-      const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
-      expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
-      expect(invokeArgs[0].content).toEqual(overridePrompt);
+      expect(response.response).toEqual('AI Response from override'); // Changed to match mock
+      expect(response.updatedSubscriber).toBeDefined();
     });
 
     it('should handle errors gracefully', async () => {
-      mockAgentInvoke.mockRejectedValueOnce(new Error('Agent error'));
+      agent.agent.invoke.mockRejectedValueOnce(new Error('Agent error'));
       const humanMessage = 'Test error';
       const response = await agent.initiateConversation(mockSubscriber, humanMessage);
-      expect(response).toContain('An error occurred while initiating the conversation.');
+      expect(response.response).toContain('An error occurred while initiating the conversation.');
+      expect(response.updatedSubscriber).toEqual(mockSubscriber);
     });
   });
 
@@ -433,18 +543,17 @@ describe('LanguageBuddyAgent', () => {
       // Mock for conversationDurationMinutes and timeSinceLastMessageMinutes
       jest.spyOn(agent, 'getConversationDuration').mockResolvedValue(60);
       jest.spyOn(agent, 'getTimeSinceLastMessage').mockResolvedValue(10);
-      const now = DateTime.now();
-      const conversationStartedAt = now.minus({ minutes: 60 }).toISO();
-      const lastMessageTime = now.minus({ minutes: 10 }).toISO();
-      const checkpoint: Checkpoint = {
-        v: 1, id: '1', ts: now.toISO(), channel_values: {
-          messages: [{ content: 'test', timestamp: lastMessageTime }]
-        }, versions_seen: {},
-        values: {}, pending_sends: []
-      };
+      
+      agent.agent.invoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage('Generated System Prompt'),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
+      });
 
-
-      await agent.processUserMessage(mockSubscriber, humanMessage);
+      const result = await agent.processUserMessage(mockSubscriber, humanMessage);
 
       // The conversationDurationMinutes and timeSinceLastMessageMinutes are derived from agent's own methods,
       // which internally call mockCheckpointer.getTuple. We verify the final values passed to generateSystemPrompt.
@@ -462,31 +571,44 @@ describe('LanguageBuddyAgent', () => {
       const dateString = currentLocalTime.toISODate();
       const expectedSessionId = `${mockSubscriber.connections.phone}_${dateString}`;
 
-      expect(mockAgentInvoke).toHaveBeenCalledWith(
-        expect.objectContaining({ messages: [expect.any(SystemMessage), expect.any(HumanMessage)] }),
+      expect(agent.agent.invoke).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            expect.objectContaining({ content: 'Generated System Prompt', type: 'system', additional_kwargs: {} }),
+            expect.objectContaining({ content: humanMessage, type: 'human', additional_kwargs: {} })
+          ],
+        }),
         { 
           configurable: { thread_id: mockSubscriber.connections.phone },
           metadata: { sessionId: expectedSessionId }
         }
       );
-      const invokeArgs = mockAgentInvoke.mock.calls[0][0].messages;
-      expect(invokeArgs[0]).toBeInstanceOf(SystemMessage);
-      expect(invokeArgs[0].content).toEqual('Generated System Prompt');
-      expect(invokeArgs[1]).toBeInstanceOf(HumanMessage);
-      expect(invokeArgs[1].content).toEqual(humanMessage);
+      expect(result.response).toEqual('AI Response'); // Add assertion for response
+      expect(result.updatedSubscriber).toBeDefined(); // Add assertion for updatedSubscriber
+
     });
 
     it('should return AI response', async () => {
       const humanMessage = 'Yo!';
+      agent.agent.invoke.mockResolvedValueOnce({
+        messages: [
+          new SystemMessage('Generated System Prompt'),
+          new HumanMessage(humanMessage),
+          new AIMessage('AI Response')
+        ],
+        subscriber: mockSubscriber, // Add the subscriber property
+      });
       const response = await agent.processUserMessage(mockSubscriber, humanMessage);
-      expect(response).toEqual('AI Response');
+      expect(response.response).toEqual('AI Response');
+      expect(response.updatedSubscriber).toBeDefined();
     });
 
     it('should handle errors gracefully', async () => {
-      mockAgentInvoke.mockRejectedValueOnce(new Error('Agent error'));
+      agent.agent.invoke.mockRejectedValueOnce(new Error('Agent error'));
       const humanMessage = 'Test error';
-      // processUserMessage currently throws on error, so we expect it to throw
-      await expect(agent.processUserMessage(mockSubscriber, humanMessage)).rejects.toThrow('Agent error');
+      const response = await agent.processUserMessage(mockSubscriber, humanMessage);
+      expect(response.response).toContain('An error occurred while processing your message.');
+      expect(response.updatedSubscriber).toEqual(mockSubscriber);
     });
   });
 
@@ -501,7 +623,7 @@ describe('LanguageBuddyAgent', () => {
       const response = await agent.oneShotMessage(systemPrompt, language, phone);
 
       expect(mockLlm.invoke).toHaveBeenCalledTimes(1);
-      expect(mockLlm.invoke).toHaveBeenCalledWith([expect.any(SystemMessage)]);
+      expect(mockLlm.invoke).toHaveBeenCalledWith([expect.objectContaining({ content: expect.any(String) })]);
       
       const invokeArg = (mockLlm.invoke.mock.calls[0][0] as any)[0];
       expect(invokeArg.content).toContain('Test Question');

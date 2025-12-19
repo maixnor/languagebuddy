@@ -455,6 +455,22 @@ export class SubscriberService {
     const lastActiveAt = subscriber.lastActiveAt;
     const lastActiveAtISO = (lastActiveAt instanceof Date && !isNaN(lastActiveAt.getTime())) ? lastActiveAt.toISOString() : null;
 
+    let lastNightlyDigestRunDate: Date | undefined;
+    if (subscriber.metadata.lastNightlyDigestRun instanceof Date) {
+      lastNightlyDigestRunDate = subscriber.metadata.lastNightlyDigestRun;
+    } else if (typeof subscriber.metadata.lastNightlyDigestRun === 'string') {
+        const parsed = new Date(subscriber.metadata.lastNightlyDigestRun);
+        if (!isNaN(parsed.getTime())) lastNightlyDigestRunDate = parsed;
+    }
+
+    let lastIncrementDate: Date | undefined;
+    if (subscriber.metadata.streakData?.lastIncrement instanceof Date) {
+      lastIncrementDate = subscriber.metadata.streakData.lastIncrement;
+    } else if (typeof subscriber.metadata.streakData?.lastIncrement === 'string') {
+        const parsed = new Date(subscriber.metadata.streakData.lastIncrement);
+        if (!isNaN(parsed.getTime())) lastIncrementDate = parsed;
+    }
+
     const rest: Partial<Subscriber> = { ...subscriber };
     delete rest.status;
     delete rest.signedUpAt;
@@ -501,10 +517,10 @@ export class SubscriberService {
             subscriber.profile.timezone,
             subscriber.isPremium ? 1 : 0,
             subscriber.isTestUser ? 1 : 0,
-            subscriber.metadata.lastNightlyDigestRun ? subscriber.metadata.lastNightlyDigestRun.toISOString() : null,
+            lastNightlyDigestRunDate ? lastNightlyDigestRunDate.toISOString() : null,
             subscriber.metadata.streakData?.currentStreak || 0,
             subscriber.metadata.streakData?.longestStreak || 0,
-            subscriber.metadata.streakData?.lastIncrement ? subscriber.metadata.streakData.lastIncrement.toISOString() : null
+            lastIncrementDate ? lastIncrementDate.toISOString() : null
         );
 
         // 2. Sync Languages

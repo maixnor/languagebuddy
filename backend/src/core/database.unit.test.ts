@@ -40,19 +40,10 @@ describe('DatabaseService', () => {
     const dbService = new DatabaseService(dbPath);
     const db = dbService.getDb();
 
-    // Add a simple test migration
-    const testMigration = `CREATE TABLE IF NOT EXISTS test_table (id INTEGER PRIMARY KEY);`;
-    const hash = crypto.createHash('md5').update(testMigration).digest('hex');
-    const migrationName = `migration_${hash}`;
-
-    // Manually add the test migration to the migrations table
-    // In a real scenario, this would be part of the migration array in DatabaseService
-    db.prepare('INSERT INTO migrations (name) VALUES (?)').run(migrationName);
-    db.exec(testMigration);
-
-    const testTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='test_table';").get();
-    expect(testTable).toBeDefined();
-    expect(testTable.name).toBe('test_table');
+    // Check if a table from the actual migrations (e.g., 'subscribers') exists
+    const subscribersTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='subscribers';").get();
+    expect(subscribersTable).toBeDefined();
+    expect(subscribersTable.name).toBe('subscribers');
 
     dbService.close();
   });
