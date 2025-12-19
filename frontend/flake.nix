@@ -1,5 +1,5 @@
 {
-  description = "LanguageBuddy Frontend - Astro Static Site";
+  description = "LanguageBuddy Frontend - SSR Node Server";
 
   inputs = {
     # Latest stable Nixpkgs
@@ -27,7 +27,7 @@
           name = "languagebuddy-frontend";
 
           buildInputs = with pkgs; [
-            nodejs_24
+            nodejs_22
           ];
 
           src = self;
@@ -45,8 +45,14 @@
           installPhase = ''
             mkdir -p $out
             
-            # Copy the entire dist directory (Astro output)
-            cp -r dist/* $out/
+            # Copy the dist directory (Astro output) containing server/ and client/
+            cp -r dist $out/
+            
+            # Copy node_modules (runtime dependencies)
+            cp -r node_modules $out/
+            
+            # Copy package.json for runtime reference
+            cp package.json $out/
           '';
         };
       });

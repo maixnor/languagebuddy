@@ -1,0 +1,1220 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<Layout>
+		<section class="maya-hero">
+			<div class="container">
+				<div class="maya-intro-layout">
+                    <div class="maya-image-container">
+                        <img src="/langbud_maya.png" alt="Maya, votre Language Buddy" class="maya-avatar" />
+                    </div>
+                    <div class="maya-text-content">
+                        <h1>Salut, je suis Maya ! 👋</h1>
+                        <p class="intro-text">
+                            Je suis votre nouveau partenaire linguistique. Je vis à l'étranger depuis quelques années maintenant, donc je sais exactement à quel point l'apprentissage d'une langue peut être difficile.
+                            Je suis là pour vous soutenir, vous donner des idées et peut-être partager un fait amusant ou deux sur la nourriture, l'histoire ou l'art en cours de route.
+                        </p>
+                        <p class="intro-text">
+                            Je vous aiderai à pratiquer l'oral, à suivre vos progrès et à vous sentir à l'aise avec votre nouvelle langue, le tout grâce à une conversation amicale sur WhatsApp.
+                        </p>
+                        <div class="cta-container">
+                            <a href="https://wa.me/4367763413180" id="hero-cta" class="btn btn-whatsapp-large">Commencer à discuter</a>
+                        </div>
+                    </div>
+                </div>
+			</div>
+		</section>
+
+        <!-- Floating Action Button (Initially Hidden) -->
+        <a href="https://wa.me/4367763413180" id="fab-cta" class="fab-btn">Commencer à discuter</a>
+
+		<section class="demo-section">
+			<div class="container">
+				<h2>Voici à quoi pourrait ressembler notre chat</h2>
+				<p class="section-subtitle">Juste un aperçu de la façon dont nous pourrions pratiquer ensemble.</p>
+				<div class="phone-demo">
+					<div class="phone-frame">
+						<div class="phone-notch"></div>
+						<div class="phone-screen">
+							<div class="whatsapp-header">
+								<div class="back-arrow">←</div>
+								<div class="contact-info">
+									<div class="contact-avatar">
+                                        <img src="/langbud_maya.png" alt="Maya" style="width: 100%; height: 100%; border-radius: 50%;" />
+                                    </div>
+									<div class="contact-details">
+										<div class="contact-name">Maya</div>
+										<div class="contact-status">en ligne</div>
+									</div>
+								</div>
+							</div>
+							<div class="chat-messages" id="chatMessages">
+								<div class="message received" style="animation-delay: 0.5s">
+									<div class="message-bubble">Bonjour ! Je suis Maya. Quelle langue aimeriez-vous pratiquer aujourd'hui ? 🌍</div>
+									<div class="message-time">10:30</div>
+								</div>
+								<div class="message sent" style="animation-delay: 1.5s">
+									<div class="message-bubble">Je veux pratiquer l'espagnol !</div>
+									<div class="message-time">10:31</div>
+								</div>
+								<div class="message received" style="animation-delay: 2.5s">
+									<div class="message-bubble">¡Perfecto! Commençons par une conversation. ¿Qué hiciste ayer?</div>
+									<div class="message-time">10:31</div>
+								</div>
+								<div class="message sent" style="animation-delay: 3.5s">
+									<div class="message-bubble">Yo fui al parque con mis amigos</div>
+									<div class="message-time">10:32</div>
+								</div>
+								<div class="message received" style="animation-delay: 4.5s">
+									<div class="message-bubble">Super ! Petite correction : "Yo fui al parque con mis amigos" ✅<br><br>Utilisation parfaite du prétérit ! 🎉</div>
+									<div class="message-time">10:32</div>
+								</div>
+								<div class="message sent" style="animation-delay: 5.5s">
+									<div class="message-bubble">Merci ! Peux-tu m'aider avec le passé ?</div>
+									<div class="message-time">10:33</div>
+								</div>
+								<div class="message received" style="animation-delay: 6.5s">
+									<div class="message-bubble">Bien sûr ! Pratiquons plus de verbes au prétérit. Essaie de décrire ce que tu as mangé hier... 🍽️</div>
+									<div class="message-time">10:33</div>
+								</div>
+							</div>
+							<div class="whatsapp-input">
+								<div class="input-icons">😊 📎</div>
+								<div class="input-text">Tapez un message</div>
+								<div class="input-mic">🎤</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+		
+		<section id="features" class="features">
+			<div class="container">
+				<h2>Pourquoi apprendre avec moi ?</h2>
+				<div class="feature-grid">
+					<div class="feature-card">
+						<div class="icon">💬</div>
+						<h3>On discute simplement</h3>
+						<p>Oubliez les exercices ennuyeux. Nous parlerons de votre journée, de vos intérêts ou de tout ce qui vous passe par la tête. C'est comme ça qu'on apprend vraiment.</p>
+					</div>
+					<div class="feature-card">
+						<div class="icon">🎯</div>
+						<h3>Je suis là pour vous</h3>
+						<p>Je corrigerai gentiment vos erreurs et j'expliquerai les choses pour que vous progressiez naturellement. Pas de pression, juste du soutien.</p>
+					</div>
+					<div class="feature-card">
+						<div class="icon">📱</div>
+						<h3>Je suis sur WhatsApp</h3>
+						<p>Pas de nouvelles applications à télécharger. Je suis juste là dans votre liste de contacts, prête à discuter dès que vous avez une pause café.</p>
+					</div>
+					<div class="feature-card">
+						<div class="icon">🌍</div>
+						<h3>Plusieurs langues</h3>
+						<p>Que vous appreniez l'espagnol, le français, l'allemand ou d'autres langues, je peux vous aider à pratiquer et à vous améliorer.</p>
+					</div>
+					<div class="feature-card">
+						<div class="icon">📊</div>
+						<h3>Je suivrai votre progression</h3>
+						<p>Je garderai une trace de ce que vous avez maîtrisé et de ce sur quoi nous devons travailler, pour que vous puissiez voir le chemin parcouru.</p>
+					</div>
+					<div class="feature-card">
+						<div class="icon">🧠</div>
+						<h3>Toujours disponible</h3>
+						<p>Comme je suis une IA, je suis éveillée 24h/24 et 7j/7. Session d'étude tardive ? Pratique tôt le matin ? Je suis là.</p>
+					</div>
+				</div>
+                <div class="section-footer-link">
+                    <a href="/faq">Vous avez des questions ? Consultez la FAQ →</a>
+                </div>
+			</div>
+		</section>
+
+		<section id="how-it-works" class="how-it-works">
+			<div class="container">
+				<h2>Comment ça marche</h2>
+				<div class="steps">
+					<div class="step">
+						<div class="step-number">1</div>
+						<h3>Commencer un chat</h3>
+						<p>Envoyez un message WhatsApp à mon numéro pour commencer votre voyage d'apprentissage linguistique.</p>
+					</div>
+					<div class="step">
+						<div class="step-number">2</div>
+						<h3>Motivations</h3>
+						<p>Nous aurons une courte conversation sur votre motivation à apprendre. C'est plus facile d'apprendre avec un objectif.</p>
+					</div>
+					<div class="step">
+						<div class="step-number">3</div>
+						<h3>Pratiquer & Apprendre</h3>
+						<p>Discutez avec moi à tout moment. Obtenez des corrections, des explications et une pratique ciblée.</p>
+					</div>
+					<div class="step">
+						<div class="step-number">4</div>
+						<h3>Suivre les progrès</h3>
+						<p>Je fournirai des évaluations régulières et vous montrerai votre amélioration au fil du temps.</p>
+					</div>
+				</div>
+				<div class="whatsapp-cta">
+					<p>Prêt à commencer ?</p>
+					<a href="https://wa.me/4367763413180" class="btn btn-whatsapp">Discuter sur WhatsApp</a>
+				</div>
+			</div>
+		</section>
+
+		<section id="pricing" class="pricing">
+			<div class="container">
+				<h2>Tarification simple et transparente</h2>
+				<div class="pricing-grid">
+					<!-- Box 1: Trial -->
+					<div class="pricing-card">
+						<h3>Essai</h3>
+						<div class="price">
+							<span class="amount">Gratuit</span>
+							<span class="period">7 jours</span>
+						</div>
+						<ul class="features-list">
+							<li>✓ Chat informel illimité</li>
+							<li>✓ Sujets de conversation quotidiens</li>
+							<li>✓ Feedback instantané</li>
+						</ul>
+						<p class="pricing-subtext">Aucune inscription requise</p>
+						<a href="https://wa.me/4367763413180" class="btn btn-outline">Essayer gratuitement</a>
+					</div>
+
+					<!-- Arrow 1 -->
+					<div class="pricing-arrow">
+						<span>→</span>
+					</div>
+
+					<!-- Box 2: Starter -->
+					<div class="pricing-card featured-subtle">
+						<h3>Starter</h3>
+						<div class="price">
+							<span class="amount">1€</span>
+							<span class="period">pour 21 jours</span>
+						</div>
+						<ul class="features-list">
+							<li>✓ Accès complet à toutes les fonctionnalités</li>
+							<li>✓ Vocabulaire personnalisé</li>
+							<li>✓ Période d'essai prolongée</li>
+						</ul>
+						<a href="https://wa.me/4367763413180" class="btn btn-primary">Commencer</a>
+					</div>
+
+					<!-- Arrow 2 -->
+					<div class="pricing-arrow">
+						<span>→</span>
+					</div>
+
+					<!-- Box 3: Monthly -->
+					<div class="pricing-card featured">
+						<div class="badge">Meilleure valeur</div>
+						<h3>Pro</h3>
+						<div class="price">
+							<span class="amount">10€</span>
+							<span class="period">par mois</span>
+						</div>
+						<ul class="features-list">
+							<li>✓ Annulable à tout moment</li>
+							<li>✓ Support prioritaire</li>
+							<li>✓ Analyses de progression avancées</li>
+						</ul>
+						<a href="https://wa.me/4367763413180" class="btn btn-primary">S'abonner</a>
+					</div>
+				</div>
+			</div>
+		</section>
+
+				<section class="testimonials">
+
+					<div class="container">
+
+						<h2>Ce que disent nos utilisateurs</h2>
+
+						<div class="testimonial-grid">
+
+							<div class="testimonial-card">
+
+								<div class="quote-icon">"</div>
+
+								<p class="testimonial-text">J'ai utilisé LanguageBuddy pendant 3 mois avant de commencer mon semestre d'échange à Madrid. Cela m'a aidé à passer de à peine capable de dire quoi que ce soit à participer réellement aux discussions en classe. La pratique conversationnelle était tellement mieux que les applications traditionnelles !</p>
+
+								<div class="testimonial-author">
+
+									<div class="author-avatar">👩‍🎓</div>
+
+									<div class="author-info">
+
+										<div class="author-name">Sarah M.</div>
+
+										<div class="author-title">Étudiante en échange en Espagne</div>
+
+									</div>
+
+								</div>
+
+							</div>
+
+							<div class="testimonial-card">
+
+								<div class="quote-icon">"</div>
+
+								<p class="testimonial-text">Je me suis préparé pour mon voyage de deux semaines en Italie en utilisant LanguageBuddy pendant mon trajet quotidien. À mon arrivée, je pouvais commander de la nourriture et même demander mon chemin. Les locaux ont adoré. Cela a rendu toutes les vacances tellement plus agréables et authentiques !</p>
+
+								<div class="testimonial-author">
+
+									<div class="author-avatar">🧳</div>
+
+									<div class="author-info">
+
+										<div class="author-name">Michael R.</div>
+
+										<div class="author-title">Passionné de voyage</div>
+
+									</div>
+
+								</div>
+
+							</div>
+
+							<div class="testimonial-card">
+
+								<div class="quote-icon">"</div>
+
+								<p class="testimonial-text">Travaillant sur un projet au Japon, j'avais besoin d'apprendre le japonais des affaires à partir de zéro. Maya m'a aidé à naviguer dans les phrases essentielles et les nuances culturelles, me permettant de participer en toute confiance aux réunions et de créer des liens avec mes collègues japonais.</p>
+
+								<div class="testimonial-author">
+
+									<div class="author-avatar">💼</div>
+
+									<div class="author-info">
+
+										<div class="author-name">Jessica T.</div>
+
+										<div class="author-title">Chef de projet, Initiative Japon</div>
+
+									</div>
+
+								</div>
+
+							</div>
+
+						</div>
+                        <div class="section-footer-link">
+                            <a href="/faq">Plus de questions sur le fonctionnement ? Lisez la FAQ →</a>
+                        </div>
+
+					</div>
+
+				</section>
+
+		
+
+		        <section id="roadmap" class="roadmap">
+
+					<div class="container">
+
+						<h2>Ce que j'apprends ensuite</h2>
+
+		                <p class="section-subtitle">J'apprends constamment de nouvelles façons de vous aider.</p>
+
+						<div class="feature-grid">
+
+							<div class="feature-card roadmap-card">
+
+								<div class="icon">📱</div>
+
+								<h3>Plus de façons de discuter</h3>
+
+								<p>Bientôt, vous pourrez me parler sur Instagram, Facebook Messenger, Telegram, RCS et Apple Messages.</p>
+
+							</div>
+
+							<div class="feature-card roadmap-card">
+
+								<div class="icon">⚔️</div>
+
+								<h3>Invités spéciaux</h3>
+
+								<p>Pratiquez avec des personnages uniques pour des week-ends thématiques spéciaux ! Imaginez apprendre avec un guerrier viking ou un maître samouraï.</p>
+
+							</div>
+
+							<div class="feature-card roadmap-card">
+
+								<div class="icon">🎙️</div>
+
+								<h3>Interactions riches</h3>
+
+								<p>J'apprends à comprendre les messages vocaux, à participer à des appels téléphoniques et même à discuter des images que vous m'envoyez.</p>
+
+							</div>
+
+						</div>
+
+					</div>
+
+				</section>
+
+		
+
+		    <style>
+
+		        .roadmap {
+
+		            background-color: #f8f9fa;
+
+		            padding: 6rem 0;
+
+		        }
+
+		        
+
+		        .roadmap h2 {
+
+		            text-align: center;
+
+		        }
+
+		
+
+		        .roadmap-card {
+
+		            border: 2px dashed #e0e0e0;
+
+		            background: #ffffff;
+
+		        }
+
+		
+
+		        .maya-hero {
+
+		            background-color: #ffffff;
+
+		            padding: 4rem 0 6rem 0;
+
+		            color: #333;
+
+		        }
+
+		
+
+		        .maya-intro-layout {
+
+		            display: flex;
+
+		            align-items: center;
+
+		            justify-content: center;
+
+		            gap: 4rem;
+
+		            flex-wrap: wrap;
+
+		        }
+
+		
+
+		        .maya-image-container {
+
+		            flex: 0 0 auto;
+
+		        }
+
+		
+
+		        .maya-avatar {
+
+		            width: 280px;
+
+		            height: 280px;
+
+		            border-radius: 50%;
+
+		            object-fit: cover;
+
+		            border: 8px solid #f8f9fa;
+
+		            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+
+		        }
+
+		
+
+		        .maya-text-content {
+
+		            flex: 1;
+
+		            max-width: 600px;
+
+		        }
+
+		
+
+		        .maya-hero h1 {
+
+		            font-size: 3.5rem;
+
+		            margin-bottom: 1.5rem;
+
+		            color: #25D366; /* WhatsApp Green for brand connection, or dark */
+
+		            color: #111;
+
+		            line-height: 1.1;
+
+		        }
+
+		
+
+		        .intro-text {
+
+		            font-size: 1.25rem;
+
+		            line-height: 1.6;
+
+		            color: #555;
+
+		            margin-bottom: 1.5rem;
+
+		        }
+
+		
+
+		        .cta-buttons {
+
+		            margin-top: 2rem;
+
+		            display: flex;
+
+		            gap: 1rem;
+
+		        }
+
+		
+
+		        /* Responsive adjustments */
+
+		        @media (max-width: 900px) {
+
+		            .maya-intro-layout {
+
+		                flex-direction: column;
+
+		                text-align: center;
+
+		                gap: 2rem;
+
+		            }
+
+		
+
+		            .maya-text-content {
+
+		                display: flex;
+
+		                flex-direction: column;
+
+		                align-items: center;
+
+		            }
+
+		            
+
+		            .maya-hero h1 {
+
+		                font-size: 2.5rem;
+
+		            }
+
+		
+
+		            .maya-avatar {
+
+		                width: 200px;
+
+		                height: 200px;
+
+		            }
+
+		        }
+
+		
+
+		                /* Large Hero Button */
+
+		
+
+		                .cta-container {
+
+		
+
+		                    margin-top: 2rem;
+
+		
+
+		                    display: flex;
+
+		
+
+		                    justify-content: flex-start; /* Aligns with text */
+
+		
+
+		                    width: 100%;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                .btn-whatsapp-large {
+
+		
+
+		                    background-color: #25D366;
+
+		
+
+		                    color: white;
+
+		
+
+		                    font-size: 1.25rem;
+
+		
+
+		                    font-weight: 700;
+
+		
+
+		                    padding: 1rem 3rem;
+
+		
+
+		                    border-radius: 50px;
+
+		
+
+		                    text-decoration: none;
+
+		
+
+		                    box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+
+		
+
+		                    display: inline-block;
+
+		
+
+		                    text-align: center;
+
+		
+
+		                    width: 100%;
+
+		
+
+		                    max-width: 350px; /* Limits width on large screens */
+
+		
+
+		                    
+
+		
+
+		                    /* Transition for Hover and Pop effect */
+
+		
+
+		                    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.3s ease, box-shadow 0.3s ease;
+
+		
+
+		                    transform-origin: center;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                .btn-whatsapp-large:hover {
+
+		
+
+		                    background-color: #1da851;
+
+		
+
+		                    transform: scale(1.02) translateY(-2px); /* Slight scale up on hover */
+
+		
+
+		                    box-shadow: 0 6px 20px rgba(37, 211, 102, 0.4);
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                /* Pop Animation States */
+
+		
+
+		                .btn-whatsapp-large.hero-hidden {
+
+		
+
+		                    opacity: 0;
+
+		
+
+		                    transform: scale(0); /* Pop out */
+
+		
+
+		                    pointer-events: none;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                /* Floating Action Button */
+
+		
+
+		                .fab-btn {
+
+		
+
+		                    position: fixed;
+
+		
+
+		                    bottom: 2rem;
+
+		
+
+		                    right: 2rem;
+
+		
+
+		                    background-color: #25D366;
+
+		
+
+		                    color: white;
+
+		
+
+		                    font-weight: 700;
+
+		
+
+		                    padding: 1rem 2rem;
+
+		
+
+		                    border-radius: 50px;
+
+		
+
+		                    text-decoration: none;
+
+		
+
+		                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+
+		
+
+		                    z-index: 1000;
+
+		
+
+		                    
+
+		
+
+		                    /* Initial State: Popped out (hidden) */
+
+		
+
+		                    opacity: 0;
+
+		
+
+		                    transform: scale(0);
+
+		
+
+		                    pointer-events: none;
+
+		
+
+		                    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+
+		
+
+		                    transform-origin: center;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                .fab-btn.fab-visible {
+
+		
+
+		                    opacity: 1;
+
+		
+
+		                    transform: scale(1); /* Pop in */
+
+		
+
+		                    pointer-events: auto;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                .fab-btn:hover {
+
+		
+
+		                    background-color: #1da851;
+
+		
+
+		                    transform: scale(1.05);
+
+		
+
+		                }
+
+		
+
+		                
+
+		
+
+		                /* Shake Animation */
+
+		
+
+		                @keyframes wiggle {
+
+		
+
+		                    0%, 100% { transform: scale(1) rotate(0deg); }
+
+		
+
+		                    15% { transform: scale(1.1) rotate(-3deg); }
+
+		
+
+		                    30% { transform: scale(1.1) rotate(3deg); }
+
+		
+
+		                    45% { transform: scale(1.1) rotate(-3deg); }
+
+		
+
+		                    60% { transform: scale(1.1) rotate(2deg); }
+
+		
+
+		                    75% { transform: scale(1.1) rotate(-1deg); }
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                .shaking {
+
+		
+
+		                    animation: wiggle 0.8s ease-in-out;
+
+		
+
+		                }
+
+		
+
+		        
+
+		
+
+		                @media (max-width: 900px) {
+
+		
+
+		                                .cta-container {
+
+		
+
+		                                    justify-content: center; /* Center on mobile */
+
+		
+
+		                                }
+
+		
+
+		                            }
+
+		
+
+		                            
+
+		
+
+		                            .section-footer-link {
+
+		
+
+		                                text-align: center;
+
+		
+
+		                                margin-top: 2rem;
+
+		
+
+		                            }
+
+		
+
+		                            
+
+		
+
+		                            .section-footer-link a {
+
+		
+
+		                                color: #128C7E;
+
+		
+
+		                                text-decoration: none;
+
+		
+
+		                                font-weight: 600;
+
+		
+
+		                                font-size: 1.1rem;
+
+		
+
+		                            }
+
+		
+
+		                            
+
+		
+
+		                            .section-footer-link a:hover {
+
+		
+
+		                                text-decoration: underline;
+
+		
+
+		                            }
+
+		
+
+		                        </style>
+
+		
+
+		        
+
+		
+
+		            <script is:inline>
+
+		
+
+		                // Scroll Observer for Pop and Shake effects
+
+		
+
+		                document.addEventListener('DOMContentLoaded', () => {
+
+		
+
+		                    const heroBtn = document.getElementById('hero-cta');
+
+		
+
+		                    const fabBtn = document.getElementById('fab-cta');
+
+		
+
+		                    const scrollThreshold = 100; // px
+
+		
+
+		                    let isFabVisible = false;
+
+		
+
+		        
+
+		
+
+		                    // Helper to trigger shake animation
+
+		
+
+		                    const triggerShake = (element) => {
+
+		
+
+		                        if (!element) return;
+
+		
+
+		                        element.classList.remove('shaking'); // Reset
+
+		
+
+		                        void element.offsetWidth; // Force reflow
+
+		
+
+		                        element.classList.add('shaking');
+
+		
+
+		                        
+
+		
+
+		                        // Cleanup after animation
+
+		
+
+		                        setTimeout(() => {
+
+		
+
+		                            element.classList.remove('shaking');
+
+		
+
+		                        }, 800);
+
+		
+
+		                    };
+
+		
+
+		        
+
+		
+
+		                    if (heroBtn && fabBtn) {
+
+		
+
+		                        // Scroll Handler
+
+		
+
+		                        window.addEventListener('scroll', () => {
+
+		
+
+		                            const scrolled = window.scrollY > scrollThreshold;
+
+		
+
+		        
+
+		
+
+		                            if (scrolled && !isFabVisible) {
+
+		
+
+		                                // Switch to FAB
+
+		
+
+		                                heroBtn.classList.add('hero-hidden');
+
+		
+
+		                                fabBtn.classList.add('fab-visible');
+
+		
+
+		                                isFabVisible = true;
+
+		
+
+		                                
+
+		
+
+		                                // Shake FAB shortly after it pops in
+
+		
+
+		                                setTimeout(() => triggerShake(fabBtn), 400);
+
+		
+
+		        
+
+		
+
+		                            } else if (!scrolled && isFabVisible) {
+
+		
+
+		                                // Switch to Hero
+
+		
+
+		                                heroBtn.classList.remove('hero-hidden');
+
+		
+
+		                                fabBtn.classList.remove('fab-visible');
+
+		
+
+		                                isFabVisible = false;
+
+		
+
+		                            }
+
+		
+
+		                        });
+
+		
+
+		        
+
+		
+
+		                        // Periodic Attention Seeker (Every 30s)
+
+		
+
+		                        setInterval(() => {
+
+		
+
+		                            if (isFabVisible) {
+
+		
+
+		                                triggerShake(fabBtn);
+
+		
+
+		                            } else {
+
+		
+
+		                                // Only shake hero if it's not hidden (double check)
+
+		
+
+		                                if (!heroBtn.classList.contains('hero-hidden')) {
+
+		
+
+		                                    triggerShake(heroBtn);
+
+		
+
+		                                }
+
+		
+
+		                            }
+
+		
+
+		                        }, 30000);
+
+		
+
+		                    } else {
+
+		
+
+		                        console.warn('Scroll interaction elements not found:', { heroBtn, fabBtn });
+
+		
+
+		                    }
+
+		
+
+		                });
+
+		
+
+		            </script>
+</Layout>

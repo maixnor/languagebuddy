@@ -1,0 +1,216 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="À propos de Benjamin Meixner - CEO de LanguageBuddy">
+    <section class="ceo-hero">
+        <div class="container hero-content">
+            <div class="hero-text">
+                <h1>Salut. Je suis Ben :)</h1>
+                <p class="lead">
+                    Je suis étudiant en premier cycle universitaire en économie et informatique. Je viens de Vienne, en Autriche. Je viens de terminer mon semestre d'échange à Lima, au Pérou, et j'ai adoré chaque seconde. Je suis passionné par la programmation, la nature et le sport. J'aime la randonnée, le judo et maintenant à Lima, j'ai fait pas mal de surf.
+                </p>
+            </div>
+            <div class="hero-image">
+                <img src="/ceo_benjamin_colca.jpeg" alt="Ben buvant du Maté" />
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section bg-light">
+        <div class="container grid-layout">
+            <div class="image-col">
+                <img src="/ceo_benjamin_surf.jpeg" alt="Ben surfant à Lima" class="rounded-shadow" />
+            </div>
+            <div class="text-col">
+                <h2>Inspiration</h2>
+                <p>
+                    J'avais besoin d'apprendre l'espagnol rapidement pour mon semestre d'échange au Pérou. J'ai essayé des cours de langue traditionnels, mais je trouvais difficile de préparer les leçons et de réviser les points de grammaire avant les cours. Je ne me sentais pas motivé pour pratiquer quoi que ce soit parce que je n'utilisais pas beaucoup mon espagnol. J'ai aussi essayé les cartes Anki, elles m'ont beaucoup aidé, par exemple pour apprendre les verbes irréguliers comme "ser" et "estar", mais l'utilité s'arrêtait là. Apprendre des mots ou des phrases individuels devenait vite ennuyeux et répétitif, et l'apprentissage réel était proche de zéro.
+                </p>
+                <p>
+                    Ensuite, j'ai commencé à avoir des conversations avec des LLM et cela a changé la donne pour moi. Je formais enfin des phrases et j'avais besoin de communiquer avec quelqu'un et de me faire comprendre. Mais je trouvais fastidieux de commencer un nouveau chat et de chercher le prompt que j'utilisais pour que le LLM se comporte comme je le voulais, et en plus, seulement la moitié du temps, il faisait exactement ce que je voulais et je passais presque plus de temps à m'assurer que le LLM coopérait vraiment avec moi. De plus, il me manquait les rappels pour utiliser réellement ce mode d'apprentissage.
+                </p>
+                <p>
+                    J'étais donc dans la situation suivante : j'utilise WhatsApp tous les jours. Je veux pratiquer avec des LLM. Le LLM ne fait généralement pas ce que je veux qu'il fasse et ne se souvient pas des choses.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section">
+        <div class="container grid-layout reverse">
+            <div class="image-col">
+                <img src="/ceo_benjamin_mate.jpeg" alt="Ben dans le Canyon de Colca" class="rounded-shadow" />
+            </div>
+            <div class="text-col">
+                <h2>Solution</h2>
+                <p>
+                    Donc, la solution v0.0.1 pour moi était d'avoir un petit service que j'ai connecté à WhatsApp et traduit presque 1:1 avec un prompt système assez basique pour ChatGPT. Rien d'extraordinaire et du point de vue du code, c'était aussi assez simple. Au fil des mois, j'ai ajouté plus de fonctionnalités pour moi-même et j'ai beaucoup affiné les prompts système (vraiment beaucoup) pour qu'ils se comportent comme je le voulais.
+                </p>
+                <p>
+                    Et lors d'une conversation avec un ami, nous en avons parlé et il a été fasciné. Ensuite, je l'ai montré à mon ancienne professeure d'espagnol des cours. Elle a été étonnée. Et de toute cette positivité, j'ai décidé de tenter le coup et de créer un service pour que les gens l'utilisent.
+                </p>
+                <p>
+                    Essentiellement, je veux fournir au monde l'outil principal que j'ai utilisé pour apprendre l'espagnol en 5 mois jusqu'à la fluidité conversationnelle. J'appelle cela un succès. J'espère que mon LanguageBuddy - Maya - vous apprendra autant qu'elle m'a appris, elle a été un outil inestimable pour mon parcours en espagnol. Et l'espagnol n'était certainement pas le dernier voyage qu'elle accompagnera.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section bg-light">
+        <div class="container text-center">
+            <h2>Rejoignez-moi</h2>
+            <p>
+                Je cherche actuellement des personnes passionnées par l'apprentissage des langues et l'exploration de nouvelles méthodes d'apprentissage. Je souhaite inspirer les gens et créer un service universel d'apprentissage des langues pour tous.
+            </p>
+            <a href="https://wa.me/436802456552" class="btn btn-whatsapp">Discutez avec moi sur WhatsApp</a>
+        </div>
+    </section>
+
+    <style>
+        .ceo-hero {
+            padding: 6rem 0;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .hero-content {
+            display: flex;
+            align-items: center;
+            gap: 4rem;
+            flex-direction: column-reverse;
+        }
+
+        @media (min-width: 768px) {
+            .hero-content {
+                flex-direction: row;
+            }
+        }
+
+        .hero-text {
+            flex: 1;
+        }
+
+        .hero-text h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+            line-height: 1.1;
+        }
+
+        .hero-text .lead {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            color: var(--text-light);
+        }
+
+        .hero-image {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        .hero-image img {
+            max-width: 100%;
+            width: 300px;
+            height: 600px; /* 1:2 aspect ratio */
+            object-fit: cover;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transform: rotate(2deg);
+            transition: transform 0.3s ease;
+        }
+        
+        .hero-image img:hover {
+            transform: rotate(0deg) scale(1.02);
+        }
+
+        .content-section {
+            padding: 6rem 0;
+        }
+
+        .bg-light {
+            background-color: var(--bg-light);
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        @media (min-width: 768px) {
+            .grid-layout {
+                grid-template-columns: 1fr 1fr;
+            }
+            .grid-layout.reverse .image-col {
+                order: 2;
+            }
+            .grid-layout.reverse .text-col {
+                order: 1;
+            }
+        }
+
+        .rounded-shadow {
+            width: 75%; /* 75% of parent column width */
+            margin: 0 auto; /* Center the image */
+            aspect-ratio: 1 / 2; /* Enforce 1:2 aspect ratio */
+            object-fit: cover;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-section {
+            padding: 6rem 0;
+        }
+
+        .cta-section .text-center {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-whatsapp {
+            background-color: var(--primary);
+            color: white;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .btn-whatsapp:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+        }
+    </style>
+</Layout>

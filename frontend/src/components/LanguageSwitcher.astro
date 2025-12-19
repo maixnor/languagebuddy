@@ -1,37 +1,175 @@
 ---
 import { getRelativeLocaleUrl } from "astro:i18n";
 
-const currentLocale = Astro.currentLocale;
+const currentLocale = Astro.currentLocale || 'en';
+
+const languages: Record<string, { flag: string; label: string }> = {
+  en: { flag: '🇬🇧', label: 'English' },
+  es: { flag: '🇪🇸', label: 'Español' },
+  fr: { flag: '🇫🇷', label: 'Français' },
+  de: { flag: '🇩🇪', label: 'Deutsch' },
+};
+
+const currentLang = languages[currentLocale];
+
+// Calculate relative path for language switching
+const pathname = Astro.url.pathname;
+let relativePath = pathname;
+
+// Remove the current locale prefix if present
+const localePrefix = `/${currentLocale}`;
+if (relativePath.startsWith(localePrefix)) {
+    relativePath = relativePath.slice(localePrefix.length);
+}
+
+// Ensure it starts with / (or is empty for root, though getRelativeLocaleUrl handles both)
+if (!relativePath.startsWith('/')) {
+    relativePath = '/' + relativePath;
+}
 ---
 
-<div class="language-switcher">
-    <a href={getRelativeLocaleUrl('en', '/')} class:list={{"active": currentLocale === 'en'}} title="English" aria-label="Switch to English">🇬🇧</a>
-    <a href={getRelativeLocaleUrl('es', '/')} class:list={{"active": currentLocale === 'es'}} title="Español" aria-label="Cambiar a Español">🇪🇸</a>
+<!-- Desktop View: Flags -->
+<div class="language-switcher desktop">
+    {Object.entries(languages).map(([code, lang]) => (
+         <a href={getRelativeLocaleUrl(code, relativePath)} class:list={{"active": currentLocale === code}} title={lang.label} aria-label={lang.label}>
+            {lang.flag}
+         </a>
+    ))}
 </div>
 
-<style>
-    .language-switcher {
-        display: flex;
-        gap: 0.5rem;
-        margin-left: 1rem; /* Adjust as needed */
+<!-- Mobile View: Button & Dropdown -->
+<div class="language-switcher mobile">
+    <button id="lang-dropdown-btn" aria-label="Select Language">
+        {currentLang.flag}
+    </button>
+    <div id="lang-dropdown-content" class="dropdown-content">
+        {Object.entries(languages).map(([code, lang]) => (
+            code !== currentLocale && (
+                 <a href={getRelativeLocaleUrl(code, relativePath)} aria-label={lang.label}>
+                    <span class="flag">{lang.flag}</span> <span class="label">{lang.label}</span>
+                 </a>
+            )
+        ))}
+    </div>
+</div>
+
+<script>
+    function setupLanguageSwitcher() {
+        const btn = document.getElementById('lang-dropdown-btn');
+        const content = document.getElementById('lang-dropdown-content');
+
+        if (btn && content) {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                content.classList.toggle('show');
+            });
+
+            document.addEventListener('click', (e) => {
+                 if (content.classList.contains('show') && e.target instanceof Node && !content.contains(e.target) && e.target !== btn) {
+                    content.classList.remove('show');
+                 }
+            });
+        }
     }
-    .language-switcher a {
-        padding: 0.25rem 0.6rem; /* Slightly more horizontal padding */
+    
+    setupLanguageSwitcher();
+</script>
+
+<style>
+    /* Shared */
+    .language-switcher {
+        z-index: 1001;
+    }
+
+    /* Desktop Styles */
+    .language-switcher.desktop {
+        display: none;
+    }
+
+    .language-switcher.desktop a {
+        padding: 0.25rem 0.6rem;
         border: 1px solid var(--text-light);
         border-radius: 4px;
         text-decoration: none;
         color: var(--text-light);
         transition: all 0.2s ease-in-out;
-        font-size: 1.5rem; /* Make flags larger */
-        line-height: 1; /* Adjust line height for better vertical centering */
+        font-size: 1.5rem;
+        line-height: 1;
     }
-    .language-switcher a:hover {
+    .language-switcher.desktop a:hover {
         background-color: var(--bg-light);
         color: var(--text);
     }
-    .language-switcher a.active {
+    .language-switcher.desktop a.active {
         background-color: var(--primary);
         color: white;
         border-color: var(--primary);
+    }
+
+    /* Mobile Styles */
+    .language-switcher.mobile {
+        display: block;
+        position: relative;
+    }
+
+    #lang-dropdown-btn {
+        background: none;
+        border: 1px solid var(--text-light);
+        border-radius: 4px;
+        font-size: 1.5rem;
+        padding: 0.25rem 0.5rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text);
+        line-height: 1;
+    }
+
+    .dropdown-content {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        margin-top: 0.5rem;
+        background-color: #fff;
+        min-width: 150px;
+        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid #eee;
+    }
+
+    .dropdown-content.show {
+        display: block;
+    }
+
+    .dropdown-content a {
+        color: var(--text);
+        padding: 12px 16px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 1rem;
+    }
+
+    .dropdown-content a:hover {
+        background-color: var(--bg-light);
+    }
+    
+    .flag {
+        font-size: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+        .language-switcher.desktop {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+        .language-switcher.mobile {
+            display: none;
+        }
     }
 </style>

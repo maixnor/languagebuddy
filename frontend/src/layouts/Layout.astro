@@ -865,10 +865,6 @@ const getLocalizedPath = (path: string) => {
 
 		/* Responsive */
 		@media (max-width: 768px) {
-			header {
-				display: none;
-			}
-
 			.hero h1 {
 				font-size: 2rem;
 			}
@@ -878,8 +874,7 @@ const getLocalizedPath = (path: string) => {
 			}
 
 			nav ul {
-				flex-direction: column;
-				gap: 1rem;
+				display: none;
 			}
 
 			.pricing-card.featured {
