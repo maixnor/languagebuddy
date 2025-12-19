@@ -4,7 +4,6 @@ import { LanguageBuddyAgent } from './language-buddy-agent';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
 import { LinkService } from '../features/subscriber/subscriber-link.service';
-import { DatabaseService } from '../core/database';
 import { recordFailedCheckResult, recordUserCommand, recordCheckExecuted } from '../core/observability/metrics';
 
 export interface IUserCommandMessenger {
@@ -15,7 +14,8 @@ export async function handleUserCommand(
     subscriber: Subscriber, 
     message: string,
     messenger: IUserCommandMessenger,
-    languageBuddyAgent: LanguageBuddyAgent
+    languageBuddyAgent: LanguageBuddyAgent,
+    linkService: LinkService
 ) {
     if (message === 'ping' || message === '!ping') {
         await messenger.sendMessage(subscriber.connections.phone, "pong");
@@ -25,7 +25,6 @@ export async function handleUserCommand(
 
     if (message.startsWith('!link')) {
         const parts = message.split(' ');
-        const linkService = LinkService.getInstance(new DatabaseService()); // Singleton will handle reuse
 
         if (parts.length === 1) {
             // Generate Code

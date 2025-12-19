@@ -270,7 +270,8 @@ export class MessagingService {
       subscriber, 
       message.text!.body, 
       this.services.whatsappService, 
-      this.services.languageBuddyAgent
+      this.services.languageBuddyAgent,
+      this.services.linkService
     ) !== 'nothing') {
       await this.services.whatsappService.markMessageAsRead(message.id);
       return;

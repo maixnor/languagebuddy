@@ -61,6 +61,11 @@ const mockStripeService = {
   getPaymentLink: jest.fn(),
 };
 
+const mockLinkService = {
+  generateLinkCode: jest.fn(),
+  linkAccounts: jest.fn(),
+};
+
 const mockServiceContainer: ServiceContainer = {
   onboardingService: mockOnboardingService as any,
   subscriberService: mockSubscriberService as any,
@@ -68,6 +73,7 @@ const mockServiceContainer: ServiceContainer = {
   whatsappService: mockWhatsappService as any,
   whatsappDeduplicationService: mockWhatsappDeduplicationService as any,
   telegramService: mockTelegramService as any,
+  linkService: mockLinkService as any,
   stripeService: mockStripeService as any,
   digestService: {} as any, // Not used in this test
   schedulingService: {} as any, // Not used in this test

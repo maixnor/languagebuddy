@@ -7,6 +7,7 @@ import { SubscriptionService } from '../features/subscription/subscription.servi
 import { config, logger } from './config';
 import { ChatOpenAI } from '@langchain/openai';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
+import { LinkService } from '../features/subscriber/subscriber-link.service';
 import { OnboardingService } from '../features/onboarding/onboarding.service';
 import { WhatsappDeduplicationService } from '../core/messaging/whatsapp/whatsapp-deduplication.service';
 import { DigestService } from '../features/digest/digest.service';
@@ -24,6 +25,7 @@ export class ServiceContainer {
   public llm!: ChatOpenAI;
   public languageBuddyAgent!: LanguageBuddyAgent;
   public subscriberService!: SubscriberService;
+  public linkService!: LinkService;
   public onboardingService!: OnboardingService;
   public feedbackService!: FeedbackService;
   public digestService!: DigestService;
@@ -46,6 +48,7 @@ export class ServiceContainer {
     });
 
     this.subscriberService = SubscriberService.getInstance(this.dbService); // Passed dbService
+    this.linkService = LinkService.getInstance(this.dbService);
     this.onboardingService = OnboardingService.getInstance();
     this.feedbackService = FeedbackService.getInstance(this.dbService);
     this.whatsappDeduplicationService = WhatsappDeduplicationService.getInstance(this.dbService);
