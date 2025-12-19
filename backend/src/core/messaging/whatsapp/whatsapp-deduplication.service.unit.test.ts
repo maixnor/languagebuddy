@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 class MockBetterSqlite3Database {
   public store: { message_id: string; phone_number: string | null; created_at: string }[] = [];
   public insertError: any = null; // New property to inject insert errors
+  public forceForeignKeyError: boolean = false;
 
   prepare = jest.fn((sql: string) => {
     if (sql.startsWith('DELETE FROM')) {
@@ -20,6 +21,11 @@ class MockBetterSqlite3Database {
     } else if (sql.startsWith('INSERT INTO processed_messages')) {
       return {
         run: jest.fn((message_id: string, phone_number: string | null, created_at: string) => {
+          if (this.forceForeignKeyError && phone_number !== null) {
+            const error: any = new Error('FOREIGN KEY constraint failed');
+            error.code = 'SQLITE_CONSTRAINT_FOREIGNKEY';
+            throw error;
+          }
           if (this.insertError) {
             const error = this.insertError;
             this.insertError = null; // Reset error after throwing
@@ -157,6 +163,22 @@ describe('WhatsappDeduplicationService', () => {
       mockBetterSqlite3Db.insertError = error;
 
       await expect(deduplicationService.recordMessageProcessed(messageId, phoneNumber)).rejects.toThrow('Database insert error');
+    });
+
+    it('should handle FOREIGN KEY constraint failed by retrying with NULL phone number', async () => {
+      const messageId = 'msg-new-user';
+      const phoneNumber = '1234567890';
+      
+      mockBetterSqlite3Db.forceForeignKeyError = true;
+  
+      // Should NOT throw, but return false (not duplicate)
+      const isDuplicate = await deduplicationService.recordMessageProcessed(messageId, phoneNumber);
+      expect(isDuplicate).toBe(false);
+  
+      // Verify it was stored with NULL phone number
+      const stored = mockBetterSqlite3Db.store.find(m => m.message_id === messageId);
+      expect(stored).toBeDefined();
+      expect(stored?.phone_number).toBeNull();
     });
   });
 
