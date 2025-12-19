@@ -201,7 +201,7 @@
             
             # Pre-deploy cleanup/permissions
             # shellcheck disable=SC2029
-            ssh "$SERVER" "sudo rm -rf $DEPLOY_PATH/_astro $DEPLOY_PATH/impressum $DEPLOY_PATH/privacy 2>/dev/null || true && sudo mkdir -p $DEPLOY_PATH && sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
+            ssh "$SERVER" "sudo rm -rf $DEPLOY_PATH/dist $DEPLOY_PATH/node_modules 2>/dev/null || true && sudo mkdir -p $DEPLOY_PATH && sudo chown -R languagebuddy:languagebuddy $DEPLOY_PATH && sudo chmod -R u+rwX,g+rwX $DEPLOY_PATH"
             
             # Rsync
             if ! rsync -az --no-perms --no-times --omit-dir-times --owner --group --rsync-path="sudo rsync" "$TEMP_DIR/" "$SERVER:$DEPLOY_PATH/"; then
@@ -210,6 +210,13 @@
                 exit 1
             fi
             
+            # Restart service
+            echo "🔄 Restarting languagebuddy-frontend service..."
+            # shellcheck disable=SC2029
+            if ! ssh "$SERVER" "sudo systemctl restart languagebuddy-frontend.service"; then
+                echo "⚠️  Warning: Service restart failed or service not found"
+                exit 1
+            fi
 
             
             # Cleanup
