@@ -1,0 +1,121 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<p style="text-align: center; font-style: italic; color: #888;">
+    Esta es una traducción generada por IA para la conveniencia del usuario. Solo la versión en inglés es legalmente válida.
+</p>
+
+<Layout>
+	<section class="faq-header">
+		<div class="container">
+			<h1>Preguntas Frecuentes</h1>
+			<p class="subtitle">(casi) Todo lo que necesitas saber sobre aprender con Maya.</p>
+		</div>
+	</section>
+
+	<section class="faq-content">
+		<div class="container">
+			<div class="faq-grid">
+				<div class="faq-item">
+					<h3>¿Cómo funciona la prueba gratuita?</h3>
+					<p>Simplemente empiezas a chatear. Después de 7 días, te pediremos amablemente que te registres utilizando un enlace proporcionado por Maya. No hay registro ni nada más. Solo empieza a chatear.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Necesito instalar una aplicación separada?</h3>
+          <p>No. La idea principal es hacer que aprender un idioma sea lo más fácil posible. No hay aplicaciones adicionales que instalar en absoluto. Actualmente solo se admite WhatsApp, pero estamos trabajando para admitir más servicios de chat.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Puedo cambiar de idioma más tarde?</h3>
+          <p>Por supuesto. También puedes aprender/practicar varios idiomas diferentes a la vez. ¿Quieres aprender francés mientras conservas tus habilidades en español? No hay problema.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Cómo cancelo mi suscripción?</h3>
+					<p>Puedes cancelar tu suscripción utilizando Stripe.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Mi información de pago es segura?</h3>
+					<p>No manejamos ninguna información de pago. Todo es gestionado por Stripe.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Qué pasa si soy un principiante absoluto?</h3>
+          <p>Este servicio está dirigido a tener conversaciones. Si bien es posible aprender un idioma desde 0 usando Maya, podría haber enfoques más fáciles utilizando diferentes aplicaciones/servicios al principio. Si empiezas a formar frases y oraciones, deberías tener conocimientos suficientes de un idioma para entablar conversaciones y aprender mucho más rápido.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Qué LLM estás usando?</h3>
+          <p>Actualmente empleamos modelos de OpenAI. Pero pronto queremos cambiar a los modelos Gemini de Google, ya que en promedio ofrecen un mejor rendimiento en tareas no técnicas como el aprendizaje/enseñanza de idiomas.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Puedo ayudar de alguna manera?</h3>
+          <p>Actualmente estamos desarrollando y mejorando la experiencia extensivamente. Nuevas funciones, plataformas y mejoras generales, así como la búsqueda de errores. Puedes participar activamente si lo deseas. Contáctanos para apoyar y darnos tus comentarios.</p>
+				</div>
+
+				<div class="faq-item">
+					<h3>¿Cómo funciona la corrección de la IA?</h3>
+					<p>Revisamos cada chat diariamente en busca de alucinaciones y otros problemas. Además, siempre puedes usar el comando !check para asegurarte de que las respuestas sean correctas.</p>
+				</div>
+			</div>
+            
+            <div class="faq-cta">
+                <p>¿Todavía tienes preguntas?</p>
+                <a href="https://wa.me/436802456552" class="btn btn-whatsapp">Chatea con Soporte</a>
+            </div>
+		</div>
+	</section>
+
+	<style>
+		.faq-header {
+			background-color: #f8f9fa;
+			padding: 4rem 0;
+			text-align: center;
+		}
+
+		.faq-header h1 {
+			margin-bottom: 1rem;
+            color: #25D366;
+            color: #333;
+		}
+
+		.faq-content {
+			padding: 4rem 0;
+		}
+
+		.faq-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+			gap: 2rem;
+			max-width: 900px;
+			margin: 0 auto;
+		}
+
+		.faq-item {
+			background: white;
+			padding: 2rem;
+			border-radius: 12px;
+			box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+		}
+
+		.faq-item h3 {
+			font-size: 1.25rem;
+			margin-bottom: 1rem;
+			color: #128C7E;
+		}
+        
+        .faq-cta {
+            text-align: center;
+            margin-top: 4rem;
+        }
+        
+        .faq-cta p {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+	</style>
+</Layout>

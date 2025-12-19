@@ -1,0 +1,37 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+
+const currentLocale = Astro.currentLocale;
+---
+
+<div class="language-switcher">
+    <a href={getRelativeLocaleUrl('en', '/')} class:list={{"active": currentLocale === 'en'}} title="English" aria-label="Switch to English">🇬🇧</a>
+    <a href={getRelativeLocaleUrl('es', '/')} class:list={{"active": currentLocale === 'es'}} title="Español" aria-label="Cambiar a Español">🇪🇸</a>
+</div>
+
+<style>
+    .language-switcher {
+        display: flex;
+        gap: 0.5rem;
+        margin-left: 1rem; /* Adjust as needed */
+    }
+    .language-switcher a {
+        padding: 0.25rem 0.6rem; /* Slightly more horizontal padding */
+        border: 1px solid var(--text-light);
+        border-radius: 4px;
+        text-decoration: none;
+        color: var(--text-light);
+        transition: all 0.2s ease-in-out;
+        font-size: 1.5rem; /* Make flags larger */
+        line-height: 1; /* Adjust line height for better vertical centering */
+    }
+    .language-switcher a:hover {
+        background-color: var(--bg-light);
+        color: var(--text);
+    }
+    .language-switcher a.active {
+        background-color: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+</style>
