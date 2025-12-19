@@ -286,20 +286,25 @@ export class LanguageBuddyAgent {
       'user.timezone': subscriber.profile.timezone || 'unknown'
     });
 
-    const response = await this.agent.invoke(
-        { 
-            messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)],
-            subscriber: subscriber
-        },
-        { 
-          configurable: { thread_id: subscriber.connections.phone },
-          metadata: newMetadata
-        }
-    );
+    try {
+      const response = await this.agent.invoke(
+          { 
+              messages: [new SystemMessage(systemPrompt), new HumanMessage(humanMessage)],
+              subscriber: subscriber
+          },
+          { 
+            configurable: { thread_id: subscriber.connections.phone },
+            metadata: newMetadata
+          }
+      );
 
-    const lastMsg = response.messages[response.messages.length - 1];
-    logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
-    return { response: lastMsg.content || "processUserMessage()?", updatedSubscriber: response.subscriber };
+      const lastMsg = response.messages[response.messages.length - 1];
+      logger.info(`🔧 (${subscriber.connections.phone.slice(-4)}) AI response: ${lastMsg.content}`);
+      return { response: lastMsg.content || "processUserMessage()?", updatedSubscriber: response.subscriber };
+    } catch (error) {
+      logger.error({ err: error, subscriber: subscriber }, "Error in processUserMessage method");
+      return { response: "An error occurred while processing your message. Please try again later.", updatedSubscriber: subscriber };
+    }
   }
 
   async clearConversation(phone: string): Promise<void> {
