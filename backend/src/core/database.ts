@@ -313,6 +313,15 @@ export class DatabaseService {
       INSERT INTO checkpoint_blobs_new SELECT * FROM checkpoint_blobs;
       DROP TABLE checkpoint_blobs;
       ALTER TABLE checkpoint_blobs_new RENAME TO checkpoint_blobs;
+      `,
+      `
+      CREATE TABLE IF NOT EXISTS link_codes (
+        code TEXT PRIMARY KEY,
+        subscriber_phone TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME NOT NULL,
+        FOREIGN KEY (subscriber_phone) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
       `
     ];
 

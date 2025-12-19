@@ -4,6 +4,8 @@ import { WhatsAppService } from '../core/messaging/whatsapp';
 import { LanguageBuddyAgent } from './language-buddy-agent';
 import { SubscriberService } from '../features/subscriber/subscriber.service';
 import { SchedulerService } from '../features/scheduling/scheduler.service';
+import { LinkService } from '../features/subscriber/subscriber-link.service';
+import { DatabaseService } from '../core/database';
 import { recordFailedCheckResult, recordUserCommand, recordCheckExecuted } from '../core/observability/metrics';
 
 export async function handleUserCommand(
@@ -16,6 +18,59 @@ export async function handleUserCommand(
         await whatsappService.sendMessage(subscriber.connections.phone, "pong");
         recordUserCommand('ping');
         return "ping";
+    }
+
+    if (message.startsWith('!link')) {
+        const parts = message.split(' ');
+        const linkService = LinkService.getInstance(new DatabaseService()); // Singleton will handle reuse
+
+        if (parts.length === 1) {
+            // Generate Code
+            try {
+                const code = await linkService.generateLinkCode(subscriber.connections.phone);
+                await whatsappService.sendMessage(
+                    subscriber.connections.phone, 
+                    `🔗 To link another account, send this command in the other app:\n\n!link ${code}\n\nThis code expires in 10 minutes.`
+                );
+                recordUserCommand('link_generate');
+                return '!link_generate';
+            } catch (error) {
+                logger.error({ err: error }, "Error generating link code");
+                await whatsappService.sendMessage(subscriber.connections.phone, "Error generating link code. Please try again.");
+                return '!link_error';
+            }
+        } else if (parts.length === 2) {
+            // Consume Code
+            const code = parts[1].trim();
+            if (!/^\d{6}$/.test(code)) {
+                await whatsappService.sendMessage(subscriber.connections.phone, "Invalid code format. It must be a 6-digit number.");
+                return '!link_invalid';
+            }
+
+            try {
+                const success = await linkService.linkAccounts(code, subscriber.connections.phone);
+                if (success) {
+                    await whatsappService.sendMessage(subscriber.connections.phone, "✅ Accounts linked successfully! You can now use Language Buddy from both apps.");
+                    // Since the current subscriber (this thread) is deleted, we should stop here.
+                    // The messaging service might try to update 'lastActiveAt' on a deleted subscriber if we aren't careful, 
+                    // but that usually happens *before* this command handler or assumes existence.
+                    // Actually, handleUserCommand returns a string. 
+                    // If we return, the calling function (handleRegularConversation or processTextMessage) might continue.
+                    // In `MessagingService.processTextMessage`, if handleUserCommand returns !== 'nothing', it returns early.
+                    // So we are safe from further processing.
+                    recordUserCommand('link_success');
+                    return '!link_success';
+                } else {
+                    await whatsappService.sendMessage(subscriber.connections.phone, "❌ Link failed. The code may be invalid, expired, or you are trying to link to yourself.");
+                    recordUserCommand('link_failed');
+                    return '!link_failed';
+                }
+            } catch (error) {
+                logger.error({ err: error }, "Error linking accounts");
+                await whatsappService.sendMessage(subscriber.connections.phone, "An error occurred while linking accounts.");
+                return '!link_error';
+            }
+        }
     }
 
     if (message.startsWith('!clear')) {
