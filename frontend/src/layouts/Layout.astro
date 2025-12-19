@@ -1,5 +1,24 @@
 ---
 import LanguageSwitcher from "../components/LanguageSwitcher.astro";
+
+const currentPath = Astro.url.pathname;
+let lang = 'en'; // Default language
+
+if (currentPath.startsWith('/es/')) {
+    lang = 'es';
+}
+// Add more languages if needed
+
+const getLocalizedPath = (path: string) => {
+    // If the path already starts with the determined language prefix, don't add it again.
+    // This is useful for root paths like /en or /es if they are directly accessed.
+    if (path.startsWith(`/${lang}/`)) {
+        return path;
+    }
+    // Handle root path specifically, e.g., for /faq -> /en/faq or /es/faq
+    // For other paths like /ceo, it should become /en/ceo or /es/ceo
+    return `/${lang}${path}`;
+}
 ---
 
 <!DOCTYPE html>
@@ -44,18 +63,21 @@ import LanguageSwitcher from "../components/LanguageSwitcher.astro";
 				<div class="footer-section">
 					<h4>Legal</h4>
 					<ul>
-						<li><a href="/faq">FAQ</a></li>
-						<li><a href="/privacy">Privacy Policy</a></li>
-						<li><a href="/impressum">Impressum</a></li>
-						<li><a href="/terms">Terms of Service</a></li>
-						<li><a href="/deleteme">Data Deletion</a></li>
+						<li><a href={getLocalizedPath('/faq')}>FAQ</a></li>
+						<li><a href={getLocalizedPath('/privacy')}>Privacy Policy</a></li>
+						<li><a href={getLocalizedPath('/impressum')}>Impressum</a></li>
+						<li><a href={getLocalizedPath('/terms')}>Terms of Service</a></li>
+						<li><a href={getLocalizedPath('/deleteme')}>Data Deletion</a></li>
 					</ul>
 				</div>
 				<div class="footer-section">
 					<h4>Contact</h4>
-					<p><a href="mailto:benjamin@meixner.org">benjamin@meixner.org</a></p>
-					<p><a href="https://wa.me/436802456552" style="color: #25D366; font-weight: 600;">💬 WhatsApp</a></p>
-					<p>Fritz-Schmerold-Gasse 36<br>2331 Voesendorf, Austria</p>
+					<ul>
+						<li><a href={`/${lang}/ceo`} style="color: white; font-weight: 600;">About the Founder</a></li>
+						<li><a href="mailto:benjamin@meixner.org">benjamin@meixner.org</a></li>
+						<li><a href="tel:+436802456552">+436802456552</a></li>
+						<li>Fritz-Schmerold-Gasse 36<br>2331 Voesendorf, Austria</li>
+					</ul>
 				</div>
 			</div>
 			<div class="footer-bottom">
