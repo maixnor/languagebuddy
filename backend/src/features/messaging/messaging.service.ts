@@ -85,6 +85,27 @@ export class MessagingService {
 
     recordConversationMessage('user', subscriberType);
 
+    // Create a messenger adapter that replies to the current Telegram chat
+    const telegramMessenger = {
+        sendMessage: async (_to: string, message: string) => {
+            await this.services.telegramService.sendMessage({
+                chat_id: chatId,
+                text: message
+            });
+        }
+    };
+
+    // Handle user commands
+    // We pass the telegramMessenger which ignores the phone number arg and sends to the current chatId
+    if (await handleUserCommand(
+      subscriber, 
+      text, 
+      telegramMessenger, 
+      this.services.languageBuddyAgent
+    ) !== 'nothing') {
+      return;
+    }
+
     await traceConversation('process_telegram_message', phone, async (span) => {
         let agentResult: { response: string; updatedSubscriber: Subscriber };
 
