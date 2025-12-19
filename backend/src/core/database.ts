@@ -21,6 +21,7 @@ export class DatabaseService {
     }
 
     this.db = new Database(finalDbPath);
+    this.db.pragma('foreign_keys = ON');
     // Apply WAL mode only if it's not an in-memory database
     if (finalDbPath !== ':memory:') {
       this.db.pragma('journal_mode = WAL');
@@ -29,6 +30,7 @@ export class DatabaseService {
   }
 
   private migrate() {
+    this.db.pragma('foreign_keys = OFF');
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS migrations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,7 +237,83 @@ export class DatabaseService {
         metric_abbreviations_json = json_extract(conversation_metrics_json, '$.abbreviationUsage');
       `,
       `ALTER TABLE digests DROP COLUMN assistant_mistakes_json;`,
-      `ALTER TABLE digests DROP COLUMN conversation_metrics_json;`
+      `ALTER TABLE digests DROP COLUMN conversation_metrics_json;`,
+      // Migrations for Cascade Delete
+      `
+      DROP TABLE IF EXISTS processed_messages_new;
+      CREATE TABLE IF NOT EXISTS processed_messages_new (
+        message_id TEXT PRIMARY KEY,
+        phone_number TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (phone_number) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
+      INSERT INTO processed_messages_new SELECT * FROM processed_messages;
+      DROP TABLE processed_messages;
+      ALTER TABLE processed_messages_new RENAME TO processed_messages;
+      `,
+      `
+      DROP TABLE IF EXISTS feedback_new;
+      CREATE TABLE IF NOT EXISTS feedback_new (
+        phone_number TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (phone_number) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
+      INSERT INTO feedback_new SELECT * FROM feedback;
+      DROP TABLE feedback;
+      ALTER TABLE feedback_new RENAME TO feedback;
+      `,
+      `
+      DROP TABLE IF EXISTS checkpoints_new;
+      CREATE TABLE IF NOT EXISTS checkpoints_new (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        parent_checkpoint_id TEXT,
+        type TEXT NOT NULL,
+        checkpoint TEXT NOT NULL,
+        metadata TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, created_at DESC),
+        UNIQUE (checkpoint_id),
+        FOREIGN KEY (thread_id) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
+      INSERT INTO checkpoints_new SELECT * FROM checkpoints;
+      DROP TABLE checkpoints;
+      ALTER TABLE checkpoints_new RENAME TO checkpoints;
+      `,
+      `
+      DROP TABLE IF EXISTS checkpoint_writes_new;
+      CREATE TABLE IF NOT EXISTS checkpoint_writes_new (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        idx INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, checkpoint_id, task_id, idx),
+        FOREIGN KEY (thread_id) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
+      INSERT INTO checkpoint_writes_new SELECT * FROM checkpoint_writes;
+      DROP TABLE checkpoint_writes;
+      ALTER TABLE checkpoint_writes_new RENAME TO checkpoint_writes;
+      `,
+      `
+      DROP TABLE IF EXISTS checkpoint_blobs_new;
+      CREATE TABLE IF NOT EXISTS checkpoint_blobs_new (
+        thread_id TEXT NOT NULL,
+        checkpoint_id TEXT NOT NULL,
+        blob_id TEXT NOT NULL,
+        data BLOB NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (thread_id, checkpoint_id, blob_id),
+        FOREIGN KEY (thread_id) REFERENCES subscribers(phone_number) ON DELETE CASCADE
+      );
+      INSERT INTO checkpoint_blobs_new SELECT * FROM checkpoint_blobs;
+      DROP TABLE checkpoint_blobs;
+      ALTER TABLE checkpoint_blobs_new RENAME TO checkpoint_blobs;
+      `
     ];
 
     for (const migration of migrations) {
@@ -258,6 +336,7 @@ export class DatabaseService {
         }
       }
     }
+    this.db.pragma('foreign_keys = ON');
   }
 
   getDb(): Database.Database {

@@ -227,7 +227,7 @@ export class MessagingService {
       
       // If subscriber is in onboarding status, use the onboarding system prompt
       if (subscriber && subscriber.status === 'onboarding') {
-        systemPromptOverride = generateOnboardingSystemPrompt(subscriber);
+        systemPromptOverride = generateOnboardingSystemPrompt();
       } else if (!systemPromptOverride && this.services.subscriberService.shouldShowSubscriptionWarning(subscriber)) {
         const paymentLink = await this.services.subscriptionService.getPaymentLink(phone);
         

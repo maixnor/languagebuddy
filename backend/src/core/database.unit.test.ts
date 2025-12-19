@@ -5,23 +5,32 @@ import * as crypto from 'crypto';
 
 describe('DatabaseService', () => {
   const dbPath = path.join(__dirname, '../../data', 'test.sqlite');
+  let dbService: DatabaseService | undefined;
 
   beforeEach(() => {
     // Ensure the test database file doesn't exist before each test
-    if (fs.existsSync(dbPath)) {
-      fs.unlinkSync(dbPath);
-    }
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    if (fs.existsSync(`${dbPath}-wal`)) fs.unlinkSync(`${dbPath}-wal`);
+    if (fs.existsSync(`${dbPath}-shm`)) fs.unlinkSync(`${dbPath}-shm`);
   });
 
   afterEach(() => {
-    // Clean up the test database file after each test
-    if (fs.existsSync(dbPath)) {
-      fs.unlinkSync(dbPath);
+    if (dbService) {
+      try {
+        dbService.close();
+      } catch (e) {
+        // Ignore if already closed
+      }
+      dbService = undefined;
     }
+    // Clean up the test database file after each test
+    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+    if (fs.existsSync(`${dbPath}-wal`)) fs.unlinkSync(`${dbPath}-wal`);
+    if (fs.existsSync(`${dbPath}-shm`)) fs.unlinkSync(`${dbPath}-shm`);
   });
 
   it('should initialize the database and enable WAL mode', () => {
-    const dbService = new DatabaseService(dbPath);
+    dbService = new DatabaseService(dbPath);
     const db = dbService.getDb();
 
     // Check if WAL mode is enabled
@@ -32,25 +41,21 @@ describe('DatabaseService', () => {
     const migrationsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migrations';").get();
     expect(migrationsTable).toBeDefined();
     expect(migrationsTable.name).toBe('migrations');
-
-    dbService.close();
   });
 
   it('should create tables specified in migrations', () => {
-    const dbService = new DatabaseService(dbPath);
+    dbService = new DatabaseService(dbPath);
     const db = dbService.getDb();
 
     // Check if a table from the actual migrations (e.g., 'subscribers') exists
     const subscribersTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='subscribers';").get();
     expect(subscribersTable).toBeDefined();
     expect(subscribersTable.name).toBe('subscribers');
-
-    dbService.close();
   });
 
   it('should not apply the same migration twice', () => {
-    let dbService = new DatabaseService(dbPath);
-    dbService.close();
+    dbService = new DatabaseService(dbPath);
+    dbService.close(); // Close explicitly to re-open
 
     // Re-initialize with the same path, should not re-apply existing migrations
     dbService = new DatabaseService(dbPath);
@@ -67,12 +72,10 @@ describe('DatabaseService', () => {
     for (const name in migrationCounts) {
         expect(migrationCounts[name]).toBe(1);
     }
-
-    dbService.close();
   });
 
   it('should work with an in-memory database', () => {
-    const dbService = new DatabaseService(':memory:');
+    dbService = new DatabaseService(':memory:');
     const db = dbService.getDb();
 
     const walMode = db.pragma('journal_mode') as { journal_mode: string }[];
@@ -80,7 +83,5 @@ describe('DatabaseService', () => {
 
     const migrationsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='migrations';").get();
     expect(migrationsTable).toBeDefined();
-
-    dbService.close();
   });
 });

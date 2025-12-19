@@ -130,11 +130,26 @@ export async function handleUserCommand(
         return '!schedule';
     }
 
-    if (message.startsWith('!reset')) {
+    if (message.startsWith('!resetreset')) {
+        const speakingLanguage = subscriber.profile.speakingLanguages?.[0]?.languageName || 'English';
+        const goodbye = "Your account and all data have been permanently deleted. If you wish to start again, just send a message.";
+        const translatedGoodbye = await languageBuddyAgent.oneShotMessage(goodbye, speakingLanguage, subscriber.connections.phone);
+        
         await languageBuddyAgent.clearConversation(subscriber.connections.phone);
         await SubscriberService.getInstance().deleteSubscriber(subscriber.connections.phone);
-        await whatsappService.sendMessage(subscriber.connections.phone, "Your conversation history and profile have been deleted. Send any message to start fresh!");
-        recordUserCommand('reset');
+        
+        await whatsappService.sendMessage(subscriber.connections.phone, translatedGoodbye);
+        recordUserCommand('reset_confirm');
+        return '!resetreset';
+    }
+
+    if (message.startsWith('!reset')) {
+        const speakingLanguage = subscriber.profile.speakingLanguages?.[0]?.languageName || 'English';
+        const warning = "WARNING: You are about to delete your account and all your learning progress. This action is irreversible. If you are really sure, please type !resetreset to confirm.";
+        const translatedWarning = await languageBuddyAgent.oneShotMessage(warning, speakingLanguage, subscriber.connections.phone);
+        
+        await whatsappService.sendMessage(subscriber.connections.phone, translatedWarning);
+        recordUserCommand('reset_request');
         return '!reset';
     }
 
