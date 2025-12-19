@@ -2,104 +2,215 @@
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout title="Sobre Benjamin Meixner">
-        <div class="relative py-16 overflow-hidden">
-            <section class="maya-hero">
-                <div class="container">
-                    <div class="maya-intro-layout">
-                                                                                        <div class="maya-text-content bg-white p-8 rounded-lg shadow-md">
-                                                                                            <h1 class="text-5xl font-extrabold mb-6 text-gray-900">Sobre Benjamin Meixner: Mi Viaje a LanguageBuddy</h1>
-                                                                                            <p class="intro-text">
-                                                                                                ¡Hola! Soy Benjamin Meixner, estudiante universitario apasionado por la economía y la informática, originario de Viena, Austria. Mi propio viaje aprendiendo español encendió la chispa de LanguageBuddy. Creo que aprender un nuevo idioma debe ser una experiencia atractiva, efectiva y accesible para todos. LanguageBuddy, o Maya como cariñosamente llamo a nuestra IA, nace de esta convicción—una herramienta que inicialmente creé para mí y que ahora deseo compartir con el mundo. Mi visión es empoderar a los estudiantes de idiomas globalmente, transformando el a menudo frustrante proceso en una aventura conversacional fluida.
-                                                                                            </p>
-                                                                                        </div>                    </div>
-                </div>
-            </section>        </div>
-    </div>
-
-        <section class="py-16 bg-bg-light">
-            <div class="container flex flex-col md:flex-row items-center gap-8">
-                <div class="md:w-1/2 bg-white p-8 rounded-lg shadow-md">
-                    <h2 class="text-3xl font-bold mb-4 text-gray-900">El Desafío que Enfrenté</h2>
-                    <p class="text-lg mb-4">Al prepararme para mi semestre de intercambio en Perú, necesitaba aprender español rápidamente. Sin embargo, los métodos tradicionales me dejaron sin inspiración:</p>
-                    <ul class="list-disc list-inside text-lg mb-4 text-gray-700">
-                        <li><strong class="text-primary">Cursos Tradicionales:</strong> Difíciles de preparar para las lecciones, repasar la gramática y carecían de aplicación práctica, lo que llevaba a una baja motivación.</li>
-                        <li><strong class="text-primary">Tarjetas de Memoria (Anki):</strong> Útiles para la memorización repetitiva (como verbos irregulares) pero rápidamente se volvieron aburridas e ineficaces para la adquisición genuina del idioma.</li>
-                    </ul>
-                    <p class="text-lg mb-8">Anhelaba una conversación real, una forma de usar activamente el idioma y consolidar mi comprensión.</p>
-                </div>
-                <div class="md:w-1/2 text-center">
-                    <img 
-                        src="/ceo_benjamin_colca.jpeg" 
-                        alt="Benjamin Meixner en el Cañón del Colca" 
-                        class="mx-auto rounded-lg shadow-xl max-w-lg w-full object-cover"
-                        style="max-height: 400px;"
-                    />
-                    <p class="text-gray-600 text-base italic mt-2">Cañón del Colca, Arequipa, Perú, septiembre de 2025</p>
-                </div>
+<Layout title="Sobre Benjamin Meixner - CEO de LanguageBuddy">
+    <section class="ceo-hero">
+        <div class="container hero-content">
+            <div class="hero-text">
+                <h1>Hola. Soy Ben :)</h1>
+                <p class="lead">
+                    Soy estudiante universitario de economía e informática. Soy de Viena, Austria. Acabo de terminar mi semestre de intercambio en Lima, Perú y amé cada segundo. Me apasiona la programación, la naturaleza y los deportes. Me encanta el senderismo, el Judo y ahora en Lima he practicado bastante surf.
+                </p>
             </div>
-        </section>
-
-        <section class="py-16">
-            <div class="container flex flex-col md:flex-row-reverse items-center gap-8">
-                <div class="md:w-1/2 text-center">
-                    <img 
-                        src="/ceo_benjamin_surf.jpeg" 
-                        alt="Benjamin Meixner surfeando" 
-                        class="mx-auto rounded-lg shadow-xl max-w-lg w-full object-cover"
-                        style="max-height: 400px;"
-                    />
-                    <p class="text-gray-600 text-base italic mt-2">Makaha, Lima, octubre de 2025</p>
-                </div>
-                <div class="md:w-1/2 bg-white p-8 rounded-lg shadow-md">
-                    <h2 class="text-3xl font-bold mb-4 text-gray-900">La Revelación del LLM</h2>
-                    <p class="text-lg mb-4">Un punto de inflexión llegó cuando empecé a experimentar con Grandes Modelos de Lenguaje (LLM). ¡Finalmente, estaba formando oraciones, comunicándome activamente y esforzándome por hacerme entender. ¡Fue un cambio de juego! Sin embargo, este enfoque también presentó su propio conjunto de frustraciones:</p>
-                    <ul class="list-disc list-inside text-lg mb-4 text-gray-700">
-                        <li><strong class="text-primary">Configuración Engorrosa:</strong> Abrir constantemente nuevos chats, buscar prompts específicos para configurar el comportamiento del LLM.</li>
-                        <li><strong class="text-primary">Comportamiento Inconsistente:</strong> El LLM a menudo no actuaba exactamente como se deseaba, requiriendo supervisión constante.</li>
-                        <li><strong class="text-primary">Falta de Persistencia:</strong> Sin memoria de conversaciones pasadas ni recordatorios para seguir practicando.</li>
-                    </ul>
-                    <p class="text-lg mb-4">Mi rutina diaria implicaba WhatsApp, mi objetivo era una práctica efectiva con LLM, pero las herramientas disponibles eran inconexas y olvidadizas.</p>
-                </div>
+            <div class="hero-image">
+                <img src="/ceo_benjamin_colca.jpeg" alt="Ben bebiendo Mate" />
             </div>
-        </section>
+        </div>
+    </section>
 
-                            <section class="py-16 bg-bg-light">
-                                <div class="container flex flex-col md:flex-row items-center gap-8">
-                                    <div class="md:w-1/2 bg-white p-8 rounded-lg shadow-md">
-                                        <h2 class="text-3xl font-bold mb-4 text-gray-900">Mi Solución: Construyendo LanguageBuddy</h2>
-                                        <p class="text-lg mb-4">Impulsado por estos desafíos, comencé a construir mi propia solución: un servicio simple conectado a WhatsApp, aprovechando un prompt de sistema sofisticado para ChatGPT. Lo que comenzó como un proyecto personal, un "pequeño servicio", evolucionó significativamente:</p>
-                                        <ul class="list-disc list-inside text-lg mb-4 text-gray-700">
-                                            <li><strong class="text-primary">Integración Perfecta:</strong> Interacción directa a través de WhatsApp, una plataforma que uso a diario.</li>
-                                            <li><strong class="text-primary">Comportamiento Refinado de la IA:</strong> Meses de perfeccionamiento de los prompts del sistema para asegurar que la IA (Maya) se comportara exactamente como necesitaba para una práctica efectiva del idioma.</li>
-                                            <li><strong class="text-primary">Expansión de Funcionalidades:</strong> Añadiendo gradualmente funciones que mejoraron la experiencia de aprendizaje.</li>
-                                        </ul>
-                                        <p class="text-lg mb-4">Esta herramienta personal me permitió alcanzar la fluidez conversacional en español en cinco meses—un éxito que atribuyo en gran parte a Maya.</p>
-                                    </div>
-                                    <div class="md:w-1/2 text-center">
-                                        <img 
-                                            src="/ceo_benjamin_mate.jpeg" 
-                                            alt="Benjamin Meixner bebiendo mate" 
-                                            class="mx-auto rounded-lg shadow-xl max-w-lg w-full object-cover"
-                                            style="max-height: 400px;"
-                                        />
-                                        <p class="text-gray-600 text-base italic mt-2">Machachi, Ecuador, noviembre de 2025</p>
-                                    </div>
-                                </div>
-                            </section>        <section class="py-16 text-center">
-            <div class="container max-w-3xl mx-auto px-4 bg-white p-8 rounded-lg shadow-md">
-                <h2 class="text-3xl font-bold mb-6 text-gray-900">Únete a Mi Visión</h2>
-                <p class="text-xl text-gray-700 mb-8 leading-relaxed">La retroalimentación positiva de amigos e incluso de mi antigua tutora de español me animó a ofrecer esta herramienta a otros. Mi objetivo es proporcionarte el mismo recurso invaluable que transformó mi viaje de aprendizaje del español. Maya me enseñó mucho, y estoy seguro de que te acompañará en muchas aventuras lingüísticas. El español fue solo el comienzo para mí, y no será el último viaje en el que ella me ayude.</p>
-                <p class="text-xl text-gray-700 mb-8 leading-relaxed">Únete a mí para abrazar una nueva y más natural forma de aprender idiomas.</p>
-                <a 
-                    href="https://wa.me/436802456552" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    class="btn btn-whatsapp"
-                >
-                    Contáctame por WhatsApp
-                </a>
+    <section class="content-section bg-light">
+        <div class="container grid-layout">
+            <div class="image-col">
+                <img src="/ceo_benjamin_surf.jpeg" alt="Ben surfeando en Lima" class="rounded-shadow" />
             </div>
-        </section>
-    </div>
+            <div class="text-col">
+                <h2>Inspiración</h2>
+                <p>
+                    Necesitaba aprender español rápido para mi semestre de intercambio en Perú. Probé cursos tradicionales pero me resultaba difícil preparar las lecciones y repasar gramática antes de clase. No me sentía motivado a practicar porque esencialmente no usaba mucho mi español. También probé tarjetas Anki, ayudaron mucho con verbos irregulares como "ser" y "estar" pero la utilidad terminaba ahí. Aprender palabras o frases sueltas se volvía aburrido y repetitivo muy rápido y el aprendizaje real era cercano a cero.
+                </p>
+                <p>
+                    Entonces empecé a tener conversaciones con LLMs y eso cambió el juego para mí. Finalmente estaba formando oraciones y necesitaba comunicarme con alguien y hacerme entender. Pero me resultaba engorroso iniciar un nuevo chat y buscar el prompt que usaba para que el LLM se comportara como quería, y además solo la mitad de las veces hacía exactamente lo que yo quería y pasaba casi más tiempo asegurándome de que el LLM cooperara. También me faltaban los recordatorios para usar realmente este modo de aprendizaje.
+                </p>
+                <p>
+                    Así que estaba en la siguiente situación: uso WhatsApp todos los días. Quiero practicar con LLMs. El LLM generalmente no hace lo que quiero y no recuerda cosas.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="content-section">
+        <div class="container grid-layout reverse">
+            <div class="image-col">
+                <img src="/ceo_benjamin_mate.jpeg" alt="Ben en el Cañón del Colca" class="rounded-shadow" />
+            </div>
+            <div class="text-col">
+                <h2>Solución</h2>
+                <p>
+                    Así que la solución v0.0.1 para mí fue tener un pequeño servicio conectado a WhatsApp y traducido casi 1:1 con un prompt de sistema bastante básico para ChatGPT. Nada elegante y desde una perspectiva de código también bastante simple. Con los meses añadí más funciones para mí y refiné mucho los prompts del sistema (mucho, mucho) para que se comportaran como yo quería.
+                </p>
+                <p>
+                    Y durante una conversación con un amigo hablamos de ello y le fascinó. Luego se lo mostré a mi anterior profesora de español de los cursos. Quedó asombrada. Y de toda esa positividad decidí darle una oportunidad y crear un servicio para que la gente lo usase.
+                </p>
+                <p>
+                    Esencialmente quiero ofrecer al mundo la herramienta principal que usé para aprender español en 5 meses hasta lograr fluidez conversacional. Yo lo llamo un éxito. Espero que mi LanguageBuddy - Maya - te enseñe tanto como me enseñó a mí; fue una herramienta invaluable para mi viaje con el español. Y el español definitivamente no fue el último viaje en el que me acompañará.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta-section bg-light">
+        <div class="container text-center">
+            <h2>Únete a mí</h2>
+            <p>
+                Actualmente busco personas apasionadas por aprender idiomas y explorar nuevos métodos de aprendizaje. Deseo inspirar a la gente y crear un servicio universal de aprendizaje de idiomas para todos.
+            </p>
+            <a href="https://wa.me/436802456552" class="btn btn-whatsapp">Chatea conmigo en WhatsApp</a>
+        </div>
+    </section>
+
+    <style>
+        .ceo-hero {
+            padding: 6rem 0;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .hero-content {
+            display: flex;
+            align-items: center;
+            gap: 4rem;
+            flex-direction: column-reverse;
+        }
+
+        @media (min-width: 768px) {
+            .hero-content {
+                flex-direction: row;
+            }
+        }
+
+        .hero-text {
+            flex: 1;
+        }
+
+        .hero-text h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+            line-height: 1.1;
+        }
+
+        .hero-text .lead {
+            font-size: 1.25rem;
+            line-height: 1.6;
+            color: var(--text-light);
+        }
+
+        .hero-image {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+        }
+
+        .hero-image img {
+            max-width: 100%;
+            width: 300px;
+            height: 600px; /* 1:2 aspect ratio */
+            object-fit: cover;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            transform: rotate(2deg);
+            transition: transform 0.3s ease;
+        }
+        
+        .hero-image img:hover {
+            transform: rotate(0deg) scale(1.02);
+        }
+
+        .content-section {
+            padding: 6rem 0;
+        }
+
+        .bg-light {
+            background-color: var(--bg-light);
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 4rem;
+            align-items: center;
+        }
+
+        @media (min-width: 768px) {
+            .grid-layout {
+                grid-template-columns: 1fr 1fr;
+            }
+            .grid-layout.reverse .image-col {
+                order: 2;
+            }
+            .grid-layout.reverse .text-col {
+                order: 1;
+            }
+        }
+
+        .rounded-shadow {
+            width: 75%; /* 75% of parent column width */
+            margin: 0 auto; /* Center the image */
+            aspect-ratio: 1 / 2; /* Enforce 1:2 aspect ratio */
+            object-fit: cover;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            color: var(--text-light);
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-section {
+            padding: 6rem 0;
+        }
+
+        .cta-section .text-center {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-whatsapp {
+            background-color: var(--primary);
+            color: white;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .btn-whatsapp:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 211, 102, 0.4);
+        }
+    </style>
 </Layout>
