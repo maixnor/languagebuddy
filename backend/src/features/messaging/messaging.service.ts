@@ -97,11 +97,13 @@ export class MessagingService {
 
     // Handle user commands
     // We pass the telegramMessenger which ignores the phone number arg and sends to the current chatId
+    logger.debug({ linkServicePresent: !!this.services.linkService }, "Calling handleUserCommand from handleTelegramConversation");
     if (await handleUserCommand(
       subscriber, 
       text, 
       telegramMessenger, 
-      this.services.languageBuddyAgent
+      this.services.languageBuddyAgent,
+      this.services.linkService
     ) !== 'nothing') {
       return;
     }
@@ -266,6 +268,7 @@ export class MessagingService {
     }
 
     // Handle user commands
+    logger.debug({ linkServicePresent: !!this.services.linkService }, "Calling handleUserCommand from processTextMessage");
     if (await handleUserCommand(
       subscriber, 
       message.text!.body, 
