@@ -19,7 +19,7 @@
     "dev:cli": "npx swc src --out-dir dist --watch & PORT=8080 ENVIRONMENT=development USE_LOCAL_CLI_ENDPOINT=http://localhost:3333/cli-response npx nodemon dist/src/main.js",
     "cli": "node ../cli/chat-cli.js",
     "lint": "eslint . --ext .ts",
-    "test": "LOG_LEVEL=error npx jest",
+    "test": "npx jest",
     "test:unit": "LOG_LEVEL=error npx jest src/features/*/*.unit.test.ts",
     "test:int": "LOG_LEVEL=error npx jest src/features/*/*.int.test.ts",
     "test:watch": "LOG_LEVEL=error npx jest src/features/*/*.unit.test.ts --watch",
