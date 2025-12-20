@@ -214,4 +214,55 @@ describe('Subscriber Linking Integration Tests', () => {
         const secondarySubscriber = await subscriberService.getSubscriber(whatsappPhone);
         expect(secondarySubscriber).toBeNull(); // Should be deleted as it was merged into Telegram one
     });
+
+    it('should allow an onboarding WhatsApp user to issue a !link {code} command successfully', async () => {
+        const primaryWhatsappPhone = '+55555555555'; // Existing subscriber who generates the code
+        const newWhatsappUserPhone = '+66666666666'; // New user, will be onboarding and consuming code
+
+        // 1. Simulate an existing WhatsApp user requesting a link code
+        // This will create primaryWhatsappPhone subscriber
+        await simulateWhatsappMessage(primaryWhatsappPhone, '!link');
+
+        expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(
+            primaryWhatsappPhone,
+            expect.stringContaining('!link ')
+        );
+        const linkCodeMessage = mockWhatsappService.sendMessage.mock.calls[0][1];
+        const linkCode = linkCodeMessage.match(/!link (\d{6})/)?.[1];
+        expect(linkCode).toBeDefined();
+        
+        // Ensure primaryWhatsappPhone is a real subscriber
+        let primarySubscriber = await subscriberService.getSubscriber(primaryWhatsappPhone);
+        expect(primarySubscriber).toBeDefined();
+        expect(primarySubscriber?.connections.whatsapp).toEqual({ phone: primaryWhatsappPhone });
+
+        // 2. Simulate a new WhatsApp user consuming the link code
+        // This user does NOT exist yet, so createSubscriber will be called internally.
+        // It will then issue the !link command during onboarding.
+        mockWhatsappService.sendMessage.mockClear(); // Clear previous send message mocks
+        await simulateWhatsappMessage(newWhatsappUserPhone, `!link ${linkCode}`);
+
+        // Expect successful linking message to the new user
+        expect(mockWhatsappService.sendMessage).toHaveBeenCalledWith(
+            newWhatsappUserPhone,
+            expect.stringContaining('✅ Accounts linked successfully!')
+        );
+
+        // Verify the primary subscriber now has its original WhatsApp connection
+        // (no change here, as secondary was also WhatsApp)
+        // No, the original primary was WhatsApp, so the secondary's connection will be removed.
+        // The expectation is that the primary subscriber exists and the secondary is gone.
+        // What we need to check is if the original primary subscriber is still there,
+        // and that the new user (secondary) is gone.
+        
+        primarySubscriber = await subscriberService.getSubscriber(primaryWhatsappPhone);
+        expect(primarySubscriber).toBeDefined();
+        // Its connections should remain the same as before, as it was already a WhatsApp account
+        expect(primarySubscriber?.connections.phone).toEqual(primaryWhatsappPhone);
+        expect(primarySubscriber?.connections.whatsapp).toEqual({ phone: primaryWhatsappPhone });
+        
+        // Verify the new user (secondary) is deleted
+        const secondarySubscriber = await subscriberService.getSubscriber(newWhatsappUserPhone);
+        expect(secondarySubscriber).toBeNull();
+    });
 });
