@@ -335,10 +335,32 @@ export class SubscriberService {
 
   async createSubscriber(phoneNumber: string, initialData?: Partial<Subscriber>): Promise<Subscriber> {
     const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
+    
+    // Determine if the incoming phoneNumber is a pseudo-phone (from Telegram) or a real WhatsApp phone.
+    // If initialData contains a telegram.chatId, it's a pseudo-phone.
+    const isPseudoPhoneFromTelegram = initialData?.connections?.telegram?.chatId !== undefined;
+    
+    const connections: Subscriber["connections"] = {
+      phone: sanitizedPhone,
+    };
+
+    if (initialData?.connections?.telegram) {
+      connections.telegram = initialData.connections.telegram;
+    }
+
+    // If it's not a pseudo-phone from Telegram, it implies it's a WhatsApp number.
+    // Also, if initialData already has a whatsapp connection (e.g., from linking), use that.
+    // The explicit 'whatsapp' connection should only be set if it's a non-pseudo phone AND no existing whatsapp connection.
+    if (!isPseudoPhoneFromTelegram && !initialData?.connections?.whatsapp) {
+      connections.whatsapp = { phone: sanitizedPhone };
+    }
+    // If initialData explicitly provides a whatsapp connection, use it
+    if (initialData?.connections?.whatsapp) {
+      connections.whatsapp = initialData.connections.whatsapp;
+    }
+
     const subscriber: Subscriber = {
-      connections: {
-        phone: sanitizedPhone,
-      },
+      connections: connections,
       profile: {
         name: "New User",
         speakingLanguages: [],

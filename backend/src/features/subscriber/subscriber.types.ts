@@ -71,6 +71,9 @@ export interface Subscriber {
       chatId: number;
       username?: string;
     };
+    whatsapp?: {
+      phone: string; // The phone number from WhatsApp Cloud API
+    };
     // instagram: string;
   };
   profile: {

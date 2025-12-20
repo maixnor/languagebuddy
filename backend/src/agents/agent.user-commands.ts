@@ -17,7 +17,6 @@ export async function handleUserCommand(
     languageBuddyAgent: LanguageBuddyAgent,
     linkService: LinkService
 ) {
-    logger.debug({ linkServiceDefined: !!linkService }, "Inside handleUserCommand");
     if (message === 'ping' || message === '!ping') {
         await messenger.sendMessage(subscriber.connections.phone, "pong");
         recordUserCommand('ping');

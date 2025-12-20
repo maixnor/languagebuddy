@@ -98,15 +98,18 @@ export class LinkService {
       if (secondarySubscriber.connections.telegram && !updatedConnections.telegram) {
         updatedConnections.telegram = secondarySubscriber.connections.telegram;
       } else if (secondarySubscriber.connections.telegram && updatedConnections.telegram) {
-          // Both have telegram? Conflict. Prioritize primary, or user should not be doing this.
-          // Since !link {number} is explicit, maybe overwrite? But user instruction implies merging distinct channels.
-          // For now, assuming distinct channels (WhatsApp vs Telegram).
-          // If collision, we keep primary.
-          logger.warn("Collision in Telegram connection during link. Keeping primary.");
+          logger.warn({ primaryPhone, secondaryPhone: currentSubscriberPhone }, "Collision in Telegram connection during link. Keeping primary.");
       }
 
-      // Same for phone if we were merging other things, but phone is the ID.
-      // If secondary is "pseudo-phone" from Telegram, we are good.
+      // If secondary has whatsapp and primary doesn't, add it
+      // Note: Assuming primarySubscriber.connections.phone is the WhatsApp phone if it originated from WhatsApp
+      // or that the secondarySubscriber.connections.phone *is* the whatsapp.phone if the secondary came from WhatsApp.
+      // We will explicitly use the whatsapp.phone from the secondarySubscriber if available and not present in primary.
+      if (secondarySubscriber.connections.whatsapp && !updatedConnections.whatsapp) {
+        updatedConnections.whatsapp = secondarySubscriber.connections.whatsapp;
+      } else if (secondarySubscriber.connections.whatsapp && updatedConnections.whatsapp) {
+          logger.warn({ primaryPhone, secondaryPhone: currentSubscriberPhone }, "Collision in WhatsApp connection during link. Keeping primary.");
+      }
 
       // 4. Update Primary
       await this.subscriberService.updateSubscriber(primaryPhone, {
