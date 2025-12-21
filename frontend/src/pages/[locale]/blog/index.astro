@@ -1,0 +1,156 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../../layouts/Layout.astro';
+
+const { locale } = Astro.params;
+
+// Validate locale or default to 'en'
+const validLocales = ['en', 'es', 'fr', 'de'];
+if (!validLocales.includes(locale)) {
+  return Astro.redirect('/en/blog');
+}
+
+const posts = await getCollection('blog');
+
+// Filter posts by the current locale
+const filteredPosts = posts.filter(post => post.data.lang === locale);
+
+const sortedPosts = filteredPosts.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+// Helper for date formatting
+const formatDate = (date: Date) => {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(date);
+};
+---
+
+<Layout>
+  <div class="blog-container">
+    <h1>LanguageBuddy Blog</h1>
+    <p class="subtitle">Latest updates and stories.</p>
+    
+    <div class="post-grid">
+      {sortedPosts.map((post) => (
+        <article class="post-card">
+          {post.data.image && (
+             <img src={post.data.image.src} alt={post.data.title} class="post-image" />
+          )}
+          <div class="post-content">
+            <h2>
+              <a href={`/${locale}/blog/${post.id}`}>{post.data.title}</a>
+            </h2>
+            <div class="meta">
+              <span>{formatDate(post.data.date)}</span>
+              <span>•</span>
+              <span>{post.data.author}</span>
+            </div>
+            <p>{post.data.description}</p>
+            <a href={`/${locale}/blog/${post.id}`} class="read-more">Read more →</a>
+          </div>
+        </article>
+      ))}
+    </div>
+  </div>
+</Layout>
+
+<style>
+  .blog-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 4rem 2rem;
+  }
+
+  h1 {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    color: var(--primary-dark);
+  }
+
+  .subtitle {
+    text-align: center;
+    color: var(--text-light);
+    margin-bottom: 3rem;
+    font-size: 1.2rem;
+  }
+
+  .post-grid {
+    display: grid;
+    gap: 2rem;
+  }
+
+  .post-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .post-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .post-image {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+  }
+
+  .post-content {
+    padding: 2rem;
+  }
+
+  .post-content h2 {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem 0;
+  }
+
+  .post-content h2 a {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .post-content h2 a:hover {
+    color: var(--primary);
+  }
+
+  .meta {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .read-more {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .read-more:hover {
+    text-decoration: underline;
+  }
+
+  @media (min-width: 768px) {
+    .post-card {
+      flex-direction: row;
+    }
+    .post-image {
+      width: 40%;
+      height: auto;
+    }
+    .post-content {
+      width: 60%;
+    }
+  }
+</style>

@@ -1,0 +1,140 @@
+---
+import { getEntry, render } from 'astro:content';
+import Layout from '../../../layouts/Layout.astro';
+
+const { locale, slug } = Astro.params;
+
+if (!slug) {
+  return Astro.redirect(`/${locale}/blog`);
+}
+
+const post = await getEntry('blog', slug);
+
+if (!post) {
+  return Astro.redirect('/404');
+}
+
+const { Content } = await render(post);
+
+const formatDate = (date: Date) => {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(date);
+};
+---
+
+<Layout>
+  <div class="blog-post-container">
+    <a href={`/${locale}/blog`} class="back-link">← Back to Blog</a>
+    
+    <article>
+      <header class="post-header">
+        <h1>{post.data.title}</h1>
+        <div class="meta">
+          <span>{formatDate(post.data.date)}</span>
+          <span>•</span>
+          <span>{post.data.author}</span>
+        </div>
+
+      </header>
+      
+      <div class="content">
+        <Content />
+      </div>
+    </article>
+  </div>
+</Layout>
+
+<style>
+  .blog-post-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 4rem 2rem;
+  }
+
+  .back-link {
+    display: inline-block;
+    margin-bottom: 2rem;
+    color: var(--text-light);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .back-link:hover {
+    color: var(--primary);
+  }
+
+  .post-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: var(--text);
+  }
+
+  .meta {
+    color: var(--text-light);
+    margin-bottom: 2rem;
+  }
+
+  .hero-image {
+    width: 100%;
+    max-height: 500px;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+
+  /* Markdown Content Styles */
+  .content {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    color: #333;
+  }
+
+  .content :global(h2) {
+    font-size: 1.8rem;
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    color: var(--secondary);
+  }
+
+  .content :global(h3) {
+    font-size: 1.4rem;
+    margin-top: 2rem;
+    margin-bottom: 0.8rem;
+  }
+
+  .content :global(p) {
+    margin-bottom: 1.5rem;
+  }
+
+  .content :global(img) {
+    max-width: 100%;
+    border-radius: 8px;
+    margin: 2rem 0;
+  }
+
+  .content :global(blockquote) {
+    border-left: 4px solid var(--primary);
+    padding-left: 1.5rem;
+    font-style: italic;
+    margin: 2rem 0;
+    color: #555;
+  }
+
+  .content :global(ul), .content :global(ol) {
+    margin-bottom: 1.5rem;
+    padding-left: 2rem;
+  }
+
+  .content :global(a) {
+    color: var(--primary);
+    text-decoration: underline;
+  }
+</style>
