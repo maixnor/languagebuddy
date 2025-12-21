@@ -35,7 +35,7 @@ const formatDate = (date: Date) => {
         <div class="meta">
           <span>{formatDate(post.data.date)}</span>
           <span>•</span>
-          <span>{post.data.author}</span>
+          <span><a href={`/${locale}/ceo`}>{post.data.author}</a></span>
         </div>
 
       </header>
@@ -80,6 +80,17 @@ const formatDate = (date: Date) => {
   .meta {
     color: var(--text-light);
     margin-bottom: 2rem;
+  }
+
+  .meta a {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 1px dotted currentColor;
+  }
+
+  .meta a:hover {
+    color: var(--primary);
+    border-bottom: 1px solid currentColor;
   }
 
   .hero-image {

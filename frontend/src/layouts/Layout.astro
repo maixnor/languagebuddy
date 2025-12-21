@@ -4,10 +4,10 @@ import LanguageSwitcher from "../components/LanguageSwitcher.astro";
 const currentPath = Astro.url.pathname;
 let lang = 'en'; // Default language
 
-if (currentPath.startsWith('/es/')) {
-    lang = 'es';
+const pathParts = currentPath.split('/').filter(Boolean);
+if (pathParts.length > 0 && ['es', 'fr', 'de'].includes(pathParts[0])) {
+    lang = pathParts[0];
 }
-// Add more languages if needed
 
 const getLocalizedPath = (path: string) => {
     // If the path already starts with the determined language prefix, don't add it again.
@@ -19,6 +19,9 @@ const getLocalizedPath = (path: string) => {
     // For other paths like /ceo, it should become /en/ceo or /es/ceo
     return `/${lang}${path}`;
 }
+
+const isHomePage = currentPath === `/${lang}` || currentPath === `/${lang}/` || currentPath === '/';
+const getNavLink = (anchor: string) => isHomePage ? anchor : getLocalizedPath(`/${anchor}`);
 ---
 
 <!DOCTYPE html>
@@ -40,9 +43,10 @@ const getLocalizedPath = (path: string) => {
                     <div class="logo">Maya</div>
                 </div>
 				<ul>
-					<li><a href="#features">Features</a></li>
-					<li><a href="#how-it-works">How It Works</a></li>
-					<li><a href="#pricing">Pricing</a></li>
+					<li><a href={getNavLink('#features')}>Features</a></li>
+					<li><a href={getNavLink('#how-it-works')}>How It Works</a></li>
+					<li><a href={getNavLink('#pricing')}>Pricing</a></li>
+                    <li><a href={getLocalizedPath('/blog')}>Blog</a></li>
 				</ul>
                 <LanguageSwitcher />
 			</div>

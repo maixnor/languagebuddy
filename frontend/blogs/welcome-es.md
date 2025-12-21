@@ -1,6 +1,6 @@
 ---
 title: "Presentando a Maya"
-description: "Nuestra primera entrada de blog sobre el futuro del aprendizaje de idiomas."
+description: "Cómo nació Maya y mi motivación detrás de su creación."
 date: "2024-12-21"
 author: "maixnor"
 image: "./langbud_maya.png"
