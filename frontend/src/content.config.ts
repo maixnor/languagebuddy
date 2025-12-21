@@ -7,7 +7,7 @@ const blog = defineCollection({
     title: z.string(),
     description: z.string(),
     date: z.coerce.date(),
-    author: z.string().default('LanguageBuddy Team'),
+    author: z.string().default('Maya Team'),
     image: image().optional(),
     tags: z.array(z.string()).default([]),
     lang: z.enum(['en', 'es', 'fr', 'de']).default('en'),

@@ -19,7 +19,7 @@ So the solution v0.0.1 for me was to have a small service that I hooked up with 
 
 And during a conversation with a friend we talked about it and he was fascinated. Then I showed my previous Spanish tutor from the courses. She was amazed. And from all that positivity I decided to give it a shot and create a service for people to use. 
 
-Essentially I want to provide the world with the main tool I used to learn Spanish within 5 months to conversational fluidity. I call that a success. I hope my Languagebuddy - Maya - will teach you as much as it tought me, she was an invaluable tool for my Spanish journey. And Spanish definetly was not the last journey she will accompany on.
+Essentially I want to provide the world with the main tool I used to learn Spanish within 5 months to conversational fluidity. I call that a success. I hope Maya will teach you as much as it tought me, she was an invaluable tool for my Spanish journey. And Spanish definetly was not the last journey she will accompany on.
 
 # Join me
 

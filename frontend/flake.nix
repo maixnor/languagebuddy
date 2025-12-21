@@ -1,5 +1,5 @@
 {
-  description = "LanguageBuddy Frontend - SSR Node Server";
+  description = "Maya Frontend - SSR Node Server";
 
   inputs = {
     # Latest stable Nixpkgs
