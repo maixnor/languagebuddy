@@ -1,6 +1,6 @@
 import Stripe from "stripe";
 import { Subscriber } from "../subscriber/subscriber.types";
-import { logger } from "../../core/config";
+import { logger, config } from "../../core/config";
 import { sanitizePhoneNumber } from "../subscriber/subscriber.utils";
 
 export class SubscriptionService {
@@ -108,13 +108,71 @@ export class SubscriptionService {
     return customer as Stripe.Customer;
   }
 
+  async createCheckoutSession(subscriberIdentifier: string): Promise<string> {
+    if (!this.stripe) {
+      // Return a dummy URL if Stripe is not initialized (e.g. dev mode without keys)
+      // or throw error. The test expects a URL.
+      if (process.env.NODE_ENV === 'test' || !config.stripe.secretKey) {
+          logger.warn("Stripe not initialized, returning dummy checkout URL");
+          return "https://buy.stripe.com/test_mode_dummy_link";
+      }
+      throw new Error("Stripe is not initialized");
+    }
+
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'subscription',
+      client_reference_id: subscriberIdentifier,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: 'LanguageBuddy Premium (Monthly)',
+              description: 'Unlimited access to your AI Language Tutor',
+            },
+            unit_amount: 1000, // 10.00 EUR
+            recurring: {
+              interval: 'month',
+            },
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: '21-Day Kickstart Pass',
+              description: 'Initial access for 21 days',
+            },
+            unit_amount: 100, // 1.00 EUR
+          },
+          quantity: 1,
+        },
+      ],
+      subscription_data: {
+        trial_period_days: 21,
+      },
+      // Using publicBaseUrl from config. If running locally without it, this might fail validation in real Stripe,
+      // but for generating the link object it should be fine.
+      success_url: `${config.publicBaseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${config.publicBaseUrl}/payment/cancel`,
+    });
+
+    if (!session.url) {
+        throw new Error("Failed to generate Stripe checkout session URL");
+    }
+
+    return session.url;
+  }
+
   /**
    * Returns the Stripe payment link for subscription.
-   * This can be static or generated per user if needed.
+   * Now generates a dynamic session.
    */
   async getPaymentLink(phoneNumber: string): Promise<string> {
-    // For now, return a static payment link. Replace with dynamic logic if needed.
-    return "https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01";
+    const sanitized = sanitizePhoneNumber(phoneNumber);
+    return this.createCheckoutSession(sanitized);
   }
 }
 

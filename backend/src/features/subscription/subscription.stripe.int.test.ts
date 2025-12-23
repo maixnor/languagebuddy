@@ -74,13 +74,21 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
     mockStripe = {
       customers: {
         search: jest.fn(),
+        retrieve: jest.fn(), // Added retrieve
       } as any,
       subscriptions: {
         list: jest.fn(),
       } as any,
       webhooks: {
         constructEvent: jest.fn(),
-      } as any, // Added mock for webhooks
+      } as any,
+      checkout: {
+        sessions: {
+          create: jest.fn().mockResolvedValue({
+            url: 'https://checkout.stripe.com/test-session-url',
+          }),
+        },
+      } as any,
     } as any;
 
     // Initialize StripeService with mock
@@ -374,7 +382,7 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
     it('should return static payment link', async () => {
       const link = await subscriptionService.getPaymentLink(testPhone);
       
-      expect(link).toBe('https://buy.stripe.com/dRmbJ3bYyfeM1pLgPX8AE01');
+      expect(link).toBe('https://checkout.stripe.com/test-session-url');
     });
 
     it('should return same link for different phone numbers', async () => {
@@ -540,6 +548,11 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
 
       // Mock constructEvent to return our mock event
       mockStripe.webhooks.constructEvent.mockReturnValue(mockStripeEvent);
+      
+      mockStripe.customers.retrieve.mockResolvedValue({
+        id: customerId,
+        phone: subscriberPhone,
+      } as any);
 
       // Act
       await stripeWebhookService.handleWebhookEvent(signature, rawBody);
@@ -594,6 +607,11 @@ describe('SubscriptionService & StripeWebhookService - Integration Tests', () =>
       };
 
       mockStripe.webhooks.constructEvent.mockReturnValue(mockStripeEvent);
+
+      mockStripe.customers.retrieve.mockResolvedValue({
+        id: customerId,
+        phone: subscriberPhone,
+      } as any);
 
       // Act
       await stripeWebhookService.handleWebhookEvent(signature, rawBody);

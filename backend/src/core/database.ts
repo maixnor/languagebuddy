@@ -332,7 +332,8 @@ export class DatabaseService {
       INSERT INTO processed_messages_new (message_id, created_at) SELECT message_id, created_at FROM processed_messages;
       DROP TABLE processed_messages;
       ALTER TABLE processed_messages_new RENAME TO processed_messages;
-      `
+      `,
+      `ALTER TABLE subscribers ADD COLUMN stripe_customer_id TEXT;`
     ];
 
     for (const migration of migrations) {

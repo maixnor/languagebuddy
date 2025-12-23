@@ -37,6 +37,9 @@ export class StripeWebhookService {
 
     // 2. Handle the event
     switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutSessionCompleted(event);
+        break;
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
       case 'customer.subscription.created': // Handle created events too, if needed
@@ -48,32 +51,71 @@ export class StripeWebhookService {
     }
   }
 
-  private async handleSubscriptionChange(event: Stripe.Event): Promise<void> {
-    const subscription = event.data.object as Stripe.Subscription;
-    let customer: Stripe.Customer;
+  private async handleCheckoutSessionCompleted(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const subscriberId = session.client_reference_id;
+    const stripeCustomerId = typeof session.customer === 'string' ? session.customer : session.customer?.id;
 
-    if (typeof subscription.customer === 'string') {
-      customer = await this.stripeService.retrieveCustomer(subscription.customer);
-    } else {
-      customer = subscription.customer as Stripe.Customer;
+    if (!subscriberId || !stripeCustomerId) {
+      logger.warn({ subscriberId, stripeCustomerId }, "Missing subscriberId or stripeCustomerId in checkout session completed event.");
+      return;
     }
 
-    const phoneNumber = customer.phone; // Assuming phone number is stored on customer metadata or directly
-    // Normalize the phone number to ensure it has exactly one leading '+'
-    const normalizedPhoneNumber = sanitizePhoneNumber(phoneNumber || '');
+    // Update subscriber with Stripe Customer ID and set as premium
+    // We assume subscriberId IS the phoneNumber (or whatever ID we used)
+    try {
+        // We use updateSubscriber because it handles creation if missing (though it shouldn't be missing here)
+        // But wait, updateSubscriber takes a phoneNumber. client_reference_id is the phoneNumber.
+        await this.subscriberService.updateSubscriber(subscriberId, {
+            stripeCustomerId: stripeCustomerId,
+            isPremium: true
+        });
+        logger.info({ subscriberId, stripeCustomerId }, "Linked Subscriber to Stripe Customer via Checkout Session.");
+    } catch (err) {
+        logger.error({ err, subscriberId }, "Failed to link subscriber in checkout session handler.");
+    }
+  }
 
-    if (!normalizedPhoneNumber) {
-      logger.warn({ customerId: customer.id }, "Stripe customer without phone number. Cannot update subscriber.");
-      return;
+  private async handleSubscriptionChange(event: Stripe.Event): Promise<void> {
+    const subscription = event.data.object as Stripe.Subscription;
+    let customerId: string;
+
+    if (typeof subscription.customer === 'string') {
+      customerId = subscription.customer;
+    } else {
+      customerId = (subscription.customer as Stripe.Customer).id;
     }
 
     const isPremium = subscription.status === 'active' || subscription.status === 'trialing';
 
-    const existingSubscriber = await this.subscriberService.getSubscriber(normalizedPhoneNumber);
+    // 1. Try to find subscriber by Stripe Customer ID (Robust/New way)
+    let subscriber = await this.subscriberService.getSubscriberByStripeCustomerId(customerId);
+
+    let normalizedPhoneNumber: string | undefined;
+
+    if (subscriber) {
+        normalizedPhoneNumber = subscriber.connections.phone;
+    } else {
+        // 2. Fallback: Try to find by phone number in Stripe Customer (Legacy/Fallback)
+        try {
+            const customer = await this.stripeService.retrieveCustomer(customerId);
+            const phoneNumber = customer.phone;
+            if (phoneNumber) {
+                normalizedPhoneNumber = sanitizePhoneNumber(phoneNumber);
+                subscriber = await this.subscriberService.getSubscriber(normalizedPhoneNumber);
+            }
+        } catch (err) {
+            logger.warn({ customerId, err }, "Could not retrieve customer details for fallback lookup.");
+        }
+    }
+
+    if (!subscriber || !normalizedPhoneNumber) {
+      logger.warn({ customerId }, "Could not find subscriber for subscription change event.");
+      return;
+    }
 
     // Record conversion metric if a non-premium user becomes premium
-    // and it's not a test phone number (assuming test numbers are defined in config)
-    if (existingSubscriber && !existingSubscriber.isPremium && isPremium && !existingSubscriber.isTestUser) { // Added isTestUser check
+    if (!subscriber.isPremium && isPremium && !subscriber.isTestUser) {
         recordConversion();
         logger.info({ phoneNumber: normalizedPhoneNumber }, "Recorded new premium conversion.");
     }

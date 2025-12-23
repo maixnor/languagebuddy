@@ -111,6 +111,7 @@ export interface Subscriber {
   };
   isPremium?: boolean;
   isTestUser?: boolean;
+  stripeCustomerId?: string;
   lastActiveAt?: Date;
   lastMessageSentAt?: Date;
   nextPushMessageAt?: Date;

@@ -200,6 +200,25 @@ export class SubscriberService {
     }
   }
 
+  async getSubscriberByStripeCustomerId(customerId: string): Promise<Subscriber | null> {
+    try {
+      const stmt = this.dbService.getDb().prepare(`
+        SELECT phone_number 
+        FROM subscribers 
+        WHERE stripe_customer_id = ?
+      `);
+      
+      const row = stmt.get(customerId) as { phone_number: string } | undefined;
+
+      if (!row) return null;
+
+      return await this.getSubscriber(row.phone_number);
+    } catch (error) {
+      logger.error({ err: error, customerId }, "Error getting subscriber by Stripe Customer ID");
+      return null;
+    }
+  }
+
   async getSubscriber(phoneNumber: string): Promise<Subscriber | null> {
     try {
       const sanitizedPhone = sanitizePhoneNumber(phoneNumber);
@@ -208,7 +227,7 @@ export class SubscriberService {
         SELECT 
           phone_number, status, created_at, last_active_at, data,
           name, timezone, is_premium, is_test_user, last_nightly_digest_run,
-          streak_current, streak_longest, streak_last_increment
+          streak_current, streak_longest, streak_last_increment, stripe_customer_id
         FROM subscribers 
         WHERE phone_number = ?
       `);
@@ -321,6 +340,7 @@ export class SubscriberService {
         },
         isPremium: !!row.is_premium,
         isTestUser: !!row.is_test_user,
+        stripeCustomerId: row.stripe_customer_id || undefined,
         signedUpAt: row.created_at ? new Date(row.created_at) : undefined,
         lastActiveAt: row.last_active_at ? new Date(row.last_active_at) : undefined,
       };
@@ -535,6 +555,7 @@ export class SubscriberService {
     }
     delete rest.isPremium;
     delete rest.isTestUser;
+    delete rest.stripeCustomerId;
 
     const data = JSON.stringify(rest);
 
@@ -544,9 +565,9 @@ export class SubscriberService {
             INSERT OR REPLACE INTO subscribers (
                 phone_number, status, created_at, last_active_at, data,
                 name, timezone, is_premium, is_test_user, last_nightly_digest_run,
-                streak_current, streak_longest, streak_last_increment
+                streak_current, streak_longest, streak_last_increment, stripe_customer_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -562,7 +583,8 @@ export class SubscriberService {
             lastNightlyDigestRunDate ? lastNightlyDigestRunDate.toISOString() : null,
             subscriber.metadata.streakData?.currentStreak || 0,
             subscriber.metadata.streakData?.longestStreak || 0,
-            lastIncrementDate ? lastIncrementDate.toISOString() : null
+            lastIncrementDate ? lastIncrementDate.toISOString() : null,
+            subscriber.stripeCustomerId || null
         );
 
         // 2. Sync Languages
