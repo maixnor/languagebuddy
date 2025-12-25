@@ -7,7 +7,7 @@ import { TelegramService } from '../../core/messaging/telegram/telegram.service'
 import { DigestService } from '../digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { DateTime } from 'luxon';
-import { Subscriber } from '../subscriber/subscriber.types';
+import { Subscriber, CommunicationPlatform } from '../subscriber/subscriber.types';
 
 export class SchedulerService {
   private static instance: SchedulerService;
@@ -124,7 +124,13 @@ export class SchedulerService {
       
       let messageSentSuccess = false;
 
-      if (subscriber.lastMessagePlatform === 'telegram' && subscriber.connections.telegram?.chatId) {
+      // Determine platform:
+      // 1. Explicitly set to Telegram
+      // 2. Fallback: Has Telegram connection but NO WhatsApp connection (Legacy Telegram-only users)
+      const useTelegram = (subscriber.lastMessagePlatform === CommunicationPlatform.Telegram) || 
+                          (!subscriber.lastMessagePlatform && !!subscriber.connections.telegram && !subscriber.connections.whatsapp);
+
+      if (useTelegram && subscriber.connections.telegram?.chatId) {
         try {
           await this.telegramService.sendMessage({
             chat_id: subscriber.connections.telegram.chatId,
@@ -258,7 +264,7 @@ export class SchedulerService {
         if (this.shouldSendReengagementMessage(subscriber, nowUtc)) {
           const reengagementMessage = "Hey! It's been a while. Shall we continue our language practice?";
           
-          if (subscriber.lastMessagePlatform === 'telegram' && subscriber.connections.telegram?.chatId) {
+          if (subscriber.lastMessagePlatform === CommunicationPlatform.Telegram && subscriber.connections.telegram?.chatId) {
              try {
                await this.telegramService.sendMessage({
                  chat_id: subscriber.connections.telegram.chatId,

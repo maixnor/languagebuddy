@@ -1,7 +1,7 @@
 import { ServiceContainer } from '../../core/container';
 import { logger, trackEvent, trackMetric, config } from '../../core/config';
 import { WebhookMessage } from './messaging.types';
-import { Subscriber } from '../subscriber/subscriber.types';
+import { Subscriber, CommunicationPlatform } from '../subscriber/subscriber.types';
 import { handleUserCommand } from '../../agents/agent.user-commands';
 import { getNextMissingField, getPromptForField, sanitizePhoneNumber } from '../subscriber/subscriber.utils';
 import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../subscriber/subscriber.prompts';
@@ -47,7 +47,7 @@ export class MessagingService {
                       username: username
                   }
               },
-              lastMessagePlatform: 'telegram'
+              lastMessagePlatform: CommunicationPlatform.Telegram
           });
       } else {
           // Update username if changed or update platform
@@ -67,9 +67,9 @@ export class MessagingService {
              needsUpdate = true;
           }
 
-          if (subscriber.lastMessagePlatform !== 'telegram') {
-              updates.lastMessagePlatform = 'telegram';
-              subscriber.lastMessagePlatform = 'telegram';
+          if (subscriber.lastMessagePlatform !== CommunicationPlatform.Telegram) {
+              updates.lastMessagePlatform = CommunicationPlatform.Telegram;
+              subscriber.lastMessagePlatform = CommunicationPlatform.Telegram;
               needsUpdate = true;
           }
 
@@ -275,7 +275,7 @@ export class MessagingService {
       if (subscriber.status === 'active') {
           await this.services.subscriberService.updateSubscriber(phone, { 
               lastMessageSentAt: new Date(),
-              lastMessagePlatform: 'whatsapp'
+              lastMessagePlatform: CommunicationPlatform.WhatsApp
           });
       }
     } catch (error) {

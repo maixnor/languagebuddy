@@ -1,6 +1,11 @@
 // Temporary import to avoid circular dependency until Digest is moved to its own feature
 import { Digest } from "../digest/digest.types";
 
+export enum CommunicationPlatform {
+  WhatsApp = 'whatsapp',
+  Telegram = 'telegram'
+}
+
 export interface LanguageSkillAssessment {
   skill:
     | "grammar"
@@ -114,6 +119,6 @@ export interface Subscriber {
   stripeCustomerId?: string;
   lastActiveAt?: Date;
   lastMessageSentAt?: Date;
-  lastMessagePlatform?: "whatsapp" | "telegram";
+  lastMessagePlatform?: CommunicationPlatform;
   nextPushMessageAt?: Date;
 }
