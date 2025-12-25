@@ -333,7 +333,8 @@ export class DatabaseService {
       DROP TABLE processed_messages;
       ALTER TABLE processed_messages_new RENAME TO processed_messages;
       `,
-      `ALTER TABLE subscribers ADD COLUMN stripe_customer_id TEXT;`
+      `ALTER TABLE subscribers ADD COLUMN stripe_customer_id TEXT;`,
+      `ALTER TABLE subscribers ADD COLUMN last_message_platform TEXT;`
     ];
 
     for (const migration of migrations) {

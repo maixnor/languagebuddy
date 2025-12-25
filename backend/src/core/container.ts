@@ -93,9 +93,9 @@ export class ServiceContainer {
     try {
       const telegramWebhookUrl = `${config.publicBaseUrl}/telegram/webhook`;
       await this.telegramService.setWebhook(telegramWebhookUrl);
-      logger.info('Telegram webhook set successfully.', { url: telegramWebhookUrl });
+      logger.info({ url: telegramWebhookUrl }, 'Telegram webhook set successfully.');
     } catch (error) {
-      logger.error('Failed to set Telegram webhook during initialization.', { error });
+      logger.error({ error }, 'Failed to set Telegram webhook during initialization.');
     }
   }
 }

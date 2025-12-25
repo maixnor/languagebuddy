@@ -114,5 +114,6 @@ export interface Subscriber {
   stripeCustomerId?: string;
   lastActiveAt?: Date;
   lastMessageSentAt?: Date;
+  lastMessagePlatform?: "whatsapp" | "telegram";
   nextPushMessageAt?: Date;
 }

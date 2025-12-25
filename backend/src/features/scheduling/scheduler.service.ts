@@ -3,6 +3,7 @@ import { logger, config } from '../../core/config';
 import { SubscriberService } from '../subscriber/subscriber.service';
 import { ensureValidTimezone } from '../subscriber/subscriber.utils';
 import { WhatsAppService } from '../../core/messaging/whatsapp';
+import { TelegramService } from '../../core/messaging/telegram/telegram.service';
 import { DigestService } from '../digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { DateTime } from 'luxon';
@@ -12,6 +13,7 @@ export class SchedulerService {
   private static instance: SchedulerService;
   private subscriberService: SubscriberService;
   private whatsappService: WhatsAppService;
+  private telegramService: TelegramService;
   private digestService: DigestService;
   private languageBuddyAgent: LanguageBuddyAgent;
 
@@ -21,6 +23,7 @@ export class SchedulerService {
   ) {
     this.subscriberService = subscriberService;
     this.whatsappService = WhatsAppService.getInstance();
+    this.telegramService = TelegramService.getInstance();
     this.digestService = DigestService.getInstance();
     this.languageBuddyAgent = languageBuddyAgent;
   }
@@ -119,9 +122,25 @@ export class SchedulerService {
         this.subscriberService.getDailySystemPrompt(subscriber)
       );
       
-      const messageSent = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
+      let messageSentSuccess = false;
+
+      if (subscriber.lastMessagePlatform === 'telegram' && subscriber.connections.telegram?.chatId) {
+        try {
+          await this.telegramService.sendMessage({
+            chat_id: subscriber.connections.telegram.chatId,
+            text: message
+          });
+          messageSentSuccess = true;
+        } catch (error) {
+          logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Failed to send Telegram message");
+          messageSentSuccess = false;
+        }
+      } else {
+        const result = await this.whatsappService.sendMessage(subscriber.connections.phone, message);
+        messageSentSuccess = result.failed === 0;
+      }
       
-      if (messageSent.failed === 0) {
+      if (messageSentSuccess) {
         logger.trace({ 
           phoneNumber: subscriber.connections.phone
         }, "Nightly tasks completed and message sent successfully");
@@ -238,8 +257,21 @@ export class SchedulerService {
         // For regular push messages, we send a re-engagement message here if needed
         if (this.shouldSendReengagementMessage(subscriber, nowUtc)) {
           const reengagementMessage = "Hey! It's been a while. Shall we continue our language practice?";
-          await this.whatsappService.sendMessage(subscriber.connections.phone, reengagementMessage);
-          logger.info({ phoneNumber: subscriber.connections.phone }, "Re-engagement message sent.");
+          
+          if (subscriber.lastMessagePlatform === 'telegram' && subscriber.connections.telegram?.chatId) {
+             try {
+               await this.telegramService.sendMessage({
+                 chat_id: subscriber.connections.telegram.chatId,
+                 text: reengagementMessage
+               });
+               logger.info({ phoneNumber: subscriber.connections.phone, platform: 'telegram' }, "Re-engagement message sent.");
+             } catch (error) {
+               logger.error({ err: error, phoneNumber: subscriber.connections.phone }, "Failed to send Telegram re-engagement message");
+             }
+          } else {
+             await this.whatsappService.sendMessage(subscriber.connections.phone, reengagementMessage);
+             logger.info({ phoneNumber: subscriber.connections.phone, platform: 'whatsapp' }, "Re-engagement message sent.");
+          }
         }
 
       }

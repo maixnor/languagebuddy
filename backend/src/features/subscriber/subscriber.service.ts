@@ -227,7 +227,8 @@ export class SubscriberService {
         SELECT 
           phone_number, status, created_at, last_active_at, data,
           name, timezone, is_premium, is_test_user, last_nightly_digest_run,
-          streak_current, streak_longest, streak_last_increment, stripe_customer_id
+          streak_current, streak_longest, streak_last_increment, stripe_customer_id,
+          last_message_platform
         FROM subscribers 
         WHERE phone_number = ?
       `);
@@ -341,6 +342,7 @@ export class SubscriberService {
         isPremium: !!row.is_premium,
         isTestUser: !!row.is_test_user,
         stripeCustomerId: row.stripe_customer_id || undefined,
+        lastMessagePlatform: row.last_message_platform || undefined,
         signedUpAt: row.created_at ? new Date(row.created_at) : undefined,
         lastActiveAt: row.last_active_at ? new Date(row.last_active_at) : undefined,
       };
@@ -556,6 +558,7 @@ export class SubscriberService {
     delete rest.isPremium;
     delete rest.isTestUser;
     delete rest.stripeCustomerId;
+    delete rest.lastMessagePlatform;
 
     const data = JSON.stringify(rest);
 
@@ -565,9 +568,10 @@ export class SubscriberService {
             INSERT OR REPLACE INTO subscribers (
                 phone_number, status, created_at, last_active_at, data,
                 name, timezone, is_premium, is_test_user, last_nightly_digest_run,
-                streak_current, streak_longest, streak_last_increment, stripe_customer_id
+                streak_current, streak_longest, streak_last_increment, stripe_customer_id,
+                last_message_platform
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         stmt.run(
@@ -584,7 +588,8 @@ export class SubscriberService {
             subscriber.metadata.streakData?.currentStreak || 0,
             subscriber.metadata.streakData?.longestStreak || 0,
             lastIncrementDate ? lastIncrementDate.toISOString() : null,
-            subscriber.stripeCustomerId || null
+            subscriber.stripeCustomerId || null,
+            subscriber.lastMessagePlatform || null
         );
 
         // 2. Sync Languages

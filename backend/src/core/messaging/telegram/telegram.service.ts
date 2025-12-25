@@ -36,9 +36,9 @@ export class TelegramService {
     try {
       SendMessageSchema.parse(payload);
       await axios.post(`${this.telegramApiUrl}/sendMessage`, payload);
-      logger.info('Telegram message sent successfully', { chat_id: payload.chat_id });
+      logger.info({ chat_id: payload.chat_id }, 'Telegram message sent successfully');
     } catch (error) {
-      logger.error('Failed to send Telegram message', { error, payload });
+      logger.error({ error, payload }, 'Failed to send Telegram message');
       throw error;
     }
   }
@@ -46,9 +46,9 @@ export class TelegramService {
   public async setWebhook(url: string): Promise<void> {
     try {
       await axios.post(`${this.telegramApiUrl}/setWebhook`, { url });
-      logger.info('Telegram webhook set successfully', { url });
+      logger.info({ url }, 'Telegram webhook set successfully');
     } catch (error) {
-      logger.error('Failed to set Telegram webhook', { error, url });
+      logger.error({ error, url }, 'Failed to set Telegram webhook');
       throw error;
     }
   }
@@ -56,17 +56,17 @@ export class TelegramService {
   public async getMe(): Promise<any> {
     try {
       const response = await axios.get(`${this.telegramApiUrl}/getMe`);
-      logger.info('Telegram getMe successful', { botInfo: response.data.result });
+      logger.info({ botInfo: response.data.result }, 'Telegram getMe successful');
       return response.data.result;
     } catch (error) {
-      logger.error('Failed to get Telegram bot info', { error });
+      logger.error({ error }, 'Failed to get Telegram bot info');
       throw error;
     }
   }
 
   // Placeholder for processing incoming updates
   public async processUpdate(update: TelegramUpdate): Promise<void> {
-    logger.info('Processing Telegram update', { update_id: update.update_id });
+    logger.info({ update_id: update.update_id }, 'Processing Telegram update');
     // This method will eventually delegate to the agent or other services
     // For now, let's just log and potentially send a test response.
     if (update.message?.text && update.message.chat.id) {

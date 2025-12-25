@@ -19,7 +19,7 @@ export class MessagingService {
   async handleTelegramWebhookMessage(body: any, res: any): Promise<void> {
     try {
       const update: TelegramUpdate = body;
-      logger.info('Received Telegram update', { update_id: update.update_id });
+      logger.info({ update_id: update.update_id }, 'Received Telegram update');
 
       if (!update.message || !update.message.text || !update.message.chat) {
          res.sendStatus(200);
@@ -46,10 +46,14 @@ export class MessagingService {
                       chatId: chatId,
                       username: username
                   }
-              }
+              },
+              lastMessagePlatform: 'telegram'
           });
       } else {
-          // Update username if changed
+          // Update username if changed or update platform
+          const updates: Partial<Subscriber> = {};
+          let needsUpdate = false;
+
           if (subscriber.connections.telegram?.username !== username) {
              const updatedConnections = {
                  ...subscriber.connections,
@@ -58,17 +62,26 @@ export class MessagingService {
                      username
                  }
              };
-             await this.services.subscriberService.updateSubscriber(subscriber.connections.phone, {
-                 connections: updatedConnections
-             });
+             updates.connections = updatedConnections;
              subscriber.connections = updatedConnections;
+             needsUpdate = true;
+          }
+
+          if (subscriber.lastMessagePlatform !== 'telegram') {
+              updates.lastMessagePlatform = 'telegram';
+              subscriber.lastMessagePlatform = 'telegram';
+              needsUpdate = true;
+          }
+
+          if (needsUpdate) {
+             await this.services.subscriberService.updateSubscriber(subscriber.connections.phone, updates);
           }
       }
 
       await this.handleTelegramConversation(subscriber, text, chatId);
       res.sendStatus(200);
     } catch (error) {
-      logger.error('Failed to process Telegram webhook', { error, body });
+      logger.error({ error, body }, 'Failed to process Telegram webhook');
       res.sendStatus(400);
     }
   }
@@ -215,7 +228,7 @@ export class MessagingService {
 
     // Only handle text messages
     if (message?.type !== "text") {
-      logger.info(message.type, "unsupported type of message");
+      logger.info({ type: message.type }, "unsupported type of message");
       await this.services.whatsappService.sendMessage(
         message.from, 
         "I currently only support text messages. Please send a text message to continue."
@@ -260,10 +273,13 @@ export class MessagingService {
     // Update lastMessageSentAt (for active subscribers)
     try {
       if (subscriber.status === 'active') {
-          await this.services.subscriberService.updateSubscriber(phone, { lastMessageSentAt: new Date() });
+          await this.services.subscriberService.updateSubscriber(phone, { 
+              lastMessageSentAt: new Date(),
+              lastMessagePlatform: 'whatsapp'
+          });
       }
     } catch (error) {
-      logger.error({ err: error, phone }, "Failed to update lastMessageSentAt");
+      logger.error({ err: error, phone }, "Failed to update lastMessageSentAt/lastMessagePlatform");
     }
 
     // Handle user commands
