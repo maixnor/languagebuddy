@@ -6,15 +6,22 @@ import path from 'path';
 // Load environment variables first
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+// Setup test environment variables if missing
+if (!process.env.PUBLIC_BASE_URL) {
+  process.env.PUBLIC_BASE_URL = 'https://test.languagebuddy.com';
+}
+
 import { SubscriberService } from '../../features/subscriber/subscriber.service';
 import { DigestService } from '../../features/digest/digest.service';
 import { LanguageBuddyAgent } from '../../agents/language-buddy-agent';
 import { Subscriber, Language } from '../../features/subscriber/subscriber.types';
 import { Digest } from '../../features/digest/digest.types';
 import Database from 'better-sqlite3';
+import { DatabaseService } from '../../core/database';
 import { SqliteCheckpointSaver } from '../../core/persistence/sqlite-checkpointer';
 import { initializeSubscriberTools } from '../subscriber/subscriber.tools';
 import { FeedbackService } from '../feedback/feedback.service'; // Import FeedbackService
+import { ChatOpenAI } from '@langchain/openai';
 
 
 // Predefined conversation templates
@@ -271,10 +278,16 @@ class DigestTestHelper {
   async verifyConversationLoaded(): Promise<boolean> {
     try {
       const checkpoint = await this.checkpointer.get({ configurable: { thread_id: this.phone } });
-      if (!checkpoint || !checkpoint.checkpoint || !checkpoint.checkpoint.channel_values) {
+      if (!checkpoint) {
+        logger.error(`[TEST] No checkpoint found for thread ${this.phone}`);
         return false;
       }
-      const messages = checkpoint.checkpoint.channel_values.messages as any[] || [];
+      // BaseCheckpointSaver.get() returns the Checkpoint object directly, not the tuple
+      if (!checkpoint.channel_values) {
+        logger.error(`[TEST] channel_values missing in checkpoint`, checkpoint);
+        return false;
+      }
+      const messages = checkpoint.channel_values.messages as any[] || [];
       logger.debug(`[TEST] Found ${messages.length} messages in checkpoint`);
       return messages.length > 0;
     } catch (error) {
@@ -345,6 +358,7 @@ class DigestTestHelper {
     logger.debug(`[TEST] Cleaning up test data for ${this.phone}`);
     
     try {
+      const db = this.subscriberService['dbService'].getDb();
       // Clean up SQLite data
       db.exec(`DELETE FROM subscribers WHERE phone_number = '${this.phone}'`);
       db.exec(`DELETE FROM checkpoints WHERE thread_id = '${this.phone}'`);
@@ -358,7 +372,8 @@ class DigestTestHelper {
 
 describe('Digest System E2E Test', () => {
   let test: DigestTestHelper;
-  const testPhone = '+1234567890digest'; // Use a unique test phone number
+  const testPhone = '+1234567890999'; // Use a unique numeric test phone number
+  let dbService: DatabaseService;
 
   beforeAll(async () => {
     // SQLite will be initialized in beforeEach for each test
@@ -371,34 +386,10 @@ describe('Digest System E2E Test', () => {
     (DigestService as any).instance = null;
     (FeedbackService as any).instance = null;
 
-    // Create an in-memory database for each test
-    db = new Database(':memory:');
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS checkpoints (
-        thread_id TEXT PRIMARY KEY,
-        checkpoint TEXT
-      );
-    `);
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS subscribers (
-        phone_number TEXT PRIMARY KEY,
-        profile TEXT,
-        metadata TEXT
-      );
-    `);
-    // Need a daily_usage table for some subscriber service functions
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS daily_usage (
-        phone_number TEXT NOT NULL,
-        usage_date TEXT NOT NULL,
-        message_count INTEGER DEFAULT 0,
-        conversation_start_count INTEGER DEFAULT 0,
-        last_interaction_at TEXT,
-        PRIMARY KEY (phone_number, usage_date)
-      );
-    `);
-
-    test = new DigestTestHelper(testPhone, db);
+    // Create an in-memory database service which automatically runs migrations
+    dbService = new DatabaseService(':memory:');
+    
+    test = new DigestTestHelper(testPhone, dbService.getDb());
     
     // Clean up any existing data for this test phone
     await test.cleanup();
@@ -406,8 +397,8 @@ describe('Digest System E2E Test', () => {
 
   afterEach(async () => {
     // Close the database connection after each test
-    if (db) {
-      db.close();
+    if (dbService) {
+      dbService.close();
     }
   });
 
@@ -415,7 +406,14 @@ describe('Digest System E2E Test', () => {
     logger.debug('[TEST] E2E Digest Test Suite Finished');
   });
 
-  it('should create a complete subscriber profile and generate a digest from German dative conversation', async () => {
+  // Helper to skip tests if OpenAI key is missing
+  const runIfOpenAI = process.env.OPENAI_API_KEY ? it : it.skip;
+
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn('⚠️ Skipping Digest E2E tests because OPENAI_API_KEY is not set.');
+  }
+
+  runIfOpenAI('should create a complete subscriber profile and generate a digest from German dative conversation', async () => {
     // Run the complete workflow with dative conversation template
     const { subscriber, template, digest } = await test.runDigestWorkflow('germanBasicDative');
     
@@ -458,7 +456,7 @@ describe('Digest System E2E Test', () => {
     });
   }, 60000); // 60 second timeout
 
-  it('should extract learning insights from German food vocabulary conversation', async () => {
+  runIfOpenAI('should extract learning insights from German food vocabulary conversation', async () => {
     // Run workflow with food vocabulary conversation
     const { subscriber, template, digest } = await test.runDigestWorkflow('germanVocabularyFood');
     
@@ -495,7 +493,7 @@ describe('Digest System E2E Test', () => {
     });
   }, 60000);
 
-  it('should update subscriber language profile based on digest insights from past tense conversation', async () => {
+  runIfOpenAI('should update subscriber language profile based on digest insights from past tense conversation', async () => {
     // First, create a subscriber and get baseline data
     const originalSubscriber = await test.createGermanLearner();
     const originalObjectiveCount = originalSubscriber.profile.learningLanguages![0].currentObjectives?.length || 0;
@@ -533,7 +531,7 @@ describe('Digest System E2E Test', () => {
     });
   }, 60000);
 
-  it('should retrieve recent digests and user memos from multiple conversations', async () => {
+  runIfOpenAI('should retrieve recent digests and user memos from multiple conversations', async () => {
     // Create test subscriber and run multiple conversation workflows
     await test.createGermanLearner();
     
@@ -604,7 +602,7 @@ describe('Digest System E2E Test', () => {
     }
   }, 30000);
 
-  it('should extract grammar insights from past tense conversation', async () => {
+  runIfOpenAI('should extract grammar insights from past tense conversation', async () => {
     const { subscriber, template, digest } = await test.runDigestWorkflow('germanPastTense');
     
     expect(template.name).toBe('German Past Tense Practice');
@@ -620,7 +618,7 @@ describe('Digest System E2E Test', () => {
     });
   }, 60000);
 
-  it('should extract vocabulary insights from food conversation', async () => {
+  runIfOpenAI('should extract vocabulary insights from food conversation', async () => {
     const { subscriber, template, digest } = await test.runDigestWorkflow('germanVocabularyFood');
     
     expect(template.name).toBe('German Food Vocabulary');
