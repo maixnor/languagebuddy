@@ -52,6 +52,8 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
   });
 
   // Feedback analytics endpoint
+  // SECURITY: Deactivated due to unauthenticated access vulnerability. See tasks/security_vulnerabilities_remediation.md
+  /*
   app.get("/analytics/feedback", async (req: any, res: any) => {
     try {
       const analytics = await services.feedbackService.getFeedbackAnalytics();
@@ -61,8 +63,11 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
       res.status(500).json({ error: "Failed to get feedback analytics" });
     }
   });
+  */
 
   // Subscriber info endpoint
+  // SECURITY: Deactivated due to unauthenticated PII leak. See tasks/security_vulnerabilities_remediation.md
+  /*
   app.get("/subscriber/:phone", async (req: any, res: any) => {
     try {
       const subscriber = await services.subscriberService.getSubscriber(req.params.phone);
@@ -78,6 +83,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
       res.status(500).json({ error: "Failed to get subscriber info" });
     }
   });
+  */
 
   // Health check endpoint
   app.get("/health", (req: any, res: any) => {
