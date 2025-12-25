@@ -4,9 +4,6 @@ import path from 'path';
 // Load environment variables first
 dotenv.config({ path: path.join(process.cwd(), '.env') });
 
-// Initialize tracing BEFORE any other imports (critical for auto-instrumentation)
-import { initializeTracing } from './core/observability/tracing';
-initializeTracing();
 
 import { logger } from './core/config';
 
