@@ -427,7 +427,8 @@ Extract actionable learning insights that will help personalize future conversat
         grammar: analysisData.grammar,
         conversationMetrics: metrics,
         assistantMistakes: analysisData.assistantMistakes,
-        userMemos: analysisData.userMemos
+        userMemos: analysisData.userMemos,
+        detectedInterests: analysisData.detectedInterests
       };
 
       logger.info({
@@ -529,6 +530,7 @@ ANALYSIS GUIDELINES:
 5. Extract phrases and expressions that were taught or practiced
 6. Identify conversation topics and user interests
 7. Note any cultural context or background information shared
+8. DETECT INTERESTS: List specific hobbies, topics, or activities the user discussed with enthusiasm (e.g. "Surfing", "Tapas", "History").
 
 QUALITY ASSURANCE AUDIT (CRITICAL):
 - You act as a Quality Assurance Auditor for the 'Assistant'.
@@ -598,6 +600,7 @@ Be thorough but concise. Extract only meaningful learning insights.`;
       let deficienciesAdded = 0;
       let deficienciesUpdated = 0;
       let objectivesAdded = 0;
+      let interestsAdded = 0;
       
       if (updatedSubscriber.profile.learningLanguages && updatedSubscriber.profile.learningLanguages.length > 0) {
         const learningLanguage = updatedSubscriber.profile.learningLanguages[0];
@@ -687,10 +690,24 @@ Be thorough but concise. Extract only meaningful learning insights.`;
         ].slice(0, 10); // Keep only latest 10 objectives
         objectivesAdded = newObjectivesFromStruggles.length;
 
+        // Merge detected interests
+        const currentInterests = new Set(learningLanguage.interests || []);
+        if (digest.detectedInterests && digest.detectedInterests.length > 0) {
+            digest.detectedInterests.forEach(interest => {
+                // simple case-insensitive check
+                const exists = Array.from(currentInterests).some(existing => existing.toLowerCase() === interest.toLowerCase());
+                if (!exists) {
+                    currentInterests.add(interest);
+                    interestsAdded++;
+                }
+            });
+        }
+
         const updatedLearningLanguage = {
           ...learningLanguage,
           deficiencies: [...(learningLanguage.deficiencies || []), ...newDeficiencies].slice(-20),
           currentObjectives: updatedObjectives,
+          interests: Array.from(currentInterests),
           lastPracticed: new Date(),
           totalPracticeTime: (learningLanguage.totalPracticeTime || 0) + 30
         };
@@ -709,6 +726,7 @@ Be thorough but concise. Extract only meaningful learning insights.`;
         deficienciesAdded,
         deficienciesUpdated,
         objectivesAdded,
+        interestsAdded, // Log this
         digestTopic: digest.topic,
         durationMs: Date.now() - startTime
       }, "Digest saved to subscriber successfully");

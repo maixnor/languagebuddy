@@ -116,11 +116,12 @@ export class SchedulerService {
       }
       
       await this.languageBuddyAgent.clearConversation(subscriber.connections.phone);
-      const message = await this.languageBuddyAgent.initiateConversation(
+      const { response } = await this.languageBuddyAgent.initiateConversation(
         subscriber,
         "",
         this.subscriberService.getDailySystemPrompt(subscriber)
       );
+      const message = response;
       
       let messageSentSuccess = false;
 

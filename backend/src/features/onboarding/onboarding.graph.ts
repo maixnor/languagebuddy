@@ -65,7 +65,7 @@ export const createOnboardingGraph = (llm: ChatOpenAI, subscriberService: Subscr
         
         // Find the tool call payload
         const lastMsg = subMessages[subMessages.length - 1];
-        const toolCall = lastMsg.tool_calls?.[0];
+        const toolCall = (lastMsg as AIMessage).tool_calls?.[0];
         
         if (!toolCall) {
             // Should not happen if edge routing is correct

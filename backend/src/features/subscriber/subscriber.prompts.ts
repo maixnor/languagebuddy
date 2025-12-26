@@ -11,6 +11,8 @@ interface SystemPromptContext {
   timeSinceLastMessageMinutes: number | null;
   currentLocalTime: DateTime;
   lastDigestTopic: string | null; // For future re-engagement
+  messageCount: number;
+  dailyTopic: string | null;
 }
 
 export function generateSystemPrompt({
@@ -18,7 +20,9 @@ export function generateSystemPrompt({
   conversationDurationMinutes,
   timeSinceLastMessageMinutes,
   currentLocalTime,
-  lastDigestTopic
+  lastDigestTopic,
+  messageCount,
+  dailyTopic
 }: SystemPromptContext): string {
   // Determine target language (default to first learning language or a placeholder)
   // Ideally this should come from the current conversation context if multiple languages are being learned
@@ -40,6 +44,9 @@ export function generateSystemPrompt({
   if (conversationDurationMinutes !== null) {
     prompt += `\n\nCONTEXT - CURRENT SESSION:\nConversation started ${conversationDurationMinutes.toFixed(0)} minutes ago.\n`;
   }
+
+  // Inject Message Count Context
+  prompt += `Messages exchanged in this session: ${messageCount}.\n`;
 
   if (timeSinceLastMessageMinutes !== null) {
     prompt += `Time since last message: ${timeSinceLastMessageMinutes.toFixed(0)} minutes.\n`;
@@ -66,6 +73,73 @@ export function generateSystemPrompt({
   if (hour >= 22 || hour < 6) { // 10 PM to 6 AM local time
     prompt += `It is currently late at night/early morning for the user (${currentLocalTime.toFormat('hh:mm a')}).
 Suggest ending the conversation naturally soon, e.g., "It's getting late, perhaps we should continue tomorrow?" or "Good night!".\n`;
+  }
+
+  // --- STEERING LOGIC ---
+  const WARM_UP_THRESHOLD = 2; // Number of *user* messages before steering (approx 4 total messages)
+  // Assuming messageCount includes System + AI + Human messages.
+  // 0: Init
+  // 1: AI (Init)
+  // 2: Human (1st reply)
+  // 3: AI
+  // 4: Human (2nd reply) -> Steer now?
+  
+  // Let's rely on the raw count. If count > 3, we start steering.
+  const shouldSteer = messageCount > 3;
+
+  if (shouldSteer) {
+      prompt += `\n\n[PHASE: STRATEGIC PRACTICE - ACTIVE]\n`;
+      prompt += `The warm-up is over. It is time to steer the conversation towards the daily learning goals.\n`;
+      
+      if (dailyTopic) {
+          prompt += `\n🎯 DAILY TOPIC: "${dailyTopic}"\n`;
+          prompt += `- Your goal is to transition the conversation to this topic naturally.\n`;
+          prompt += `- If the current topic is unrelated, find a bridge (e.g., "That reminds me of [Topic]...", "Have you ever [Topic]...").\n`;
+          prompt += `- Do not be abrupt, but be persistent. We want to practice vocabulary related to "${dailyTopic}".\n`;
+      }
+  } else {
+      prompt += `\n\n[PHASE: WARM-UP]\n`;
+      prompt += `- Keep the conversation light and friendly.\n`;
+      prompt += `- Respond to the user's input directly without forcing a topic change yet.\n`;
+      prompt += `- Build rapport.\n`;
+  }
+  
+  // Add current deficiencies for targeted practice (Conditional on Steering)
+  const priorityDeficiencies = selectDeficienciesToPractice(targetLanguage, 3);
+  if (priorityDeficiencies.length > 0) {
+    prompt += `\n\nCURRENT LEARNING FOCUS - AREAS NEEDING IMPROVEMENT:`
+    
+    priorityDeficiencies.forEach((deficiency, index) => {
+      const practicedInfo = deficiency.lastPracticedAt
+        ? ` (last practiced: ${deficiency.lastPracticedAt.toLocaleDateString()})`
+        : " (never practiced)";
+      prompt += `\n${index + 1}. **${deficiency.specificArea}** (${deficiency.category}, ${deficiency.severity} severity)${practicedInfo}\n`;
+
+      if (
+        deficiency.examples && deficiency.examples.length > 0
+      ) {
+        prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join("; ")}\n`;
+      }
+
+      if (
+        deficiency.improvementSuggestions &&
+        deficiency.improvementSuggestions.length > 0
+      ) {
+        prompt += `   Improvement approach: ${deficiency.improvementSuggestions[0]}\n`;
+      }
+    });
+
+    if (shouldSteer) {
+        prompt += `\nIMPORTANT: ACTIVELY STEER the conversation to force practice of these specific areas.
+    - Ask questions or set up scenarios where the user MUST use the target concept to answer naturally.
+    - Example (Past Tense): "Tell me about what you did last weekend?" (Forces past tense) rather than "Do you like weekends?"
+    - Example (Conditional): "What would you do if you won the lottery?" (Forces conditional)
+    - Example (Vocabulary): Ask about a topic related to the weak vocabulary area.
+    - Gently correct mistakes and provide natural examples of correct usage.
+    - The system automatically tracks when you practice these areas, so just focus on the conversation.\n`;
+    } else {
+        prompt += `\n(Keep these deficiencies in mind, but prioritize the warm-up flow for now. Correct mistakes if they occur, but don't force the practice yet.)\n`;
+    }
   }
 
   return prompt;
@@ -202,44 +276,6 @@ ${digest.summary}
         prompt += `ACTION REQUIRED: At the start of this conversation, apologize for these specific mistakes and provide the correct information to the user to build trust.\n`;
       }
     });
-  }
-
-  // Add current deficiencies for targeted practice
-  const priorityDeficiencies = selectDeficienciesToPractice(language, 3);
-  if (priorityDeficiencies.length > 0) {
-    prompt += `\n\nCURRENT LEARNING FOCUS - AREAS NEEDING IMPROVEMENT:`
-    prompt += `\nThese are areas where ${name} has been struggling. Naturally incorporate these topics into your conversation to provide targeted practice:
-`;
-
-    priorityDeficiencies.forEach((deficiency, index) => {
-      const practicedInfo = deficiency.lastPracticedAt
-        ? ` (last practiced: ${deficiency.lastPracticedAt.toLocaleDateString()})`
-        : " (never practiced)";
-      prompt += `\n${index + 1}. **${deficiency.specificArea}** (${deficiency.category}, ${deficiency.severity} severity)${practicedInfo}\n`;
-
-      if (
-        deficiency.examples && deficiency.examples.length > 0
-      ) {
-        prompt += `   Examples of struggles: ${deficiency.examples.slice(0, 2).join("; ")}\n`;
-      }
-
-      if (
-        deficiency.improvementSuggestions &&
-        deficiency.improvementSuggestions.length > 0
-      ) {
-        prompt += `   Improvement approach: ${deficiency.improvementSuggestions[0]}\n`;
-      }
-    });
-
-    prompt += `\nIMPORTANT: ACTIVELY STEER the conversation to force practice of these specific areas, but do it naturally.
-    - PHASE 1 (Warm-up): Start the session with 1-2 light, friendly messages to build rapport. Don't dive into complex tasks immediately.
-    - PHASE 2 (Strategic Practice): After the warm-up, ask questions or set up scenarios where the user MUST use the target concept to answer naturally.
-    - Example (Past Tense): "Tell me about what you did last weekend?" (Forces past tense) rather than "Do you like weekends?"
-    - Example (Conditional): "What would you do if you won the lottery?" (Forces conditional)
-    - Example (Vocabulary): Ask about a topic related to the weak vocabulary area.
-    - Gently correct mistakes and provide natural examples of correct usage.
-    - Use the add_language_deficiency tool to record any NEW deficiencies you identify.
-    - The system automatically tracks when you practice these areas, so just focus on the conversation.\n`;
   }
 
   prompt += `\n\nCONVERSATION GUIDELINES:

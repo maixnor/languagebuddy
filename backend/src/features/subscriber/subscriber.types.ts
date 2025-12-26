@@ -57,6 +57,7 @@ export interface Language {
   deficiencies: LanguageDeficiency[];
 
   currentObjectives?: string[]; // Learning objectives and progress
+  interests?: string[]; // Topics of interest for this language (e.g., "Surfing", "Spanish Cuisine")
   motivationFactors?: string[]; // What drives them to learn
 
   // Metadata

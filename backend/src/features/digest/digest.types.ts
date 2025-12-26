@@ -49,4 +49,5 @@ export interface Digest {
   }[];
 
   userMemos?: string[]; // Personal memos about the user for better context in future conversations
+  detectedInterests?: string[]; // New interests detected in this conversation
 }

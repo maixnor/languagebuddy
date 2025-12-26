@@ -3,7 +3,8 @@ import { z } from "zod";
 export const LanguageContract = z.object({
   languageName: z.string(),
   level: z.string().optional().nullable(),
-  currentObjectives: z.array(z.string()).optional().nullable()
+  currentObjectives: z.array(z.string()).optional().nullable(),
+  interests: z.array(z.string()).optional().nullable()
 });
 
 export const ProfileUpdateContract = z.object({

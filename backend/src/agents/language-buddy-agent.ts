@@ -7,6 +7,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { setContextVariable } from "@langchain/core/context";
 import { DateTime } from "luxon";
 import { generateSystemPrompt } from '../features/subscriber/subscriber.prompts';
+import { getDailyTopic } from '../features/subscriber/subscriber.utils';
 import { z } from "zod";
 import { DigestService } from '../features/digest/digest.service';
 import { setSpanAttributes } from '../core/observability/tracing';
@@ -172,12 +173,16 @@ export class LanguageBuddyAgent {
             logger.error("DigestService is missing in initiateConversation. Skipping digest retrieval.");
         }
 
+        const dailyTopic = getDailyTopic(subscriber);
+
         systemPrompt = generateSystemPrompt({
           subscriber,
           conversationDurationMinutes,
           timeSinceLastMessageMinutes,
           currentLocalTime,
           lastDigestTopic,
+          messageCount: 0, // Conversation just starting
+          dailyTopic
         });
       }
 
@@ -255,12 +260,21 @@ export class LanguageBuddyAgent {
           logger.error("DigestService is missing in processUserMessage. Skipping digest retrieval.");
       }
 
+      // Calculate message count from checkpoint
+      const checkpointTuple = await this.checkpointer.getTuple({ configurable: { thread_id: subscriber.connections.phone } });
+      const messages = (checkpointTuple?.checkpoint as any)?.channel_values?.messages || [];
+      const messageCount = Array.isArray(messages) ? messages.length : 0;
+
+      const dailyTopic = getDailyTopic(subscriber);
+
       systemPrompt = generateSystemPrompt({
         subscriber,
         conversationDurationMinutes,
         timeSinceLastMessageMinutes,
         currentLocalTime,
         lastDigestTopic,
+        messageCount,
+        dailyTopic
       });
     }
 

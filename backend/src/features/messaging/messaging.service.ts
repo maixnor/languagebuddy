@@ -3,7 +3,7 @@ import { logger, trackEvent, trackMetric, config } from '../../core/config';
 import { WebhookMessage } from './messaging.types';
 import { Subscriber, CommunicationPlatform } from '../subscriber/subscriber.types';
 import { handleUserCommand } from '../../agents/agent.user-commands';
-import { getNextMissingField, getPromptForField, sanitizePhoneNumber } from '../subscriber/subscriber.utils';
+import { getNextMissingField, getPromptForField, sanitizePhoneNumber, getDailyTopic } from '../subscriber/subscriber.utils';
 import { generateSystemPrompt, generateDefaultSystemPromptForSubscriber } from '../subscriber/subscriber.prompts';
 import { generateOnboardingSystemPrompt } from '../onboarding/onboarding.prompts';
 import { getFirstLearningLanguage } from "../subscriber/subscriber.utils";
@@ -188,11 +188,12 @@ export class MessagingService {
     // Start conversation
     const selectedPrompt = this.services.subscriberService.getDailySystemPrompt(subscriber);
     await this.services.languageBuddyAgent.clearConversation(subscriber.connections.phone);
-    const initialMessage = await this.services.languageBuddyAgent.initiateConversation(
+    const initiationResult = await this.services.languageBuddyAgent.initiateConversation(
       subscriber, 
       'The Conversation is not being initialized by the User, but by an automated System. Start off with a conversation opener in your next message, then continue the conversation.', // Human message for system initiation
       selectedPrompt // Actual system prompt
     );
+    const initialMessage = initiationResult?.response;
 
     if (initialMessage) {
       await this.services.subscriberService.incrementConversationCount(phone);
@@ -359,6 +360,7 @@ export class MessagingService {
         // Fetch context for prompt generation
         const conversationDurationMinutes = await this.services.languageBuddyAgent.getConversationDuration(phone);
         const timeSinceLastMessageMinutes = await this.services.languageBuddyAgent.getTimeSinceLastMessage(phone);
+        const dailyTopic = getDailyTopic(subscriber);
 
         const basePrompt = generateSystemPrompt({
           subscriber,
@@ -366,6 +368,8 @@ export class MessagingService {
           timeSinceLastMessageMinutes,
           currentLocalTime,
           lastDigestTopic,
+          messageCount: 0, // Fallback for warning override
+          dailyTopic
         });
 
         systemPromptOverride = basePrompt + `\n\nIMPORTANT SYSTEM INSTRUCTION:

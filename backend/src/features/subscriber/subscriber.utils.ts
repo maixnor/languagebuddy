@@ -117,8 +117,29 @@ export const selectDeficienciesToPractice = (
         return bLastOccurrence - aLastOccurrence; // More recent first
     });
 
-    // Return top N deficiencies
-    return sortedDeficiencies.slice(0, maxCount);
+    // Take the top N (candidate pool) to select from
+    // We take up to 3 candidates (or maxCount if smaller) to ensure high priority but add variety
+    const poolSize = Math.max(3, maxCount); 
+    const candidates = sortedDeficiencies.slice(0, poolSize);
+
+    // If we have fewer candidates than requested, just return them all
+    if (candidates.length <= maxCount) {
+        // Shuffle them anyway to prevent "always the same order" if the user has < 3 deficiencies
+        return candidates.sort(() => Math.random() - 0.5);
+    }
+
+    // Otherwise, pick 'maxCount' random items from the 'candidates' pool
+    const selected: LanguageDeficiency[] = [];
+    const pool = [...candidates];
+    
+    for (let i = 0; i < maxCount; i++) {
+        if (pool.length === 0) break;
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        selected.push(pool[randomIndex]);
+        pool.splice(randomIndex, 1); // Remove selected to avoid duplicates
+    }
+
+    return selected;
 };
 
 /**
@@ -217,4 +238,49 @@ export function sanitizePhoneNumber(phone: string): string {
     cleaned = '+' + cleaned.replace(/^\++/, '');
 
     return cleaned;
+}
+
+/**
+ * Simple string hash function
+ */
+function simpleHash(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash;
+}
+
+/**
+ * Deterministically selects a daily topic for the subscriber based on their phone number and the current date.
+ * This ensures the topic remains consistent throughout the day (until the next day).
+ * Candidates are drawn from 'interests' and 'currentObjectives'.
+ */
+export function getDailyTopic(subscriber: Subscriber): string | null {
+    // Collect candidates
+    // We look at the first learning language for objectives/interests
+    // TODO: Support multiple learning languages?
+    const language = subscriber.profile.learningLanguages?.[0];
+    
+    const interests = language?.interests || [];
+    const objectives = language?.currentObjectives || [];
+    
+    // Combine and deduplicate
+    const candidates = Array.from(new Set([...interests, ...objectives]));
+    
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    const timezone = ensureValidTimezone(subscriber.profile.timezone);
+    const today = DateTime.now().setZone(timezone).toISODate(); // "2025-12-25"
+    
+    // Create a deterministic hash based on User ID + Date
+    const seed = subscriber.connections.phone + today;
+    const hash = simpleHash(seed);
+    
+    const index = Math.abs(hash) % candidates.length;
+    return candidates[index];
 }

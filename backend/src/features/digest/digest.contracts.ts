@@ -28,6 +28,7 @@ export const DigestAnalysisSchema = z.object({
     reason: z.string().describe("Why it was incorrect (e.g., 'Hallucination', 'Grammar', 'Factually incorrect')")
   })).default([]).describe("Mistakes made by the AI assistant during the conversation that need to be corrected for the user"),
   userMemos: z.array(z.string()).default([]).describe("Personal information about the user that should be remembered for future conversations (interests, background, preferences, etc.)"),
+  detectedInterests: z.array(z.string()).default([]).describe("Specific topics or hobbies the user showed interest in during this conversation (e.g., 'Surfing', 'Cooking', 'Hiking'). Exclude generic topics like 'Grammar' or 'Vocabulary'."),
   metrics: z.object({
     sentenceComplexity: z.number().describe("Score 0-10 based on vocabulary richness and sentence structure"),
     punctuationAccuracy: z.number().describe("Percentage 0-100 of correct punctuation usage by the user"),

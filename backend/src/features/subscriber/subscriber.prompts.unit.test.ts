@@ -56,13 +56,59 @@ describe("generateSystemPrompt", () => {
     conversationDurationMinutes: number | null = null,
     timeSinceLastMessageMinutes: number | null = null,
     lastDigestTopic: string | null = null,
-    subscriberOverride: Partial<Subscriber> | null = null
+    subscriberOverride: Partial<Subscriber> | null = null,
+    messageCount: number = 0,
+    dailyTopic: string | null = null
   ) => ({
     subscriber: subscriberOverride ? { ...mockSubscriber, ...subscriberOverride } : mockSubscriber,
     conversationDurationMinutes,
     timeSinceLastMessageMinutes,
     currentLocalTime,
     lastDigestTopic,
+    messageCount,
+    dailyTopic
+  });
+
+  describe("Steering Logic", () => {
+    it("should be in WARM-UP phase when message count is low (<= 3)", () => {
+        const now = DateTime.now();
+        const context = createPromptContext(now, 5, 1, null, null, 2, "Hiking");
+        const prompt = generateSystemPrompt(context);
+        
+        expect(prompt).toContain("[PHASE: WARM-UP]");
+        expect(prompt).not.toContain("[PHASE: STRATEGIC PRACTICE - ACTIVE]");
+        // Should not force topic yet
+        expect(prompt).not.toContain("DAILY TOPIC: \"Hiking\"");
+    });
+
+    it("should switch to STRATEGIC PRACTICE phase when message count is high (> 3)", () => {
+        const now = DateTime.now();
+        const subscriberWithDeficiency = {
+            profile: {
+                ...mockSubscriber.profile,
+                learningLanguages: [{
+                    ...mockSubscriber.profile.learningLanguages[0],
+                    deficiencies: [{
+                        category: "grammar",
+                        specificArea: "past tense",
+                        severity: "major",
+                        frequency: 10,
+                        examples: [],
+                        improvementSuggestions: [],
+                        firstDetected: new Date(),
+                        lastOccurrence: new Date(),
+                    } as any]
+                }]
+            }
+        };
+        const context = createPromptContext(now, 15, 1, null, subscriberWithDeficiency, 4, "Hiking");
+        const prompt = generateSystemPrompt(context);
+        
+        expect(prompt).not.toContain("[PHASE: WARM-UP]");
+        expect(prompt).toContain("[PHASE: STRATEGIC PRACTICE - ACTIVE]");
+        expect(prompt).toContain("DAILY TOPIC: \"Hiking\"");
+        expect(prompt).toContain("ACTIVELY STEER the conversation");
+    });
   });
 
   it("should generate a basic prompt with subscriber info and current time", () => {

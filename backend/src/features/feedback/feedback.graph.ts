@@ -80,7 +80,7 @@ Do not persist the feedback yourself, just call the tool.`;
         
         // Extract tool call
         // The last message should be the AIMessage with tool_calls
-        const toolCall = lastMessage.tool_calls?.[0];
+        const toolCall = (lastMessage as AIMessage).tool_calls?.[0];
         if (!toolCall) {
              logger.error("save_feedback called without tool call");
              return { activeMode: "conversation" as const };
