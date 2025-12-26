@@ -108,7 +108,7 @@ describe('SchedulerService', () => {
 
     mockLanguageBuddyAgent = {
         clearConversation: jest.fn().mockResolvedValue(undefined),
-        initiateConversation: jest.fn().mockResolvedValue("Hello there!"),
+        initiateConversation: jest.fn().mockResolvedValue({ response: "Hello there!" }),
     } as unknown as jest.Mocked<LanguageBuddyAgent>;
     
     // Config mock

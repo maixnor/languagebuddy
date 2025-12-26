@@ -68,7 +68,7 @@ describe('selectDeficienciesToPractice', () => {
     );
     
     const language = createLanguage([practiced2DaysAgo, practiced5DaysAgo, neverPracticed]);
-    const result = selectDeficienciesToPractice(mockLanguage, 3);
+    const result = selectDeficienciesToPractice(language, 3);
 
     expect(result).toHaveLength(3);
     
@@ -139,7 +139,7 @@ describe('selectDeficienciesToPractice', () => {
     ];
     
     const language = createLanguage(deficiencies);
-    const result = selectDeficienciesToPractice(mockLanguage, 3);
+    const result = selectDeficienciesToPractice(language, 3);
 
     expect(result).toHaveLength(3);
     

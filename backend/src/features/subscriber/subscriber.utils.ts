@@ -102,7 +102,27 @@ export const selectDeficienciesToPractice = (
             return severityDiff;
         }
 
-        const getTime = (d: Date | string | undefined) => d ? new Date(d).getTime() : 0;
+        const getTime = (d: Date | string | undefined): number => {
+            if (!d) {
+                return 0; // Represents the oldest possible time for sorting purposes
+            }
+
+            let dt: DateTime;
+            if (typeof d === 'string') {
+                dt = DateTime.fromISO(d, { setZone: true }); // Assume ISO and set its zone
+                if (!dt.isValid) {
+                    // Try parsing as just a date string if ISO fails (e.g., "YYYY-MM-DD")
+                    dt = DateTime.fromFormat(d, 'yyyy-MM-dd', { setZone: true });
+                }
+            } else if (d instanceof Date) {
+                dt = DateTime.fromJSDate(d, { setZone: true }); // Take existing Date object's zone
+            } else {
+                return 0;
+            }
+            
+            // Ensure all dates are compared in UTC to avoid timezone issues during sorting
+            return dt.toUTC().toMillis();
+        };
 
         // Then, sort by least recently practiced (or never practiced)
         const aLastPracticed = getTime(a.lastPracticedAt);
@@ -124,8 +144,7 @@ export const selectDeficienciesToPractice = (
 
     // If we have fewer candidates than requested, just return them all
     if (candidates.length <= maxCount) {
-        // Shuffle them anyway to prevent "always the same order" if the user has < 3 deficiencies
-        return candidates.sort(() => Math.random() - 0.5);
+        return candidates;
     }
 
     // Otherwise, pick 'maxCount' random items from the 'candidates' pool

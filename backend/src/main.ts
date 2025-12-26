@@ -11,7 +11,8 @@ async function main() {
   try {
     // Dynamically import modules AFTER tracing is initialized to ensure auto-instrumentation works
     const express = (await import("express")).default;
-    await import("whatsapp-cloud-api-express");
+
+
 
     const { ServiceContainer } = await import('./core/container');
     const { setupRoutes } = await import('./routes');
@@ -29,6 +30,9 @@ async function main() {
         req.rawBody = buf;
       }
     }));
+
+
+
     
     // Initialize services
     const services = new ServiceContainer();
