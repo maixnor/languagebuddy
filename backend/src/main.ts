@@ -24,7 +24,11 @@ async function main() {
     
     // Create Express app
     const app = express();
-    app.use(express.json());
+    app.use(express.json({
+      verify: (req: any, res: any, buf: Buffer) => {
+        req.rawBody = buf;
+      }
+    }));
     
     // Initialize services
     const services = new ServiceContainer();

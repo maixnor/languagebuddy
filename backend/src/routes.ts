@@ -6,6 +6,9 @@ import { logger, config } from './core/config';
 import { getCommitHash, getPackageVersion } from './core/config/config.version-info';
 import { metricsRegistry } from './core/observability/metrics';
 
+import { verifyWhatsappSignature } from './core/messaging/whatsapp/whatsapp-webhook.middleware';
+import { verifyTelegramSignature } from './core/messaging/telegram/telegram-webhook.middleware';
+
 export function setupRoutes(app: express.Application, services: ServiceContainer): void {
   const messagingService = new MessagingService(services);
 
@@ -30,7 +33,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
   });
 
   // Main webhook endpoint (WhatsApp)
-  app.post("/webhook", async (req: any, res: any) => {
+  app.post("/webhook", verifyWhatsappSignature, async (req: any, res: any) => {
     try {
       await messagingService.handleWebhookMessage(req.body, res);
     } catch (error) {
@@ -120,7 +123,7 @@ export function setupRoutes(app: express.Application, services: ServiceContainer
   });
 
   // Telegram webhook endpoint
-  app.post("/telegram/webhook", async (req: any, res: any) => {
+  app.post("/telegram/webhook", verifyTelegramSignature, async (req: any, res: any) => {
     try {
       await messagingService.handleTelegramWebhookMessage(req.body, res);
     } catch (error) {

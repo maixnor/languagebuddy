@@ -74,6 +74,11 @@ export const getConfig = () => ({
     token: process.env.WHATSAPP_ACCESS_TOKEN!,
     phoneId: process.env.WHATSAPP_PHONE_NUMBER_ID!,
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN!,
+    appSecret: process.env.WHATSAPP_APP_SECRET!,
+  },
+  telegram: {
+    token: process.env.TELEGRAM_TOKEN!,
+    webhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET!,
   },
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY!,
