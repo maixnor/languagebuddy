@@ -17,22 +17,22 @@ LanguageBuddy Project Context for Gemini
 We are migrating from a layered architecture (Services/Tools/Types) to a **Feature-Based Architecture** to improve cohesion and AI navigability.
 
 **Directory Structure (`backend/src/features/`)**:
--   **`subscriber/`** (Migrated): Core user management.
+-   **`subscriber/`**: Core user management.
     -   `subscriber.service.ts`: Business logic.
     -   `subscriber.types.ts`: Domain models (`Subscriber`, `Language`).
     -   `subscriber.tools.ts`: LangChain tools.
     -   `subscriber.contracts.ts`: Zod schemas for tools.
     -   `subscriber.utils.ts`: Helper functions.
     -   `subscriber.prompts.ts`: System prompts.
--   **`digest/`** (Migrated): Daily conversation summaries.
--   **`onboarding/`** (Migrated): User onboarding flow.
--   **`feedback/`** (Migrated): User feedback collection.
--   **`scheduling/`** (Migrated): Scheduling services.
--   **`subscription/`** (Migrated): Stripe integration.
+-   **`digest/`**: Daily conversation summaries.
+-   **`onboarding/`**: User onboarding flow.
+-   **`feedback/`**: User feedback collection.
+-   **`scheduling/`**: Scheduling services.
+-   **`subscription/`**: Stripe integration.
 
 ### Services & Container
 -   **`ServiceContainer`**: Central singleton container initializing all feature services (`backend/src/services/service-container.ts`).
--   **Pattern**: Services still follow `getInstance(database)` pattern but are located within their feature folders.
+-   **Pattern**: Services follow `getInstance(database)` pattern but are located within their feature folders.
 
 ### Data Model (SQLite)
 -   **Conversation State**: `checkpoints` table (Managed by LangGraph `SqliteCheckpointSaver`).
@@ -41,7 +41,7 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 
 ### The Agent (`LanguageBuddyAgent`)
 -   **Orchestrator**: `backend/src/agents/language-buddy-agent.ts`.
--   **Thread ID**: The user's phone number.
+-   **Thread ID**: The user's platform identifier (e.g. phone number)
 -   **Tools**: Aggregated from features (e.g., `subscriber.tools.ts`). Agent *must* use tools to access data.
 
 ## 3. Development Workflow
@@ -53,7 +53,7 @@ We are migrating from a layered architecture (Services/Tools/Types) to a **Featu
 
 ### ⚠️ Testing Mandate ⚠️
 **Every new feature or bug fix MUST include tests.**
--   **Red-Green-Refactor for Bugs**: When fixing a bug, **you MUST first write a failing unit test** that specifically reproduces the issue. Do not touch the implementation code until you have a red (failing) test. Once the test fails as expected, implement the fix to turn it green. This proves the bug existed and is now resolved.
+-   **Red-Green-Refactor for everything**: When doing any code changes, **you MUST first write a failing unit test** that specifically reproduces the issue. Do not touch the implementation code until you have a red (failing) test. Once the test fails as expected, implement the fix to turn it green. This proves the bug existed and is now resolved.
 -   **No "blind" coding**: Write the test, watch it fail, implement the fix, watch it pass.
 -   **Refactoring**: If you refactor, add tests *before* touching the code to ensure parity.
 -   **Application Stability**: A task is considered truly complete only when all associated tests pass AND the application starts without errors (verified by running `timeout 5s npm run start` as these commands run in watch mode and do not exit automatically).
@@ -94,33 +94,14 @@ We are implementing a system to summarize conversations, update user profiles, a
     -   **Common Mappings**: Common city names (e.g., "Lima", "London") are automatically mapped to IANA codes.
     -   **Scheduling**: Scheduler runs hourly and checks `subscriber.profile.timezone` to determine local time.
 2.  **Digest Creation**:
-    -   Condition: Active conversation (>5 messages).
     -   Action: Call `DigestService` to analyze chat.
     -   **Improvements**:
         -   **Vocabulary Extraction**: Extract new words to `subscriber.languages[].vocabulary`.
         -   **Deficiency Tracking**: Update `areasOfStruggle` and `deficiencies`.
-        -   **Next Session Seed**: Generate a "context hook" for the *next* conversation start.
-3.  **History Cleanup**:
-    -   After digest is created and saved, **CLEAR** the LangGraph checkpoint.
-    -   Keep system prompts/essential context, but wipe the chat buffer.
 
-## 5. Known Issues & Watchlist
--   **Throttling**: Logic for trial vs. premium is fragile. Check `SubscriberService.shouldThrottle()`.
--   **Timezones**: Day boundaries for throttling and digests can be tricky.
--   **Stripe**: Webhook handling needs robust testing.
--   **Detailed Bug Hunting**: Refer to [`backend/BUG-HUNTING-TESTS.md`](backend/BUG-HUNTING-TESTS.md) for a comprehensive list of known bugs and their associated test cases. All P0, P1, and P2 bugs have now been addressed and verified.
-
-## 6. Conventions
+## 5. Conventions
 -   **Structure**: Feature-based (`backend/src/features/`).
--   **Output**: Use `markdownToWhatsApp` formatter.
 -   **Tools**: Always define schemas with Zod in `*.contracts.ts`.
 -   **Logs**: Use structured logging (Pino).
 -   **Profile Data**: Use `SubscriberProfileSchema` in `subscriber.contracts.ts` as the single source of truth for required profile fields. The `getMissingProfileFieldsReflective` utility uses this schema to automatically drive the Agent's information collection behavior.
 
-## 7. Telegram Service
-
--   **Location**: `backend/src/core/messaging/telegram/telegram.service.ts`
--   **Purpose**: Handles direct integration with the Telegram Bot API (sending messages, setting webhooks, etc.).
--   **Design**: Implements a singleton pattern via `getInstance()` without requiring a `DatabaseService` dependency. This is because it primarily acts as a stateless API client and does not persist data directly.
--   **Placement**: Located in `core/messaging` rather than a `feature` directory as it is a foundational messaging integration component, not tied to a specific business feature.
--   **`processUpdate`**: Currently a placeholder with echo functionality; will be expanded to delegate to the main agent for complex message processing.
