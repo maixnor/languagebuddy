@@ -3,11 +3,19 @@ import crypto from 'crypto';
 import { config } from '../../config';
 import { logger } from '../../observability/logging';
 
+const IS_CLI_DEV_MODE = process.env.USE_LOCAL_CLI_ENDPOINT && process.env.ENVIRONMENT === 'development';
+
 export interface RequestWithRawBody extends Request {
   rawBody?: Buffer;
 }
 
 export const verifyWhatsappSignature = (req: Request, res: Response, next: NextFunction) => {
+  if (IS_CLI_DEV_MODE) {
+    logger.warn("Skipping WhatsApp webhook signature verification due to CLI dev mode.");
+    next();
+    return;
+  }
+
   const reqWithRawBody = req as RequestWithRawBody;
   
   if (!reqWithRawBody.rawBody) {
@@ -33,7 +41,6 @@ export const verifyWhatsappSignature = (req: Request, res: Response, next: NextF
 
   try {
     const elements = signature.split('=');
-    const method = elements[0];
     const signatureHash = elements[1];
 
     const expectedHash = crypto
