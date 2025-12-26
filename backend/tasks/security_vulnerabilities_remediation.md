@@ -26,11 +26,13 @@
 *   **Remediation:**
     *   Implement middleware to validate the signature using `WHATSAPP_APP_SECRET`.
     *   Must be done *before* body parsing or using `verifyBuffer`.
+    *   *Status:* Implemented with `verifyWhatsappSignature` middleware.
 
 ### 4. Implement Telegram Webhook Verification
 *   **Vulnerability:** `POST /telegram/webhook` does not verify `X-Telegram-Bot-Api-Secret-Token`.
 *   **Remediation:**
     *   Check the `X-Telegram-Bot-Api-Secret-Token` header against the configured secret.
+    *   *Status:* Implemented with `verifyTelegramSignature` middleware.
 
 ### 5. Replace Vulnerable `axios` Dependency
 *   **Vulnerability:** `whatsapp-cloud-api-express` uses a vulnerable version of `axios`.
